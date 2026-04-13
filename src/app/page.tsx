@@ -1,9 +1,14 @@
 import PlansSection from "./PlansSection";
 import SiteHeader from "@/components/SiteHeader";
 import Image from "next/image";
+import Link from "next/link";
 import logo from "./logo.png";
 
 export default function Home() {
+  const whatsappHref =
+    "https://wa.me/201158954215?text=" +
+    encodeURIComponent("I came from 800 Academy and I need help.");
+
   return (
     <>
       <SiteHeader active="home" />
@@ -22,15 +27,21 @@ export default function Home() {
                 Scholastic Test environments. Built for the modern student.
               </p>
               <div className="flex flex-col sm:flex-row gap-5">
-                <button className="bg-secondary text-white px-10 py-5 font-bold text-lg transition-all active:scale-[0.98] btn-sharp">
+                <a
+                  href="#plans"
+                  className="bg-secondary text-white px-10 py-5 font-bold text-lg transition-all active:scale-[0.98] btn-sharp text-center"
+                >
                   Explore Packages
-                </button>
-                <button className="bg-white text-primary border border-outline px-10 py-5 font-bold text-lg hover:bg-surface-variant transition-all flex items-center gap-2 group btn-sharp">
-                  Explore Mocks
+                </a>
+                <Link
+                  href="/join?mode=signup"
+                  className="bg-white text-primary border border-outline px-10 py-5 font-bold text-lg hover:bg-surface-variant transition-all flex items-center justify-center gap-2 group btn-sharp"
+                >
+                  Create Account
                   <span className="material-symbols-outlined text-xl group-hover:translate-x-1 transition-transform">
                     arrow_forward
                   </span>
-                </button>
+                </Link>
               </div>
               <div className="mt-16 flex items-center gap-3">
                 <span
@@ -97,25 +108,27 @@ export default function Home() {
               </h2>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-              <div className="bg-white p-10 border border-outline shadow-premium hover:shadow-soft-xl transition-all group">
-                <div className="w-16 h-16 bg-blue-50 flex items-center justify-center mb-10 group-hover:scale-110 group-hover:bg-blue-600 transition-all">
+              <div className="bg-white p-10 border-2 border-outline/30 rounded-2xl shadow-premium hover:shadow-2xl hover:border-blue-200 transition-all duration-500 hover:-translate-y-2 group relative overflow-hidden">
+                <div className="absolute -top-10 -right-10 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl group-hover:bg-blue-500/20 transition-all"></div>
+                <div className="w-16 h-16 bg-blue-50 rounded-xl flex items-center justify-center mb-10 group-hover:scale-110 group-hover:bg-blue-600 transition-all duration-500 shadow-sm relative z-10 hover:rotate-3">
                   <span
-                    className="material-symbols-outlined text-secondary text-3xl group-hover:text-white transition-colors"
+                    className="material-symbols-outlined text-blue-600 text-3xl group-hover:text-white transition-colors"
                     data-icon="schedule"
                   >
                     schedule
                   </span>
                 </div>
-                <h3 className="font-headline text-2xl font-extrabold text-primary mb-5 tracking-tight">
-                  Time Pressure Logic
+                <h3 className="font-headline text-2xl font-extrabold text-primary mb-5 tracking-tight relative z-10">
+                  True Exam Simulation
                 </h3>
-                <p className="text-on-surface-variant leading-relaxed font-medium">
-                  Native countdown modules that perfectly replicate the mental strain and
-                  pace of the official testing center.
+                <p className="text-on-surface-variant leading-relaxed font-medium relative z-10">
+                  A 1:1 interface with the official exam, plus a real-time timer per exam
+                  that matches the test-day pacing and pressure.
                 </p>
               </div>
-              <div className="bg-white p-10 border border-outline shadow-premium hover:shadow-soft-xl transition-all group">
-                <div className="w-16 h-16 bg-indigo-50 flex items-center justify-center mb-10 group-hover:scale-110 group-hover:bg-indigo-600 transition-all">
+              <div className="bg-white p-10 border-2 border-outline/30 rounded-2xl shadow-premium hover:shadow-2xl hover:border-indigo-200 transition-all duration-500 hover:-translate-y-2 group relative overflow-hidden">
+                <div className="absolute -top-10 -right-10 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl group-hover:bg-indigo-500/20 transition-all"></div>
+                <div className="w-16 h-16 bg-indigo-50 rounded-xl flex items-center justify-center mb-10 group-hover:scale-110 group-hover:bg-indigo-600 transition-all duration-500 shadow-sm relative z-10 hover:-rotate-3">
                   <span
                     className="material-symbols-outlined text-indigo-600 text-3xl group-hover:text-white transition-colors"
                     data-icon="fact_check"
@@ -123,16 +136,17 @@ export default function Home() {
                     fact_check
                   </span>
                 </div>
-                <h3 className="font-headline text-2xl font-extrabold text-primary mb-5 tracking-tight">
-                  Curated Question Banks
+                <h3 className="font-headline text-2xl font-extrabold text-primary mb-5 tracking-tight relative z-10">
+                  800-Scale Scoring
                 </h3>
-                <p className="text-on-surface-variant leading-relaxed font-medium">
-                  Forget generic questions. Access a proprietary database vetted by Diploma
-                  veterans specifically for 2026 trial patterns.
+                <p className="text-on-surface-variant leading-relaxed font-medium relative z-10">
+                  Instant results with a score calculated on the real 800 scale, so you can
+                  track progress clearly and confidently.
                 </p>
               </div>
-              <div className="bg-white p-10 border border-outline shadow-premium hover:shadow-soft-xl transition-all group">
-                <div className="w-16 h-16 bg-emerald-50 flex items-center justify-center mb-10 group-hover:scale-110 group-hover:bg-emerald-600 transition-all">
+              <div className="bg-white p-10 border-2 border-outline/30 rounded-2xl shadow-premium hover:shadow-2xl hover:border-emerald-200 transition-all duration-500 hover:-translate-y-2 group relative overflow-hidden">
+                <div className="absolute -top-10 -right-10 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl group-hover:bg-emerald-500/20 transition-all"></div>
+                <div className="w-16 h-16 bg-emerald-50 rounded-xl flex items-center justify-center mb-10 group-hover:scale-110 group-hover:bg-emerald-600 transition-all duration-500 shadow-sm relative z-10 hover:rotate-3">
                   <span
                     className="material-symbols-outlined text-emerald-600 text-3xl group-hover:text-white transition-colors"
                     data-icon="bolt"
@@ -140,12 +154,12 @@ export default function Home() {
                     bolt
                   </span>
                 </div>
-                <h3 className="font-headline text-2xl font-extrabold text-primary mb-5 tracking-tight">
-                  Neural Feedback
+                <h3 className="font-headline text-2xl font-extrabold text-primary mb-5 tracking-tight relative z-10">
+                  Smart Review
                 </h3>
-                <p className="text-on-surface-variant leading-relaxed font-medium">
-                  Proprietary scoring engine that predicts your official band score with high
-                  precision using machine learning.
+                <p className="text-on-surface-variant leading-relaxed font-medium relative z-10">
+                  Clear insights after every attempt: performance breakdowns, mistakes
+                  analysis, and targeted next steps to improve faster.
                 </p>
               </div>
             </div>
@@ -169,12 +183,20 @@ export default function Home() {
               environments.
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-8">
-              <button className="bg-secondary text-white px-14 py-6 font-bold text-xl hover:shadow-2xl hover:shadow-blue-500/40 hover:-translate-y-1 transition-all btn-sharp">
+              <Link
+                href="/join?mode=signup"
+                className="bg-secondary text-white px-14 py-6 font-bold text-xl hover:shadow-2xl hover:shadow-blue-500/40 hover:-translate-y-1 transition-all btn-sharp"
+              >
                 Create Free Account
-              </button>
-              <button className="bg-white/5 text-white backdrop-blur-md border border-white/10 px-14 py-6 font-bold text-xl hover:bg-white/10 transition-all btn-sharp">
+              </Link>
+              <a
+                href={whatsappHref}
+                target="_blank"
+                rel="noreferrer"
+                className="bg-white/5 text-white backdrop-blur-md border border-white/10 px-14 py-6 font-bold text-xl hover:bg-white/10 transition-all btn-sharp text-center"
+              >
                 Talk to a Mentor
-              </button>
+              </a>
             </div>
             <div className="mt-24 grid grid-cols-1 md:grid-cols-3 gap-12 max-w-4xl mx-auto border-t border-white/10 pt-20">
               <div>
