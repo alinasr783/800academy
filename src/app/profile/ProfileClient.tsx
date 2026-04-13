@@ -68,6 +68,37 @@ function daysUntil(dateStr: string) {
   return Math.ceil((target - now) / (1000 * 60 * 60 * 24));
 }
 
+function formatDuration(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}m ${s.toString().padStart(2, "0")}s`;
+}
+
+function getScoreStyles(score: number) {
+  const percent = (score / 800) * 100;
+  if (percent <= 50) {
+    return {
+      wrapper: "bg-rose-50 border-rose-200 text-rose-700",
+      icon: "text-rose-500",
+    };
+  } else if (percent < 70) {
+    return {
+      wrapper: "bg-amber-50 border-amber-200 text-amber-700",
+      icon: "text-amber-500",
+    };
+  } else if (percent < 85) {
+    return {
+      wrapper: "bg-blue-50 border-blue-200 text-blue-700",
+      icon: "text-blue-500",
+    };
+  } else {
+    return {
+      wrapper: "bg-emerald-50 border-emerald-200 text-emerald-700",
+      icon: "text-emerald-500",
+    };
+  }
+}
+
 export default function ProfileClient() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -202,6 +233,17 @@ export default function ProfileClient() {
     return map;
   }, [activeEntitlements, completedExamCountBySubject]);
 
+  /* Build a subject-title lookup from entitlements for the scores section */
+  const subjectTitleMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const e of entitlements) {
+      if (e.subjects?.title) {
+        map.set(e.subject_id, e.subjects.title);
+      }
+    }
+    return map;
+  }, [entitlements]);
+
   async function onSave() {
     setSaving(true);
     setError(null);
@@ -278,7 +320,7 @@ export default function ProfileClient() {
 
   if (loading) {
     return (
-      <section className="max-w-[1440px] mx-auto px-8 lg:px-12 py-20">
+      <section className="max-w-[1440px] mx-auto px-8 lg:px-12 py-10">
         <div className="bg-surface-variant border border-outline/40 p-10 text-on-surface-variant font-medium">
           Loading…
         </div>
@@ -287,16 +329,17 @@ export default function ProfileClient() {
   }
 
   return (
-    <section className="max-w-[1440px] mx-auto px-8 lg:px-12 py-20">
-      <div className="flex items-center justify-between gap-6 mb-8">
+    <section className="max-w-[1440px] mx-auto px-8 lg:px-12 py-8 md:py-10">
+      <div className="flex items-center justify-between gap-6 mb-6">
         <BackButton fallbackHref="/" />
         <Breadcrumbs items={[{ label: "Home", href: "/" }, { label: "My Account" }]} />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+        {/* ── Sidebar ── */}
         <div className="lg:col-span-4">
-          <div className="bg-white border border-outline/60 shadow-soft-xl p-8">
+          <div className="bg-white border border-outline/60 shadow-soft-xl p-8 rounded-2xl">
             <div className="flex items-start justify-between gap-6">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 min-w-0">
                 <input
                   id="avatar-upload"
                   type="file"
@@ -311,13 +354,13 @@ export default function ProfileClient() {
 
                 <label
                   htmlFor="avatar-upload"
-                  className="w-16 h-16 bg-surface-variant border border-outline/40 overflow-hidden rounded-full flex items-center justify-center cursor-pointer group"
+                  className="w-16 h-16 min-w-[4rem] min-h-[4rem] bg-surface-variant border border-outline/40 overflow-hidden rounded-full flex items-center justify-center cursor-pointer group flex-shrink-0"
                 >
                   {profile?.avatar_url ? (
                     <img
                       src={profile.avatar_url}
                       alt={profile.full_name ?? "Avatar"}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover rounded-full"
                     />
                   ) : (
                     <span className="material-symbols-outlined text-primary text-[28px]">
@@ -325,19 +368,19 @@ export default function ProfileClient() {
                     </span>
                   )}
                 </label>
-                <div>
-                  <div className="text-xl font-extrabold text-primary tracking-tight">
+                <div className="min-w-0">
+                  <div className="text-xl font-extrabold text-primary tracking-tight truncate">
                     {profile?.full_name || "Your Profile"}
                   </div>
-                  <div className="text-xs text-on-surface-variant font-medium mt-1">
-                    {profile?.email ?? ""}
+                  <div className="text-xs text-on-surface-variant font-medium mt-1 truncate">
+                    {profile?.bio || "No bio yet"}
                   </div>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={onLogout}
-                className="text-xs font-bold text-on-surface-variant hover:text-primary transition-colors"
+                className="text-xs font-bold text-on-surface-variant hover:text-primary transition-colors flex-shrink-0"
               >
                 Logout
               </button>
@@ -347,7 +390,7 @@ export default function ProfileClient() {
               <div className="text-xs font-bold text-primary uppercase tracking-widest mb-3">
                 Motivation
               </div>
-              <div className="bg-surface-variant border border-outline/40 p-5 text-sm text-on-surface leading-relaxed font-medium">
+              <div className="bg-surface-variant border border-outline/40 p-5 text-sm text-on-surface leading-relaxed font-medium rounded-xl">
                 {quote}
               </div>
             </div>
@@ -379,6 +422,18 @@ export default function ProfileClient() {
 
               <div>
                 <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">
+                  Email
+                </div>
+                <input
+                  value={profile?.email ?? ""}
+                  disabled
+                  className="w-full bg-surface-variant border border-outline px-4 py-3 text-sm outline-none btn-sharp text-on-surface-variant cursor-not-allowed"
+                  placeholder="Email"
+                />
+              </div>
+
+              <div>
+                <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">
                   Bio
                 </div>
                 <textarea
@@ -390,10 +445,10 @@ export default function ProfileClient() {
                 />
               </div>
 
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex w-full gap-3">
                 <label
                   htmlFor="avatar-upload"
-                  className="bg-white text-primary border border-outline px-4 py-3 text-xs font-bold hover:bg-surface-variant transition-all btn-sharp cursor-pointer"
+                  className="flex-1 bg-white text-primary border border-outline px-4 py-3 text-xs font-bold hover:bg-surface-variant transition-all btn-sharp cursor-pointer text-center"
                 >
                   Upload avatar
                 </label>
@@ -401,7 +456,7 @@ export default function ProfileClient() {
                   type="button"
                   onClick={onSave}
                   disabled={saving}
-                  className="bg-primary text-white px-6 py-3 text-xs font-bold hover:bg-slate-800 transition-all btn-sharp disabled:opacity-60"
+                  className="flex-1 bg-primary text-white px-6 py-3 text-xs font-bold hover:bg-slate-800 transition-all btn-sharp disabled:opacity-60"
                 >
                   Save
                 </button>
@@ -421,18 +476,20 @@ export default function ProfileClient() {
           </div>
         </div>
 
+        {/* ── Main content ── */}
         <div className="lg:col-span-8 space-y-10">
-          <div className="bg-white border border-outline/60 shadow-soft-xl p-8">
-            <div className="flex items-end justify-between gap-8 mb-8">
+          {/* Active Subscriptions */}
+          <div className="bg-white border border-outline/60 shadow-soft-xl p-6 md:p-8 rounded-2xl">
+            <div className="flex items-end justify-between gap-4 md:gap-8 mb-8">
               <div>
                 <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
                   Access
                 </div>
-                <h2 className="font-headline text-4xl font-extrabold text-primary tracking-tighter">
+                <h2 className="font-headline text-2xl md:text-4xl font-extrabold text-primary tracking-tighter">
                   Active Subscriptions
                 </h2>
               </div>
-              <div className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">
+              <div className="text-[10px] md:text-xs uppercase tracking-widest text-on-surface-variant font-bold whitespace-nowrap">
                 {expiringSoon.length ? `${expiringSoon.length} expiring soon` : "All good"}
               </div>
             </div>
@@ -451,18 +508,19 @@ export default function ProfileClient() {
                         if (!slug) return;
                         router.push(`/subjects/${slug}?focus=exams&hideOffers=1`);
                       }}
-                      className={
+                      className={[
+                        "w-full text-left rounded-xl transition-all hover:shadow-md",
                         soon
                           ? "border border-amber-200 bg-amber-50/40 p-6"
-                          : "border border-outline/60 bg-surface-variant/30 p-6"
-                      }
+                          : "border border-outline/60 bg-surface-variant/30 p-6",
+                      ].join(" ")}
                     >
                       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
                         <div>
                           <div className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant">
                             {e.subjects?.track ?? "Subject"}
                           </div>
-                          <div className="text-2xl font-extrabold text-primary mt-2 tracking-tight">
+                          <div className="text-xl md:text-2xl font-extrabold text-primary mt-2 tracking-tight">
                             {e.subjects?.title ?? "Subscription"}
                           </div>
                           <div className="text-sm text-on-surface-variant font-medium mt-2">
@@ -470,14 +528,14 @@ export default function ProfileClient() {
                           </div>
                         </div>
 
-                        <div className="min-w-[260px]">
+                        <div className="min-w-0 md:min-w-[260px] w-full md:w-auto">
                           <div className="flex items-center justify-between text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-3">
                             <span>Progress</span>
                             <span>{percent}%</span>
                           </div>
-                          <div className="h-3 bg-white border border-outline/60 overflow-hidden">
+                          <div className="h-3 bg-white border border-outline/60 overflow-hidden rounded-full">
                             <div
-                              className="h-full bg-secondary"
+                              className="h-full bg-secondary rounded-full transition-all duration-500"
                               style={{ width: `${percent}%` }}
                             />
                           </div>
@@ -491,19 +549,172 @@ export default function ProfileClient() {
                 })}
               </div>
             ) : (
-              <div className="border border-outline/60 bg-surface-variant px-6 py-10 text-on-surface-variant font-medium">
+              <div className="border border-outline/60 bg-surface-variant px-6 py-10 text-on-surface-variant font-medium rounded-xl">
                 No active subscriptions yet.
               </div>
             )}
           </div>
 
-          <div className="bg-white border border-outline/60 shadow-soft-xl p-8">
-            <div className="flex items-end justify-between gap-8 mb-8">
+          {/* ── My Scores ── */}
+          <div className="bg-white border border-outline/60 shadow-soft-xl p-6 md:p-8 rounded-2xl">
+            <div className="flex items-end justify-between gap-4 md:gap-8 mb-8">
+              <div>
+                <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
+                  Performance
+                </div>
+                <h2 className="font-headline text-2xl md:text-4xl font-extrabold text-primary tracking-tighter">
+                  My Scores
+                </h2>
+              </div>
+              <div className="text-[10px] md:text-xs uppercase tracking-widest text-on-surface-variant font-bold whitespace-nowrap">
+                {attempts.length} submission{attempts.length === 1 ? "" : "s"}
+              </div>
+            </div>
+
+            {attempts.length ? (
+              <>
+                {/* Desktop table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b-2 border-outline/40">
+                        <th className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant py-3 pr-4">
+                          #
+                        </th>
+                        <th className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant py-3 pr-4">
+                          Exam
+                        </th>
+                        <th className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant py-3 pr-4">
+                          Subject
+                        </th>
+                        <th className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant py-3 pr-4">
+                          Score
+                        </th>
+                        <th className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant py-3 pr-4">
+                          Duration
+                        </th>
+                        <th className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant py-3">
+                          Date
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {attempts.map((a, idx) => {
+                        const subjectTitle =
+                          (a.exams?.subject_id
+                            ? subjectTitleMap.get(a.exams.subject_id)
+                            : undefined) ?? "—";
+                        const scoreStyles = getScoreStyles(a.score);
+                        return (
+                          <tr
+                            key={a.id}
+                            className="border-b border-outline/20 hover:bg-surface-variant/40 transition-colors"
+                          >
+                            <td className="py-4 pr-4 text-xs text-on-surface-variant font-medium">
+                              {idx + 1}
+                            </td>
+                            <td className="py-4 pr-4 text-sm font-bold text-primary">
+                              {a.exams?.title ?? `Exam #${a.exams?.exam_number ?? "—"}`}
+                            </td>
+                            <td className="py-4 pr-4 text-sm text-on-surface-variant font-medium">
+                              {subjectTitle}
+                            </td>
+                            <td className="py-4 pr-4">
+                              <span className={`inline-flex items-center gap-1.5 border font-extrabold text-sm px-3 py-1 rounded-lg ${scoreStyles.wrapper}`}>
+                                <span
+                                  className={`material-symbols-outlined text-sm ${scoreStyles.icon}`}
+                                  style={{ fontVariationSettings: "'FILL' 1" }}
+                                >
+                                  star
+                                </span>
+                                {a.score} / 800
+                              </span>
+                            </td>
+                            <td className="py-4 pr-4 text-sm text-on-surface-variant font-medium">
+                              {formatDuration(a.duration_seconds)}
+                            </td>
+                            <td className="py-4 text-sm text-on-surface-variant font-medium">
+                              {new Date(a.submitted_at).toLocaleDateString(undefined, {
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                              })}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile cards */}
+                <div className="md:hidden space-y-4">
+                  {attempts.map((a, idx) => {
+                    const subjectTitle =
+                      (a.exams?.subject_id
+                        ? subjectTitleMap.get(a.exams.subject_id)
+                        : undefined) ?? "—";
+                    const scoreStyles = getScoreStyles(a.score);
+                    return (
+                      <div
+                        key={a.id}
+                        className="border border-outline/40 bg-surface-variant/20 rounded-xl p-4 space-y-3"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-[10px] uppercase tracking-[0.15em] font-black text-on-surface-variant mb-1">
+                              #{idx + 1} · {subjectTitle}
+                            </div>
+                            <div className="text-sm font-bold text-primary truncate">
+                              {a.exams?.title ?? `Exam #${a.exams?.exam_number ?? "—"}`}
+                            </div>
+                          </div>
+                          <span className={`inline-flex items-center gap-1 border font-extrabold text-xs px-2.5 py-1 rounded-lg flex-shrink-0 ${scoreStyles.wrapper}`}>
+                            <span
+                              className={`material-symbols-outlined text-xs ${scoreStyles.icon}`}
+                              style={{ fontVariationSettings: "'FILL' 1" }}
+                            >
+                              star
+                            </span>
+                            {a.score}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-4 text-xs text-on-surface-variant font-medium">
+                          <span className="flex items-center gap-1">
+                            <span className="material-symbols-outlined text-sm">timer</span>
+                            {formatDuration(a.duration_seconds)}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="material-symbols-outlined text-sm">calendar_today</span>
+                            {new Date(a.submitted_at).toLocaleDateString(undefined, {
+                              month: "short",
+                              day: "numeric",
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <div className="border border-outline/60 bg-surface-variant px-6 py-10 text-on-surface-variant font-medium rounded-xl text-center">
+                <span className="material-symbols-outlined text-4xl text-on-surface-variant/40 mb-3 block">
+                  assignment
+                </span>
+                No submissions yet. Start an exam to see your scores here!
+              </div>
+            )}
+          </div>
+
+          {/* Previous Orders */}
+          <div className="bg-white border border-outline/60 shadow-soft-xl p-6 md:p-8 rounded-2xl">
+            <div className="flex items-end justify-between gap-4 md:gap-8 mb-8">
               <div>
                 <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
                   History
                 </div>
-                <h2 className="font-headline text-4xl font-extrabold text-primary tracking-tighter">
+                <h2 className="font-headline text-2xl md:text-4xl font-extrabold text-primary tracking-tighter">
                   Previous Orders
                 </h2>
               </div>
@@ -514,7 +725,7 @@ export default function ProfileClient() {
                 {orders.map((o) => (
                   <div
                     key={o.id}
-                    className="border border-outline/60 bg-surface-variant/30 p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+                    className="border border-outline/60 bg-surface-variant/30 p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4 rounded-xl"
                   >
                     <div>
                       <div className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant">
@@ -534,7 +745,7 @@ export default function ProfileClient() {
                 ))}
               </div>
             ) : (
-              <div className="border border-outline/60 bg-surface-variant px-6 py-10 text-on-surface-variant font-medium">
+              <div className="border border-outline/60 bg-surface-variant px-6 py-10 text-on-surface-variant font-medium rounded-xl">
                 No orders yet.
               </div>
             )}

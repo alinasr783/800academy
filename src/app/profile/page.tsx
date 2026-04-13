@@ -9,7 +9,7 @@ export default function ProfilePage() {
   return (
     <>
       <SiteHeader />
-      <main className="pt-24">
+      <main className="pt-20">
         <ProfileClient />
       </main>
     </>
