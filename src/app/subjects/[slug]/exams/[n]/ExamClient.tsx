@@ -208,6 +208,7 @@ export default function ExamClient({
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<SubmitResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const questionTopRef = useRef<HTMLDivElement | null>(null);
 
   const [accessChecked, setAccessChecked] = useState(false);
   const [accessAllowed, setAccessAllowed] = useState(exam.is_free);
@@ -226,6 +227,10 @@ export default function ExamClient({
   );
 
   const [qState, setQState] = useState<Map<string, QuestionState>>(new Map());
+
+  /* Past attempts for the donut history feature */
+  const [pastAttempts, setPastAttempts] = useState<{ id: string; score: number; submitted_at: string }[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(0);
 
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(offers[0]?.id ?? null);
   const selectedOffer = useMemo(() => {
@@ -484,6 +489,33 @@ export default function ExamClient({
     };
   }, [allExams]);
 
+  /* Load past attempts for score history donut */
+  useEffect(() => {
+    if (!result) return;
+    let mounted = true;
+    async function loadPastAttempts() {
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const user = sess.session?.user;
+        if (!user) return;
+        const { data: rows } = await supabase
+          .from("exam_attempts")
+          .select("id,score,submitted_at")
+          .eq("user_id", user.id)
+          .eq("exam_id", exam.id)
+          .order("submitted_at", { ascending: false })
+          .limit(100)
+          .returns<{ id: string; score: number; submitted_at: string }[]>();
+        if (mounted && rows) {
+          setPastAttempts(rows);
+          setHistoryIndex(0);
+        }
+      } catch { /* ignore */ }
+    }
+    loadPastAttempts();
+    return () => { mounted = false; };
+  }, [result, exam.id]);
+
   const currentQuestion = questions[currentIndex] ?? null;
 
   useEffect(() => {
@@ -741,40 +773,55 @@ export default function ExamClient({
     router.push(`/checkout?offer=${selectedOffer.id}`);
   }
 
+  /* ── Timer urgency color ── */
+  const timerUrgent = remaining <= 60;
+  const timerWarn = remaining <= 300 && !timerUrgent;
+
   if (showNoQuestions) {
     return (
-      <div className="bg-surface-variant border border-outline/40 p-10 text-on-surface-variant font-medium">
+      <div className="bg-slate-50 border-2 border-outline/30 rounded-2xl p-10 text-on-surface-variant font-medium text-center">
+        <span className="material-symbols-outlined text-4xl text-on-surface-variant/40 block mb-3">quiz</span>
         No questions yet for this exam. Add questions in Supabase and refresh.
       </div>
     );
   }
 
   return (
-    <div className="relative bg-surface-variant/20 border border-outline/60 shadow-soft-xl overflow-hidden">
+    <div className="relative bg-white border-2 border-outline/30 rounded-2xl shadow-soft-xl overflow-hidden">
+      {/* ── Checking access modal ── */}
       {checkingAccess ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/40">
-          <div className="w-full max-w-lg bg-white border border-outline/60 shadow-soft-xl p-8">
-            <div className="text-xs font-black uppercase tracking-[0.2em] text-on-surface-variant">
-              Checking access
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-lg bg-white border-2 border-outline/30 rounded-2xl shadow-2xl p-6 sm:p-8">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="material-symbols-outlined text-secondary text-2xl animate-spin">progress_activity</span>
+              <div className="text-xs font-black uppercase tracking-[0.2em] text-on-surface-variant">
+                Checking access
+              </div>
             </div>
-            <div className="text-2xl font-extrabold text-primary mt-3 tracking-tight">
+            <div className="text-xl sm:text-2xl font-extrabold text-primary tracking-tight">
               Please wait…
             </div>
           </div>
         </div>
       ) : null}
 
+      {/* ── Paywall modal (ALL ENGLISH) ── */}
       {showPaywall ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/40">
-          <div className="w-full max-w-lg bg-white border border-outline/60 shadow-soft-xl p-8">
-            <div className="text-xs font-black uppercase tracking-[0.2em] text-on-surface-variant">
-              Locked
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-lg bg-white border-2 border-outline/30 rounded-2xl shadow-2xl p-6 sm:p-8">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center">
+                <span className="material-symbols-outlined text-amber-600 text-xl">lock</span>
+              </div>
+              <div className="text-xs font-black uppercase tracking-[0.2em] text-on-surface-variant">
+                Locked
+              </div>
             </div>
-            <div className="text-2xl font-extrabold text-primary mt-3 tracking-tight">
-              الاختبار ده متاح للمشتركين فقط
+            <div className="text-xl sm:text-2xl font-extrabold text-primary mt-3 tracking-tight">
+              This exam is for subscribers only
             </div>
-            <div className="mt-4 text-on-surface-variant font-medium leading-relaxed">
-              أنت مش مشترك في باقة <span className="font-extrabold text-primary">{subjectTitle}</span>، اشترك علشان تقدر تشوف الاختبار ده.
+            <div className="mt-4 text-on-surface-variant font-medium leading-relaxed text-sm sm:text-base">
+              You don&apos;t have an active subscription for <span className="font-extrabold text-primary">{subjectTitle}</span>. Subscribe to unlock this exam.
             </div>
             {offers.length > 1 ? (
               <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -787,8 +834,8 @@ export default function ExamClient({
                       onClick={() => setSelectedOfferId(offer.id)}
                       className={
                         active
-                          ? "text-left bg-surface-variant border border-primary px-4 py-4 transition-all"
-                          : "text-left bg-white border border-outline/60 px-4 py-4 hover:bg-surface-variant transition-all"
+                          ? "text-left bg-primary/5 border-2 border-primary rounded-xl px-4 py-4 transition-all"
+                          : "text-left bg-slate-50 border-2 border-outline/30 rounded-xl px-4 py-4 hover:bg-primary/5 hover:border-primary/30 transition-all"
                       }
                       aria-pressed={active}
                     >
@@ -802,7 +849,7 @@ export default function ExamClient({
               </div>
             ) : null}
             {selectedOffer ? (
-              <div className="mt-5 bg-surface-variant border border-outline/50 p-4">
+              <div className="mt-5 bg-primary/5 border-2 border-primary/10 rounded-xl p-4">
                 <div className="text-sm font-extrabold text-primary">{selectedOffer.label}</div>
                 <div className="text-sm text-on-surface-variant font-medium mt-1">
                   {formatMoney(selectedOffer.price_cents, selectedOffer.currency)} • Expires{" "}
@@ -810,92 +857,85 @@ export default function ExamClient({
                 </div>
               </div>
             ) : (
-              <div className="mt-5 bg-surface-variant border border-outline/50 p-4 text-on-surface-variant font-medium">
-                لا يوجد عرض شراء متاح حاليًا لهذه الباقة.
+              <div className="mt-5 bg-slate-50 border-2 border-outline/30 rounded-xl p-4 text-on-surface-variant font-medium">
+                No purchase offers are currently available for this package.
               </div>
             )}
-            <div className="mt-8 flex flex-col sm:flex-row gap-4">
+            <div className="mt-8 flex flex-col sm:flex-row gap-3">
               {sessionUserId ? null : (
                 <button
                   type="button"
                   onClick={() => router.push("/join?mode=login")}
-                  className="flex-1 bg-white text-primary border border-outline px-10 py-4 font-bold text-base hover:bg-surface-variant transition-all rounded-full"
+                  className="flex-1 bg-white text-primary border-2 border-outline/40 px-6 sm:px-10 py-3 sm:py-4 font-bold text-sm sm:text-base hover:bg-primary/5 transition-all rounded-xl"
                 >
-                  تسجيل الدخول
+                  Sign in
                 </button>
               )}
               <button
                 type="button"
                 disabled={!selectedOffer}
                 onClick={goToCheckout}
-                className="flex-1 bg-secondary text-white px-10 py-4 font-bold text-base hover:bg-primary transition-all rounded-full disabled:opacity-60"
+                className="flex-1 bg-secondary text-white px-6 sm:px-10 py-3 sm:py-4 font-bold text-sm sm:text-base hover:bg-primary transition-all rounded-xl disabled:opacity-60"
               >
-                اشتري الآن
+                Buy now
               </button>
             </div>
           </div>
         </div>
       ) : null}
 
-      <div className="flex">
-        <aside
-          className={
-            navOpen
-              ? "w-80 border-r border-outline/40 bg-surface-variant/30 transition-all"
-              : "w-16 border-r border-outline/40 bg-surface-variant/30 transition-all"
-          }
-        >
-          <div className="p-4 flex items-center justify-between gap-3 border-b border-outline/40">
-            {navOpen ? (
+      <div className="flex relative">
+        {/* ── Side navigation — hidden on mobile, collapsible on desktop ── */}
+        {navOpen ? (
+          <aside
+            className="hidden lg:block w-80 border-r border-outline/30 bg-gradient-to-b from-slate-50 to-white transition-all"
+          >
+            <div className="p-4 flex items-center justify-between gap-3 border-b border-outline/30">
               <div className="min-w-0">
                 <div className="inline-flex items-center px-2.5 py-1 rounded-full bg-secondary/10 border border-secondary/20 text-[10px] font-black tracking-[0.2em] uppercase text-secondary">
                   Package
                 </div>
                 <div className="mt-2">
-                  <div className="inline-flex max-w-full px-3 py-2 bg-white border border-outline/60 shadow-sm">
+                  <div className="inline-flex max-w-full px-3 py-2 bg-white border-2 border-outline/30 rounded-lg shadow-sm">
                     <div className="text-sm font-extrabold text-primary truncate">{subjectNavTitle}</div>
                   </div>
                 </div>
               </div>
-            ) : (
-              <span className="material-symbols-outlined text-secondary">menu</span>
-            )}
-            <button
-              type="button"
-              onClick={() => setNavOpen((v) => !v)}
-              className="h-10 w-10 flex items-center justify-center bg-white border border-outline/60 hover:bg-surface-variant transition-all"
-              aria-label={navOpen ? "Collapse" : "Expand"}
-            >
-              <span className="material-symbols-outlined text-[18px] text-primary">
-                {navOpen ? "chevron_left" : "chevron_right"}
-              </span>
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => setNavOpen(false)}
+                className="h-10 w-10 flex items-center justify-center bg-white border-2 border-outline/30 rounded-lg hover:bg-primary/5 transition-all"
+                aria-label="Collapse"
+              >
+                <span className="material-symbols-outlined text-[18px] text-primary">
+                  chevron_left
+                </span>
+              </button>
+            </div>
 
-          <div className="p-3">
-            <div className="text-xs font-bold text-primary uppercase tracking-widest mb-3">Exams</div>
-            <div className="space-y-2 max-h-[70vh] overflow-auto pr-1">
-              {allExams.map((e) => {
-                const st = examStatus.get(e.id);
-                const isCurrent = e.exam_number === examNumber;
-                const passed = !!st?.passed;
-                const attempted = !!st?.attempted;
-                const dot = passed ? "bg-emerald-500" : attempted ? "bg-amber-500" : "bg-slate-300";
-                const row = isCurrent
-                  ? "border border-primary bg-white"
-                  : "border border-outline/40 bg-surface-variant hover:bg-white";
+            <div className="p-3">
+              <div className="text-xs font-bold text-primary uppercase tracking-widest mb-3">Exams</div>
+              <div className="space-y-2 max-h-[70vh] overflow-auto pr-1">
+                {allExams.map((e) => {
+                  const st = examStatus.get(e.id);
+                  const isCurrent = e.exam_number === examNumber;
+                  const passed = !!st?.passed;
+                  const attempted = !!st?.attempted;
+                  const dot = passed ? "bg-emerald-500" : attempted ? "bg-amber-500" : "bg-slate-300";
+                  const row = isCurrent
+                    ? "border-2 border-primary bg-primary/5 rounded-lg"
+                    : "border-2 border-outline/20 bg-white hover:bg-primary/5 hover:border-primary/30 rounded-lg";
 
-                return (
-                  <button
-                    key={e.id}
-                    type="button"
-                    onClick={() => router.push(`/subjects/${subjectSlug}/exams/${e.exam_number}`)}
-                    className={`w-full text-left px-3 py-3 ${row} transition-all`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0 flex items-center gap-3">
-                        <span className={`h-2.5 w-2.5 rounded-full ${dot}`} />
-                        {navOpen ? (
+                  return (
+                    <button
+                      key={e.id}
+                      type="button"
+                      onClick={() => router.push(`/subjects/${subjectSlug}/exams/${e.exam_number}`)}
+                      className={`w-full text-left px-3 py-3 ${row} transition-all`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0 flex items-center gap-3">
+                          <span className={`h-2.5 w-2.5 rounded-full ${dot} flex-shrink-0`} />
                           <div className="min-w-0">
                             <div className="text-sm font-extrabold text-primary truncate">
                               Exam {e.exam_number}
@@ -904,70 +944,79 @@ export default function ExamClient({
                               {e.title}
                             </div>
                           </div>
-                        ) : (
-                          <div className="text-sm font-extrabold text-primary">{e.exam_number}</div>
-                        )}
-                      </div>
-                      {navOpen ? (
+                        </div>
                         <span
                           className={
                             e.is_free
-                              ? "px-2 py-1 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-black tracking-[0.2em] uppercase"
-                              : "px-2 py-1 bg-slate-50 border border-slate-200 text-slate-800 text-[10px] font-black tracking-[0.2em] uppercase"
+                              ? "px-2 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-black tracking-[0.15em] uppercase rounded-md"
+                              : "px-2 py-1 bg-slate-50 border border-slate-200 text-slate-600 text-[10px] font-black tracking-[0.15em] uppercase rounded-md"
                           }
                         >
                           {e.is_free ? "Free" : "Paid"}
                         </span>
-                      ) : null}
-                    </div>
-                  </button>
-                );
-              })}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        </aside>
+          </aside>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setNavOpen(true)}
+            className="hidden lg:flex absolute left-0 top-4 z-20 h-10 w-10 items-center justify-center bg-white border-2 border-outline/30 rounded-r-lg shadow-md hover:bg-primary/5 transition-all"
+            aria-label="Expand navigation"
+          >
+            <span className="material-symbols-outlined text-[18px] text-primary">
+              chevron_right
+            </span>
+          </button>
+        )}
 
-        <div className="flex-1 min-w-0 bg-surface-variant/10">
-          <div className="border-b border-outline/40 bg-white">
-            <div className="px-8 py-6 flex flex-col gap-4">
-              <div className="flex items-center justify-between gap-6">
+        {/* ── Main content area ── */}
+        <div className="flex-1 min-w-0 bg-white">
+          {/* Header */}
+          <div className="border-b border-outline/30 bg-gradient-to-r from-slate-50 to-white">
+            <div className="px-4 sm:px-6 md:px-8 py-4 sm:py-6 flex flex-col gap-3 sm:gap-4">
+              <div className="flex items-center justify-between gap-4 sm:gap-6">
                 <BackButton fallbackHref={`/subjects/${subjectSlug}?focus=exams`} />
                 <Breadcrumbs items={breadcrumbs} />
               </div>
 
-              <div className="flex items-start justify-between gap-6">
-                <div>
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 sm:gap-6">
+                <div className="min-w-0">
                   <div className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant">
                     Exam {examNumber}
                   </div>
-                  <div className="text-2xl font-extrabold text-primary mt-2 tracking-tight">{exam.title}</div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface-variant border border-outline/40 text-xs font-extrabold text-primary">
-                      <span className="material-symbols-outlined text-[16px] text-secondary">quiz</span>
+                  <div className="text-xl sm:text-2xl font-extrabold text-primary mt-1 sm:mt-2 tracking-tight truncate">{exam.title}</div>
+                  <div className="mt-3 sm:mt-4 flex flex-wrap gap-2">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-blue-50 border border-blue-200 text-[10px] sm:text-xs font-extrabold text-blue-700 rounded-lg">
+                      <span className="material-symbols-outlined text-[14px] sm:text-[16px] text-blue-500">quiz</span>
                       {questions.length} questions
                     </div>
-                    <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface-variant border border-outline/40 text-xs font-extrabold text-primary">
-                      <span className="material-symbols-outlined text-[16px] text-secondary">timer</span>
-                      Time {Math.round(exam.duration_seconds / 60)} min
+                    <div className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-indigo-50 border border-indigo-200 text-[10px] sm:text-xs font-extrabold text-indigo-700 rounded-lg">
+                      <span className="material-symbols-outlined text-[14px] sm:text-[16px] text-indigo-500">timer</span>
+                      {Math.round(exam.duration_seconds / 60)} min
                     </div>
-                    <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface-variant border border-outline/40 text-xs font-extrabold text-primary">
-                      <span className="material-symbols-outlined text-[16px] text-secondary">repeat</span>
+                    <div className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-purple-50 border border-purple-200 text-[10px] sm:text-xs font-extrabold text-purple-700 rounded-lg">
+                      <span className="material-symbols-outlined text-[14px] sm:text-[16px] text-purple-500">repeat</span>
                       {typeof exam.max_attempts === "number"
-                        ? `Max attempts ${exam.max_attempts}`
-                        : "Unlimited attempts"}
+                        ? `Max ${exam.max_attempts}`
+                        : "Unlimited"}
                     </div>
-                    <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface-variant border border-outline/40 text-xs font-extrabold text-primary">
-                      <span className="material-symbols-outlined text-[16px] text-secondary">task_alt</span>
+                    <div className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-amber-50 border border-amber-200 text-[10px] sm:text-xs font-extrabold text-amber-700 rounded-lg">
+                      <span className="material-symbols-outlined text-[14px] sm:text-[16px] text-amber-500">task_alt</span>
                       Pass {exam.pass_percent}%
                     </div>
                     <div
                       className={
                         exam.is_free
-                          ? "inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-xs font-extrabold text-emerald-800"
-                          : "inline-flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 text-xs font-extrabold text-slate-800"
+                          ? "inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-emerald-50 border border-emerald-200 text-[10px] sm:text-xs font-extrabold text-emerald-700 rounded-lg"
+                          : "inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-slate-100 border border-slate-300 text-[10px] sm:text-xs font-extrabold text-slate-600 rounded-lg"
                       }
                     >
-                      <span className="material-symbols-outlined text-[16px]">
+                      <span className="material-symbols-outlined text-[14px] sm:text-[16px]">
                         {exam.is_free ? "lock_open" : "lock"}
                       </span>
                       {exam.is_free ? "Free" : "Paid"}
@@ -975,13 +1024,13 @@ export default function ExamClient({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-shrink-0">
                   {!started ? (
                     <button
                       type="button"
                       onClick={start}
                       disabled={contentLoading}
-                      className="bg-secondary text-white px-6 py-3 font-bold text-sm hover:bg-primary transition-all rounded-full"
+                      className="bg-secondary text-white px-5 sm:px-6 py-2.5 sm:py-3 font-bold text-sm hover:bg-primary transition-all rounded-xl active:scale-[0.97]"
                     >
                       Start test
                     </button>
@@ -990,7 +1039,7 @@ export default function ExamClient({
                       type="button"
                       onClick={() => onSubmit(false)}
                       disabled={submitting || !!result}
-                      className="bg-secondary text-white px-6 py-3 font-bold text-sm hover:bg-primary transition-all rounded-full disabled:opacity-60"
+                      className="bg-secondary text-white px-5 sm:px-6 py-2.5 sm:py-3 font-bold text-sm hover:bg-primary transition-all rounded-xl disabled:opacity-60 active:scale-[0.97]"
                     >
                       Submit
                     </button>
@@ -999,30 +1048,39 @@ export default function ExamClient({
               </div>
 
               {started ? (
-                <div className="flex items-center justify-between gap-6">
-                  <div className="flex items-center gap-2 bg-surface-variant border border-outline/40 px-4 py-3">
-                    <span className="material-symbols-outlined text-secondary text-[18px]">timer</span>
-                    <div className="text-sm font-extrabold text-primary">{secondsToClock(remaining)}</div>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-6">
+                  <div className={[
+                    "flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-3 rounded-xl border-2 transition-colors",
+                    timerUrgent ? "bg-rose-50 border-rose-300" : timerWarn ? "bg-amber-50 border-amber-300" : "bg-blue-50 border-blue-200",
+                  ].join(" ")}>
+                    <span className={[
+                      "material-symbols-outlined text-[18px]",
+                      timerUrgent ? "text-rose-500" : timerWarn ? "text-amber-500" : "text-blue-500",
+                    ].join(" ")}>timer</span>
+                    <div className={[
+                      "text-sm font-extrabold",
+                      timerUrgent ? "text-rose-700" : timerWarn ? "text-amber-700" : "text-blue-700",
+                    ].join(" ")}>{secondsToClock(remaining)}</div>
                   </div>
-                  <div className="flex-1">
-                    <div className="h-2 bg-surface-variant border border-outline/40 overflow-hidden">
+                  <div className="flex-1 min-w-0">
+                    <div className="h-2.5 bg-slate-100 border border-outline/30 overflow-hidden rounded-full">
                       <div
-                        className="h-full bg-secondary"
+                        className="h-full bg-gradient-to-r from-secondary to-primary rounded-full transition-all duration-500"
                         style={{ width: `${Math.max(0, Math.min(100, progressRatio * 100))}%` }}
                       />
                     </div>
-                    <div className="mt-2 text-xs text-on-surface-variant font-medium">
+                    <div className="mt-1.5 text-[10px] sm:text-xs text-on-surface-variant font-medium">
                       Answered {answeredCount}/{questions.length}
                     </div>
                   </div>
-                  <div className="flex bg-slate-50 p-2 border border-outline shadow-inner">
+                  <div className="flex bg-slate-100 p-1.5 rounded-xl border border-outline/30">
                     <button
                       type="button"
                       onClick={() => setTab("test")}
                       className={
                         tab === "test"
-                          ? "bg-white text-primary px-6 py-2.5 font-bold text-xs shadow-sm border border-outline/50 btn-sharp"
-                          : "text-on-surface-variant px-6 py-2.5 font-bold text-xs hover:text-primary transition-all"
+                          ? "bg-white text-primary px-4 sm:px-6 py-2 font-bold text-xs shadow-sm border border-outline/30 rounded-lg"
+                          : "text-on-surface-variant px-4 sm:px-6 py-2 font-bold text-xs hover:text-primary transition-all rounded-lg"
                       }
                     >
                       Test
@@ -1032,16 +1090,17 @@ export default function ExamClient({
                       onClick={() => setTab("reference")}
                       className={
                         tab === "reference"
-                          ? "bg-white text-primary px-6 py-2.5 font-bold text-xs shadow-sm border border-outline/50 btn-sharp"
-                          : "text-on-surface-variant px-6 py-2.5 font-bold text-xs hover:text-primary transition-all"
+                          ? "bg-white text-primary px-4 sm:px-6 py-2 font-bold text-xs shadow-sm border border-outline/30 rounded-lg"
+                          : "text-on-surface-variant px-4 sm:px-6 py-2 font-bold text-xs hover:text-primary transition-all rounded-lg"
                       }
                     >
-                      Reference sheet
+                      Reference
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="bg-surface-variant border border-outline/40 px-6 py-4 text-sm text-on-surface-variant font-medium">
+                <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 sm:px-6 py-3 sm:py-4 text-sm text-blue-700 font-medium flex items-center gap-2">
+                  <span className="material-symbols-outlined text-blue-500 text-lg">info</span>
                   When you start, the timer begins immediately and the attempt will auto-submit when time is over.
                 </div>
               )}
@@ -1049,122 +1108,185 @@ export default function ExamClient({
           </div>
 
       {error ? (
-        <div className="px-8 py-4 bg-rose-50 border-b border-rose-200 text-rose-700 text-sm">
+        <div className="px-4 sm:px-8 py-3 sm:py-4 bg-rose-50 border-b border-rose-200 text-rose-700 text-sm flex items-center gap-2">
+          <span className="material-symbols-outlined text-rose-500 text-lg">error</span>
           {error}
         </div>
       ) : null}
 
+      {/* ── Result screen ── */}
       {result ? (
-        <div className="p-10">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+        <div className="p-4 sm:p-6 md:p-10">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-10 items-start">
           <div className="lg:col-span-7">
             <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
               Result
             </div>
-            <div className="font-headline text-5xl font-extrabold text-primary tracking-tighter">
+            <div className="font-headline text-4xl sm:text-5xl font-extrabold text-primary tracking-tighter">
               {result.score}/800
             </div>
-            <div className="text-on-surface-variant text-lg font-medium mt-3">
+            <div className="text-on-surface-variant text-base sm:text-lg font-medium mt-3">
               {result.correctQuestions}/{result.totalQuestions} correct •{" "}
               {Math.round(result.questionsPercent)}% •{" "}
-              {result.passed ? "Passed" : "Not passed"}
+              <span className={result.passed ? "text-emerald-600 font-bold" : "text-rose-600 font-bold"}>
+                {result.passed ? "Passed ✓" : "Not passed"}
+              </span>
             </div>
 
-            <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-surface-variant border border-outline/40 p-6">
-                <div className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">
-                  Score
+            <div className="mt-8 sm:mt-10 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 sm:p-6">
+                <div className="text-xs uppercase tracking-widest text-blue-600 font-bold">
+                  Accuracy
                 </div>
-                <div className="text-3xl font-extrabold text-primary mt-2">
-                  {result.earnedPoints}/{result.totalPoints}
+                <div className="text-2xl sm:text-3xl font-extrabold text-blue-700 mt-2">
+                  {Math.round(result.questionsPercent)}%
                 </div>
               </div>
-              <div className="bg-surface-variant border border-outline/40 p-6">
-                <div className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">
+              <div className="bg-indigo-50 border-2 border-indigo-200 rounded-xl p-4 sm:p-6">
+                <div className="text-xs uppercase tracking-widest text-indigo-600 font-bold">
                   Time
                 </div>
-                <div className="text-3xl font-extrabold text-primary mt-2">
+                <div className="text-2xl sm:text-3xl font-extrabold text-indigo-700 mt-2">
                   {secondsToClock(result.durationSeconds)}
                 </div>
               </div>
-              <div className="bg-surface-variant border border-outline/40 p-6">
-                <div className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">
-                  Attempt
-                </div>
-                <div className="text-3xl font-extrabold text-primary mt-2">
-                  Saved
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-10 flex flex-col sm:flex-row gap-4">
-              <button
-                type="button"
-                className="bg-secondary text-white px-8 py-4 font-bold text-base hover:bg-primary transition-all rounded-full"
-                onClick={() => {
-                  setResult(null);
-                  setError(null);
-                  setSubmitting(false);
-                  setQState(buildInitialQState(questions));
-                  setCurrentIndex(0);
-                  setTab("test");
-                  start();
-                }}
-              >
-                Retake exam
-              </button>
-              <button
-                type="button"
-                className="bg-primary text-white px-8 py-4 font-bold text-base hover:bg-slate-800 transition-all rounded-full"
-                onClick={() => router.push("/profile")}
-              >
-                Go to profile
-              </button>
-              <button
-                type="button"
-                className="bg-white text-primary border border-outline px-8 py-4 font-bold text-base hover:bg-surface-variant transition-all rounded-full"
-                onClick={() => router.push(`/subjects/${subjectSlug}`)}
-              >
-                Back to subject
-              </button>
             </div>
           </div>
 
           <div className="lg:col-span-5">
-            <div className="bg-white border border-outline/60 shadow-soft-xl p-8">
+            <div className="bg-gradient-to-br from-slate-50 to-blue-50 border-2 border-outline/30 shadow-soft-xl rounded-2xl p-6 sm:p-8">
               <div className="text-xs font-bold text-primary uppercase tracking-widest mb-6">
                 Score breakdown
               </div>
-              <div className="flex items-center justify-center py-8">
-                <div className="relative w-44 h-44">
-                  <div
-                    className="absolute inset-0 rounded-full"
-                    style={{
-                      background: `conic-gradient(#3e5e95 ${result.questionsPercent}%, #e2e8f0 0)`,
-                    }}
-                  />
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                    <div className="text-3xl font-extrabold text-primary">
-                      {Math.round(result.questionsPercent)}%
+              <div className="flex items-center justify-center py-6 sm:py-8">
+                {(() => {
+                  const displayAttempt = pastAttempts[historyIndex];
+                  const displayScore = displayAttempt?.score ?? result.score;
+                  const scorePercent = (displayScore / 800) * 100;
+                  return (
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="relative w-36 h-36 sm:w-44 sm:h-44">
+                        <div
+                          className="absolute inset-0 rounded-full"
+                          style={{
+                            background: `conic-gradient(#3e5e95 ${scorePercent}%, #e2e8f0 0)`,
+                          }}
+                        />
+                        <div className="absolute inset-2 rounded-full bg-white" />
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                          <div className="text-2xl sm:text-3xl font-extrabold text-primary">
+                            {displayScore}
+                          </div>
+                          <div className="text-[10px] sm:text-xs text-on-surface-variant font-bold uppercase tracking-widest mt-1">
+                            / 800
+                          </div>
+                        </div>
+                      </div>
+                      {pastAttempts.length > 1 ? (
+                        <div className="flex items-center gap-4">
+                          <button
+                            type="button"
+                            disabled={historyIndex >= pastAttempts.length - 1}
+                            onClick={() => setHistoryIndex((i) => Math.min(pastAttempts.length - 1, i + 1))}
+                            className="w-9 h-9 flex items-center justify-center bg-white border-2 border-outline/30 rounded-lg hover:bg-primary/5 transition-all disabled:opacity-30"
+                            aria-label="Older attempt"
+                          >
+                            <span className="material-symbols-outlined text-[18px] text-primary">chevron_left</span>
+                          </button>
+                          <div className="text-xs text-on-surface-variant font-medium text-center min-w-[60px]">
+                            {historyIndex === 0 ? "Latest" : `#${pastAttempts.length - historyIndex}`}
+                          </div>
+                          <button
+                            type="button"
+                            disabled={historyIndex <= 0}
+                            onClick={() => setHistoryIndex((i) => Math.max(0, i - 1))}
+                            className="w-9 h-9 flex items-center justify-center bg-white border-2 border-outline/30 rounded-lg hover:bg-primary/5 transition-all disabled:opacity-30"
+                            aria-label="Newer attempt"
+                          >
+                            <span className="material-symbols-outlined text-[18px] text-primary">chevron_right</span>
+                          </button>
+                        </div>
+                      ) : null}
+                      <div className="text-[10px] text-on-surface-variant font-medium">
+                        {displayAttempt ? new Date(displayAttempt.submitted_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : ""}
+                      </div>
                     </div>
-                    <div className="text-xs text-on-surface-variant font-bold uppercase tracking-widest mt-1">
-                      Correct
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="text-sm text-on-surface-variant font-medium">
-                Attempt ID: {result.attemptId.slice(0, 8).toUpperCase()}
+                  );
+                })()}
               </div>
             </div>
           </div>
           </div>
 
-          <div className="mt-12">
+          {/* Review overview grid */}
+          <div className="mt-8 sm:mt-10 px-0">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-6 mb-4">
+              <div className="text-xs font-bold text-primary uppercase tracking-widest">Review Overview</div>
+              <div className="flex flex-wrap gap-3 sm:gap-4 text-[10px] sm:text-xs text-on-surface-variant font-medium">
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 border-2 border-emerald-400 bg-emerald-50 rounded-sm" />
+                  Correct
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 border-2 border-rose-400 bg-rose-50 rounded-sm" />
+                  Wrong
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 border-2 border-outline/40 bg-slate-100 rounded-sm" />
+                  Unanswered
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-12 lg:grid-cols-16 xl:grid-cols-20 gap-1.5 sm:gap-2">
+              {questions.map((q) => {
+                const st = qState.get(q.id);
+                const selected = new Set(st?.selectedOptionIds ?? []);
+                const fill = (st?.fillText ?? "").trim();
+                const correctFill = (q.correct_text ?? "").trim();
+                const correctOptionIds = new Set(q.options.filter((o) => o.is_correct).map((o) => o.id));
+                const hasAnswer = q.type === "fill" ? !!fill : selected.size > 0;
+                const isCorrect =
+                  q.type === "fill"
+                    ? fill.toLowerCase() === correctFill.toLowerCase() && !!correctFill
+                    : (() => {
+                        if (selected.size === 0) return false;
+                        if (q.allow_multiple) {
+                          if (selected.size !== correctOptionIds.size) return false;
+                          for (const id of selected) if (!correctOptionIds.has(id)) return false;
+                          return true;
+                        }
+                        if (selected.size !== 1) return false;
+                        for (const id of selected) return correctOptionIds.has(id);
+                        return false;
+                      })();
+                const border = !hasAnswer
+                  ? "border-outline/40"
+                  : isCorrect
+                    ? "border-emerald-400"
+                    : "border-rose-400";
+                const bg = !hasAnswer
+                  ? "bg-slate-100"
+                  : isCorrect
+                    ? "bg-emerald-50"
+                    : "bg-rose-50";
+                return (
+                  <div
+                    key={q.id}
+                    className={`h-8 sm:h-10 border-2 ${border} ${bg} font-bold text-xs sm:text-sm text-primary flex items-center justify-center rounded-lg`}
+                  >
+                    {q.question_number}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Review section */}
+          <div className="mt-8 sm:mt-12">
             <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
               Review
             </div>
-            <div className="space-y-8">
+            <div className="space-y-6 sm:space-y-8">
               {questions.map((q) => {
                 const st = qState.get(q.id);
                 const selected = new Set(st?.selectedOptionIds ?? []);
@@ -1190,41 +1312,41 @@ export default function ExamClient({
                       })();
 
                 return (
-                  <div key={q.id} className="bg-white border border-outline/60 shadow-soft-xl overflow-hidden">
-                    <div className="p-6 border-b border-outline/40 flex items-start justify-between gap-6">
+                  <div key={q.id} className="bg-white border-2 border-outline/30 shadow-sm rounded-2xl overflow-hidden">
+                    <div className="p-4 sm:p-6 border-b border-outline/30 flex items-start justify-between gap-4 sm:gap-6 bg-slate-50">
                       <div>
                         <div className="text-xs font-bold text-primary uppercase tracking-widest">
                           Question {q.question_number}
                         </div>
                       </div>
                       {!hasAnswer ? (
-                        <span className="px-3 py-1 bg-slate-100 text-slate-800 text-[10px] font-black tracking-[0.2em] uppercase">
+                        <span className="px-3 py-1 bg-slate-200 text-slate-700 text-[10px] font-black tracking-[0.15em] uppercase rounded-lg">
                           Unanswered
                         </span>
                       ) : isCorrect ? (
-                        <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-[10px] font-black tracking-[0.2em] uppercase">
+                        <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-black tracking-[0.15em] uppercase rounded-lg">
                           Correct
                         </span>
                       ) : (
-                        <span className="px-3 py-1 bg-rose-100 text-rose-800 text-[10px] font-black tracking-[0.2em] uppercase">
+                        <span className="px-3 py-1 bg-rose-100 text-rose-700 text-[10px] font-black tracking-[0.15em] uppercase rounded-lg">
                           Wrong
                         </span>
                       )}
                     </div>
 
-                    <div className="p-6 space-y-5">
+                    <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
                       {q.prompt_text ? (
-                        <div className="text-on-surface font-medium leading-relaxed">{q.prompt_text}</div>
+                        <div className="text-on-surface font-medium leading-relaxed text-sm sm:text-base">{q.prompt_text}</div>
                       ) : null}
 
                       {q.prompt_assets.length ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex flex-col items-center gap-4">
                           {q.prompt_assets.map((a) => {
                             const url = assetUrl(a);
                             return (
                               <div
                                 key={a.id}
-                                className="border border-outline/60 bg-surface-variant overflow-hidden"
+                                className="border-2 border-outline/30 bg-slate-50 overflow-hidden rounded-xl max-w-2xl w-full"
                               >
                                 {url ? (
                                   <img src={url} alt="Question asset" className="w-full h-auto" />
@@ -1238,18 +1360,18 @@ export default function ExamClient({
                       ) : null}
 
                       {q.type === "fill" ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="border border-outline/60 bg-surface-variant p-5">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="border-2 border-outline/30 bg-slate-50 p-4 sm:p-5 rounded-xl">
                             <div className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">
                               Your answer
                             </div>
-                            <div className="text-lg font-extrabold text-primary mt-2">{fill || "—"}</div>
+                            <div className="text-base sm:text-lg font-extrabold text-primary mt-2">{fill || "—"}</div>
                           </div>
-                          <div className="border border-outline/60 bg-surface-variant p-5">
-                            <div className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">
+                          <div className="border-2 border-emerald-200 bg-emerald-50 p-4 sm:p-5 rounded-xl">
+                            <div className="text-xs font-bold text-emerald-600 uppercase tracking-widest">
                               Correct answer
                             </div>
-                            <div className="text-lg font-extrabold text-primary mt-2">{correctFill || "—"}</div>
+                            <div className="text-base sm:text-lg font-extrabold text-emerald-700 mt-2">{correctFill || "—"}</div>
                           </div>
                         </div>
                       ) : (
@@ -1258,15 +1380,19 @@ export default function ExamClient({
                             const isSelected = selected.has(o.id);
                             const isCorrectOpt = o.is_correct;
                             const border = isCorrectOpt
-                              ? "border-emerald-500"
+                              ? "border-emerald-400"
                               : isSelected
                                 ? "border-rose-400"
-                                : "border-outline/60";
-                            const bg = isSelected ? "bg-white" : "bg-surface-variant";
+                                : "border-outline/30";
+                            const bg = isCorrectOpt
+                              ? "bg-emerald-50"
+                              : isSelected
+                                ? "bg-rose-50"
+                                : "bg-slate-50";
                             return (
                               <div
                                 key={o.id}
-                                className={`border ${border} ${bg} px-5 py-4 flex items-start justify-between gap-6`}
+                                className={`border-2 ${border} ${bg} px-4 sm:px-5 py-3 sm:py-4 flex items-start justify-between gap-4 sm:gap-6 rounded-xl`}
                               >
                                 <div className="min-w-0">
                                   <div className="text-sm font-bold text-primary">
@@ -1276,18 +1402,18 @@ export default function ExamClient({
                                     <img
                                       src={o.url}
                                       alt="Option"
-                                      className="mt-3 max-h-48 w-auto border border-outline/40"
+                                      className="mt-3 mx-auto max-w-full max-h-48 object-contain border border-outline/40 rounded-lg"
                                     />
                                   ) : null}
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-shrink-0">
                                   {isSelected ? (
-                                    <span className="px-3 py-1 bg-indigo-100 text-indigo-800 text-[10px] font-black tracking-[0.2em] uppercase">
+                                    <span className="px-2 sm:px-3 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-black tracking-[0.15em] uppercase rounded-md">
                                       Your choice
                                     </span>
                                   ) : null}
                                   {isCorrectOpt ? (
-                                    <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-[10px] font-black tracking-[0.2em] uppercase">
+                                    <span className="px-2 sm:px-3 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-black tracking-[0.15em] uppercase rounded-md">
                                       Correct
                                     </span>
                                   ) : null}
@@ -1299,21 +1425,22 @@ export default function ExamClient({
                       )}
 
                       {q.explanation_text || q.explanation_assets.length ? (
-                        <div className="border border-outline/60 bg-surface-variant p-6">
-                          <div className="text-xs font-bold text-primary uppercase tracking-widest mb-4">
+                        <div className="border-2 border-blue-200 bg-blue-50 p-4 sm:p-6 rounded-xl">
+                          <div className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-3 sm:mb-4 flex items-center gap-2">
+                            <span className="material-symbols-outlined text-blue-500 text-sm">lightbulb</span>
                             Explanation
                           </div>
                           {q.explanation_text ? (
-                            <div className="text-on-surface font-medium leading-relaxed">{q.explanation_text}</div>
+                            <div className="text-on-surface font-medium leading-relaxed text-sm sm:text-base">{q.explanation_text}</div>
                           ) : null}
                           {q.explanation_assets.length ? (
-                            <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="flex flex-col items-center gap-4 mt-4 sm:mt-5">
                               {q.explanation_assets.map((a) => {
                                 const url = assetUrl(a);
                                 return (
                                   <div
                                     key={a.id}
-                                    className="border border-outline/60 bg-white overflow-hidden"
+                                    className="border-2 border-outline/30 bg-white overflow-hidden rounded-xl max-w-2xl w-full"
                                   >
                                     {url ? (
                                       <img src={url} alt="Explanation asset" className="w-full h-auto" />
@@ -1333,10 +1460,43 @@ export default function ExamClient({
               })}
             </div>
           </div>
+
+          {/* Action buttons at the very bottom */}
+          <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row gap-3 sm:gap-4">
+            <button
+              type="button"
+              className="bg-secondary text-white px-6 sm:px-8 py-3 sm:py-4 font-bold text-sm sm:text-base hover:bg-primary transition-all rounded-xl active:scale-[0.97]"
+              onClick={() => {
+                setResult(null);
+                setError(null);
+                setSubmitting(false);
+                setQState(buildInitialQState(questions));
+                setCurrentIndex(0);
+                setTab("test");
+                start();
+              }}
+            >
+              Retake exam
+            </button>
+            <button
+              type="button"
+              className="bg-primary text-white px-6 sm:px-8 py-3 sm:py-4 font-bold text-sm sm:text-base hover:bg-slate-800 transition-all rounded-xl active:scale-[0.97]"
+              onClick={() => router.push("/profile")}
+            >
+              Go to profile
+            </button>
+            <button
+              type="button"
+              className="bg-white text-primary border-2 border-outline/40 px-6 sm:px-8 py-3 sm:py-4 font-bold text-sm sm:text-base hover:bg-primary/5 transition-all rounded-xl active:scale-[0.97]"
+              onClick={() => router.push(`/subjects/${subjectSlug}`)}
+            >
+              Back to subject
+            </button>
+          </div>
         </div>
       ) : started ? (
         tab === "reference" ? (
-          <div className="p-10">
+          <div className="p-4 sm:p-6 md:p-10">
             <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
               Reference sheet
             </div>
@@ -1347,7 +1507,7 @@ export default function ExamClient({
                   return (
                     <div
                       key={a.id}
-                      className="border border-outline/60 bg-surface-variant overflow-hidden"
+                      className="border-2 border-outline/30 bg-slate-50 overflow-hidden rounded-xl"
                     >
                       {url ? (
                         <img src={url} alt="Reference sheet" className="w-full h-auto" />
@@ -1359,52 +1519,53 @@ export default function ExamClient({
                 })}
               </div>
             ) : (
-              <div className="border border-outline/60 bg-surface-variant px-6 py-10 text-on-surface-variant font-medium">
+              <div className="border-2 border-outline/30 bg-slate-50 px-6 py-10 text-on-surface-variant font-medium rounded-xl text-center">
                 No reference sheet uploaded yet.
               </div>
             )}
           </div>
         ) : (
           <div>
-            <div className="px-8 py-6 border-b border-outline/40 bg-surface-variant/30">
-              <div className="flex items-center justify-between gap-6">
+            {/* Overview grid */}
+            <div className="px-4 sm:px-6 md:px-8 py-4 sm:py-6 border-b border-outline/30 bg-gradient-to-r from-slate-50 to-white">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-6">
                 <div className="text-xs font-bold text-primary uppercase tracking-widest">Overview</div>
-                <div className="flex flex-wrap gap-4 text-xs text-on-surface-variant font-medium">
+                <div className="flex flex-wrap gap-3 sm:gap-4 text-[10px] sm:text-xs text-on-surface-variant font-medium">
                   <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 border border-outline/80 bg-surface-variant" />
-                    Unseen / Seen
+                    <span className="w-3 h-3 border-2 border-outline/40 bg-slate-100 rounded-sm" />
+                    Unseen
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 border border-emerald-500 bg-emerald-50" />
+                    <span className="w-3 h-3 border-2 border-emerald-400 bg-emerald-50 rounded-sm" />
                     Answered
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 border border-amber-400 bg-amber-50" />
-                    Marked for review
+                    <span className="w-3 h-3 border-2 border-amber-400 bg-amber-50 rounded-sm" />
+                    Marked
                   </div>
                 </div>
               </div>
 
-              <div className="mt-5 grid grid-cols-8 sm:grid-cols-12 md:grid-cols-16 lg:grid-cols-20 gap-2">
+              <div className="mt-4 sm:mt-5 grid grid-cols-6 sm:grid-cols-8 md:grid-cols-12 lg:grid-cols-16 xl:grid-cols-20 gap-1.5 sm:gap-2">
                 {overview.map(({ q, seen, answered, marked }, idx) => {
                   const isCurrent = idx === currentIndex;
                   const border = marked
                     ? "border-amber-400"
                     : answered
-                      ? "border-emerald-500"
-                      : "border-outline/80";
+                      ? "border-emerald-400"
+                      : "border-outline/40";
                   const bg = marked
                     ? "bg-amber-50"
                     : answered
                       ? "bg-emerald-50"
-                      : "bg-surface-variant";
-                  const currentRing = isCurrent ? "ring-2 ring-primary/20" : "";
+                      : "bg-slate-100";
+                  const currentRing = isCurrent ? "ring-2 ring-primary/30" : "";
                   return (
                     <button
                       key={q.id}
                       type="button"
                       onClick={() => setCurrentIndex(idx)}
-                      className={`h-10 border ${border} ${bg} ${currentRing} font-bold text-sm text-primary hover:brightness-[0.98] transition-all`}
+                      className={`h-8 sm:h-10 border-2 ${border} ${bg} ${currentRing} font-bold text-xs sm:text-sm text-primary hover:brightness-[0.96] transition-all rounded-lg`}
                       aria-label={`Question ${q.question_number}`}
                     >
                       {q.question_number}
@@ -1414,12 +1575,13 @@ export default function ExamClient({
               </div>
             </div>
 
-            <div className="p-10">
+            {/* Current question */}
+            <div className="p-4 sm:p-6 md:p-10">
               {currentQuestion ? (
                 <>
-                  <div className="flex items-start justify-between gap-6">
+                  <div ref={questionTopRef} className="flex items-start justify-between gap-4 sm:gap-6">
                     <div>
-                      <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
+                      <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-3 sm:mb-4">
                         Question {currentQuestion.question_number} of {questions.length}
                       </div>
                     </div>
@@ -1434,27 +1596,33 @@ export default function ExamClient({
                           return next;
                         });
                       }}
-                      className="bg-white text-primary border border-outline/80 px-5 py-2.5 font-bold text-xs hover:bg-surface-variant transition-all rounded-full"
+                      className={[
+                        "px-3 sm:px-5 py-2 sm:py-2.5 font-bold text-xs transition-all rounded-xl flex items-center gap-1.5 flex-shrink-0 active:scale-[0.97]",
+                        qState.get(currentQuestion.id)?.marked
+                          ? "bg-amber-50 text-amber-700 border-2 border-amber-300"
+                          : "bg-white text-primary border-2 border-outline/40 hover:bg-primary/5",
+                      ].join(" ")}
                     >
-                      Mark for review
+                      <span className="material-symbols-outlined text-sm">flag</span>
+                      <span className="hidden sm:inline">Mark for review</span>
                     </button>
                   </div>
 
-                  <div className="mt-8 space-y-6 bg-white border border-outline/50 shadow-soft-xl p-8">
+                  <div className="mt-4 sm:mt-8 space-y-4 sm:space-y-6 bg-gradient-to-br from-white to-slate-50 border-2 border-outline/30 shadow-sm rounded-2xl p-4 sm:p-6 md:p-8">
                     {currentQuestion.prompt_text ? (
-                      <div className="text-lg text-on-surface leading-relaxed font-medium">
+                      <div className="text-base sm:text-lg text-on-surface leading-relaxed font-medium">
                         {currentQuestion.prompt_text}
                       </div>
                     ) : null}
 
                     {currentQuestion.prompt_assets.length ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex flex-col items-center gap-4">
                         {currentQuestion.prompt_assets.map((a) => {
                           const url = assetUrl(a);
                           return (
                             <div
                               key={a.id}
-                              className="border border-outline/60 bg-surface-variant overflow-hidden"
+                              className="border-2 border-outline/30 bg-slate-50 overflow-hidden rounded-xl max-w-2xl w-full"
                             >
                               {url ? (
                                 <img src={url} alt="Question asset" className="w-full h-auto" />
@@ -1468,7 +1636,7 @@ export default function ExamClient({
                     ) : null}
 
                     {currentQuestion.type === "fill" ? (
-                      <div className="border border-outline/80 bg-white p-6">
+                      <div className="border-2 border-outline/30 bg-white p-4 sm:p-6 rounded-xl">
                         <input
                           value={qState.get(currentQuestion.id)?.fillText ?? ""}
                           onChange={(e) => {
@@ -1481,12 +1649,12 @@ export default function ExamClient({
                               return next;
                             });
                           }}
-                          className="h-12 w-full px-4 bg-background border border-border/80 focus:border-primary outline-none transition-colors"
+                          className="h-11 sm:h-12 w-full px-4 bg-white border-2 border-outline/40 rounded-lg focus:border-primary outline-none transition-colors"
                           placeholder="Type your answer"
                         />
                       </div>
                     ) : (
-                      <div className="space-y-3">
+                      <div className="space-y-2 sm:space-y-3">
                         {(() => {
                           const st = qState.get(currentQuestion.id);
                           const selected = new Set(st?.selectedOptionIds ?? []);
@@ -1525,19 +1693,19 @@ export default function ExamClient({
                                 }}
                                 className={
                                   selectedNow
-                                    ? "w-full text-left border border-primary bg-surface-variant px-6 py-4 font-bold text-primary transition-all"
-                                    : "w-full text-left border border-outline/80 bg-white px-6 py-4 font-bold text-on-surface hover:bg-surface-variant transition-all"
+                                    ? "w-full text-left border-2 border-primary bg-primary/5 px-4 sm:px-6 py-3 sm:py-4 font-bold text-primary transition-all rounded-xl"
+                                    : "w-full text-left border-2 border-outline/30 bg-white px-4 sm:px-6 py-3 sm:py-4 font-bold text-on-surface hover:bg-primary/5 hover:border-primary/30 transition-all rounded-xl"
                                 }
                               >
-                                <div className="flex items-start justify-between gap-4">
-                                  <div className="text-sm font-extrabold">
+                                <div className="flex items-start justify-between gap-3 sm:gap-4">
+                                  <div className="text-sm font-extrabold min-w-0">
                                     {opt.text ? opt.text : `Option ${opt.option_number}`}
                                   </div>
                                   <span
                                     className={
                                       selectedNow
-                                        ? "w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center"
-                                        : "w-5 h-5 rounded-full border border-outline/80 flex items-center justify-center"
+                                        ? "w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center flex-shrink-0"
+                                        : "w-5 h-5 rounded-full border-2 border-outline/40 flex items-center justify-center flex-shrink-0"
                                     }
                                   >
                                     {selectedNow ? (
@@ -1551,7 +1719,7 @@ export default function ExamClient({
                                   <img
                                     src={opt.url}
                                     alt="Option"
-                                    className="mt-4 w-full max-h-56 object-contain border border-outline/60 bg-white"
+                                    className="mt-4 mx-auto max-w-full max-h-56 object-contain border-2 border-outline/30 bg-white rounded-lg"
                                   />
                                 ) : null}
                               </button>
@@ -1562,12 +1730,15 @@ export default function ExamClient({
                     )}
                   </div>
 
-                  <div className="mt-10 flex items-center justify-between gap-4">
+                  <div className="mt-6 sm:mt-10 flex items-center justify-between gap-3 sm:gap-4">
                     <button
                       type="button"
-                      onClick={() => setCurrentIndex((v) => Math.max(0, v - 1))}
+                      onClick={() => {
+                        setCurrentIndex((v) => Math.max(0, v - 1));
+                        setTimeout(() => questionTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                      }}
                       disabled={currentIndex === 0}
-                      className="bg-white text-primary border border-outline/80 px-8 py-4 font-bold text-sm hover:bg-surface-variant transition-all rounded-full disabled:opacity-50"
+                      className="bg-white text-primary border-2 border-outline/40 px-4 sm:px-8 py-3 sm:py-4 font-bold text-sm hover:bg-primary/5 transition-all rounded-xl disabled:opacity-50 active:scale-[0.97]"
                     >
                       Previous
                     </button>
@@ -1578,10 +1749,11 @@ export default function ExamClient({
                           onSubmit(false);
                         } else {
                           setCurrentIndex((v) => Math.min(questions.length - 1, v + 1));
+                          setTimeout(() => questionTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
                         }
                       }}
                       disabled={submitting || !!result}
-                      className="bg-primary text-white px-8 py-4 font-bold text-sm hover:bg-slate-800 transition-all rounded-full disabled:opacity-50"
+                      className="bg-primary text-white px-4 sm:px-8 py-3 sm:py-4 font-bold text-sm hover:bg-slate-800 transition-all rounded-xl disabled:opacity-50 active:scale-[0.97]"
                     >
                       {currentIndex === questions.length - 1 ? "Submit" : "Next"}
                     </button>
@@ -1592,13 +1764,21 @@ export default function ExamClient({
           </div>
         )
       ) : (
-        <div className="p-10">
-          <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
+        <div className="p-6 sm:p-10 text-center">
+          <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-3">
             Ready
           </div>
-          <div className="text-on-surface-variant font-medium">
-            Start the test to begin the timer.
+          <div className="text-on-surface-variant font-medium text-sm sm:text-base mb-6">
+            Press the button below to begin. The timer will start immediately.
           </div>
+          <button
+            type="button"
+            onClick={start}
+            disabled={contentLoading}
+            className="bg-secondary text-white px-8 py-3.5 font-bold text-base hover:bg-primary transition-all rounded-xl active:scale-[0.97] disabled:opacity-60"
+          >
+            Start test
+          </button>
         </div>
       )}
         </div>

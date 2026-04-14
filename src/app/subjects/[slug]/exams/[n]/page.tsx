@@ -115,7 +115,7 @@ export default async function ExamPage({ params }: PageProps) {
     <>
       <SiteHeader />
       <main className="pt-24">
-        <section className="max-w-[1440px] mx-auto px-8 lg:px-12 py-16">
+        <section className="max-w-[1440px] mx-auto px-3 sm:px-6 md:px-8 lg:px-12 py-6 sm:py-10 md:py-16">
           <ExamClient
             subjectId={subject.id}
             subjectSlug={subject.slug}
