@@ -591,3 +591,54 @@ on public.subject_assets
 for select
 to anon, authenticated
 using (true);
+
+-- ═══════════════════════════════════════════════════════════════
+-- Passage-based questions (Reading Comprehension)
+-- ═══════════════════════════════════════════════════════════════
+
+create table if not exists public.exam_passages (
+  id uuid primary key default gen_random_uuid(),
+  exam_id uuid not null references public.exams (id) on delete cascade,
+  sort_order integer not null default 0,
+  title text,
+  body_html text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+drop trigger if exists set_exam_passages_updated_at on public.exam_passages;
+create trigger set_exam_passages_updated_at
+before update on public.exam_passages
+for each row execute function public.set_updated_at();
+
+alter table public.exam_passages enable row level security;
+
+drop policy if exists exam_passages_read_all on public.exam_passages;
+create policy exam_passages_read_all
+on public.exam_passages
+for select
+to anon, authenticated
+using (
+  exists (
+    select 1
+    from public.exams e
+    where e.id = exam_passages.exam_id
+      and (
+        e.is_free = true
+        or (
+          auth.uid() is not null
+          and exists (
+            select 1
+            from public.entitlements ent
+            where ent.user_id = auth.uid()
+              and ent.subject_id = e.subject_id
+              and ent.access_expires_at >= now()
+          )
+        )
+      )
+  )
+);
+
+-- Link questions to passages (nullable FK)
+alter table public.exam_questions
+add column if not exists passage_id uuid references public.exam_passages (id) on delete set null;

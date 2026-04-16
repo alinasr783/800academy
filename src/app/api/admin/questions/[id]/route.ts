@@ -12,6 +12,7 @@ type QuestionRow = {
   points: number;
   allow_multiple: boolean;
   correct_text: string | null;
+  passage_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -61,7 +62,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { data: question, error } = await admin
     .from("exam_questions")
     .select(
-      "id,exam_id,question_number,type,prompt_text,explanation_text,points,allow_multiple,correct_text,created_at,updated_at",
+      "id,exam_id,question_number,type,prompt_text,explanation_text,points,allow_multiple,correct_text,passage_id,created_at,updated_at",
     )
     .eq("id", id)
     .single();
@@ -96,7 +97,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const body = (await req.json().catch(() => null)) as Partial<
     Pick<
       QuestionRow,
-      "type" | "prompt_text" | "explanation_text" | "points" | "allow_multiple" | "correct_text"
+      "type" | "prompt_text" | "explanation_text" | "points" | "allow_multiple" | "correct_text" | "passage_id"
     >
   > | null;
   if (!body) return NextResponse.json({ error: "Invalid body." }, { status: 400 });
@@ -111,13 +112,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if ("points" in body && typeof body.points === "number") patch.points = Math.max(0, Math.trunc(body.points));
   if ("allow_multiple" in body) patch.allow_multiple = !!body.allow_multiple;
   if ("correct_text" in body) patch.correct_text = body.correct_text ?? null;
+  if ("passage_id" in body) patch.passage_id = body.passage_id ?? null;
 
   const { data, error } = await admin
     .from("exam_questions")
     .update(patch)
     .eq("id", id)
     .select(
-      "id,exam_id,question_number,type,prompt_text,explanation_text,points,allow_multiple,correct_text,created_at,updated_at",
+      "id,exam_id,question_number,type,prompt_text,explanation_text,points,allow_multiple,correct_text,passage_id,created_at,updated_at",
     )
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });

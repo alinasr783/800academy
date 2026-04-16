@@ -39,6 +39,18 @@ type QuestionRow = {
   points: number;
   allow_multiple: boolean;
   correct_text: string | null;
+  passage_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type PassageRow = {
+  id: string;
+  exam_id: string;
+  sort_order: number;
+  kind: "reading" | "reference";
+  title: string | null;
+  body_html: string;
   created_at: string;
   updated_at: string;
 };
@@ -58,6 +70,7 @@ export default function DashboardExamDetails() {
   const [exam, setExam] = useState<ExamRow | null>(null);
   const [assets, setAssets] = useState<ExamAssetRow[]>([]);
   const [questions, setQuestions] = useState<QuestionRow[]>([]);
+  const [passages, setPassages] = useState<PassageRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -72,6 +85,11 @@ export default function DashboardExamDetails() {
 
   const [assetUrl, setAssetUrl] = useState("");
   const [assetSort, setAssetSort] = useState("0");
+
+  const [passageTitle, setPassageTitle] = useState("");
+  const [passageKind, setPassageKind] = useState<"reading"|"reference">("reading");
+  const [passageBody, setPassageBody] = useState("");
+  const [passageSort, setPassageSort] = useState("0");
 
   const dragFromIdx = useRef<number | null>(null);
 
@@ -101,10 +119,12 @@ export default function DashboardExamDetails() {
         exam: ExamRow;
         assets: ExamAssetRow[];
         questions: QuestionRow[];
+        passages: PassageRow[];
       };
       setExam(json.exam);
       setAssets(json.assets ?? []);
       setQuestions((json.questions ?? []).slice().sort((a, b) => a.question_number - b.question_number));
+      setPassages(json.passages ?? []);
 
       setTitle(json.exam.title);
       setExamNumber(String(json.exam.exam_number));
@@ -297,6 +317,79 @@ export default function DashboardExamDetails() {
     }
   }
 
+  async function addPassage() {
+    if (!passageBody.trim()) {
+      setError("Passage HTML body is required.");
+      return;
+    }
+    const sortOrder = Math.trunc(Number(passageSort || 0));
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const json = (await adminFetch(`/api/admin/exams/${examId}`, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "create_passage",
+          title: passageTitle.trim() || null,
+          body_html: passageBody.trim(),
+          kind: passageKind,
+          sort_order: sortOrder,
+        }),
+      })) as { passage: PassageRow };
+      setPassages((prev) =>
+        [...prev, json.passage].sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at)),
+      );
+      setPassageTitle("");
+      setPassageBody("");
+      setPassageSort("0");
+      setMessage("Passage added.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Something went wrong.";
+      setError(msg);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updatePassage(passageId: string, patch: Partial<PassageRow>) {
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const json = (await adminFetch(`/api/admin/exams/${examId}`, {
+        method: "POST",
+        body: JSON.stringify({ action: "update_passage", passage_id: passageId, ...patch }),
+      })) as { passage: PassageRow };
+      setPassages((prev) => prev.map((p) => (p.id === passageId ? json.passage : p)));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Something went wrong.";
+      setError(msg);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deletePassage(passageId: string) {
+    const ok = window.confirm("Delete this passage? This will link related questions to NULL.");
+    if (!ok) return;
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await adminFetch(`/api/admin/exams/${examId}`, {
+        method: "POST",
+        body: JSON.stringify({ action: "delete_passage", passage_id: passageId }),
+      });
+      setPassages((prev) => prev.filter((p) => p.id !== passageId));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Something went wrong.";
+      setError(msg);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function reorderLocal(from: number, to: number) {
     setQuestions((prev) => {
       if (from < 0 || from >= prev.length || to < 0 || to >= prev.length) return prev;
@@ -335,294 +428,478 @@ export default function DashboardExamDetails() {
   }, [exam, examId]);
 
   return (
-    <div className="bg-white border border-outline/60 shadow-soft-xl overflow-hidden">
-      <div className="p-8 border-b border-outline/40">
-        <div className="flex items-start justify-between gap-8">
+    <div className="max-w-full">
+      {/* Sticky Header Actions */}
+      <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border border-outline/60 shadow-soft-xl rounded-2xl mb-8 p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
+        <div className="flex items-center gap-4">
+          <Link
+            href="/dashboard/exams"
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 text-on-surface hover:bg-slate-200 transition-all active:scale-95"
+          >
+            <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+          </Link>
           <div>
-            <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
-              Exam
-            </div>
-            <h1 className="font-headline text-4xl font-extrabold text-primary tracking-tighter">
+            <h1 className="font-headline text-2xl font-black text-primary tracking-tighter">
               Exam Builder
             </h1>
-            <p className="text-on-surface-variant font-medium mt-3">{headerTitle}</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-secondary mt-1">
+              {headerTitle}
+            </p>
           </div>
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={deleteExam}
-              disabled={saving}
-              className="bg-white text-rose-700 border border-rose-200 px-6 py-3 font-bold text-sm hover:bg-rose-50 transition-all disabled:opacity-60"
-            >
-              Delete
-            </button>
-            <button
-              type="button"
-              onClick={saveExam}
-              disabled={saving}
-              className="bg-secondary text-white px-6 py-3 font-bold text-sm hover:bg-primary transition-all disabled:opacity-60"
-            >
-              Save
-            </button>
-          </div>
+        </div>
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={deleteExam}
+            disabled={saving}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-rose-50 text-rose-700 border border-rose-100 px-6 py-3 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-rose-100 transition-all disabled:opacity-50 active:scale-95"
+          >
+            <span className="material-symbols-outlined text-[18px]">delete</span>
+            Delete
+          </button>
+          <button
+            type="button"
+            onClick={saveExam}
+            disabled={saving}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-primary text-white px-8 py-3 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-slate-800 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 active:scale-95"
+          >
+            <span className="material-symbols-outlined text-[18px]">save</span>
+            {saving ? "Saving..." : "Save Changes"}
+          </button>
         </div>
       </div>
 
       {error ? (
-        <div className="p-6 border-b border-outline/40 bg-rose-50 text-rose-700">{error}</div>
+        <div className="mb-8 p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl flex items-center gap-3 animate-slide-up">
+          <span className="material-symbols-outlined text-rose-500">error</span>
+          <span className="text-sm font-bold">{error}</span>
+        </div>
       ) : null}
 
       {message ? (
-        <div className="p-6 border-b border-outline/40 bg-surface-variant text-on-surface">{message}</div>
+        <div className="mb-8 p-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl flex items-center gap-3 animate-slide-up">
+          <span className="material-symbols-outlined text-emerald-500">check_circle</span>
+          <span className="text-sm font-bold">{message}</span>
+        </div>
       ) : null}
 
       {loading ? (
-        <div className="p-10 text-on-surface-variant font-medium">Loading…</div>
+        <div className="flex flex-col items-center justify-center py-24 gap-4">
+          <div className="w-12 h-12 border-4 border-slate-200 border-t-primary rounded-full animate-spin" />
+          <div className="text-slate-400 font-black text-xs uppercase tracking-widest animate-pulse">
+            Loading Content...
+          </div>
+        </div>
       ) : (
-        <div className="p-8 grid grid-cols-1 lg:grid-cols-12 gap-10">
-          <div className="lg:col-span-7 space-y-6">
-            <div>
-              <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">Title</div>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="h-12 w-full px-4 bg-background border border-border/60 focus:border-primary outline-none transition-colors"
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-              <div className="md:col-span-3">
-                <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">
-                  Exam #
-                </div>
-                <input
-                  value={examNumber}
-                  onChange={(e) => setExamNumber(e.target.value)}
-                  className="h-12 w-full px-4 bg-background border border-border/60 focus:border-primary outline-none transition-colors"
-                />
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+          {/* Main Configuration Panel */}
+          <div className="xl:col-span-8 space-y-8">
+            <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden">
+              <div className="p-6 border-b border-outline/40 bg-slate-50/50 flex items-center gap-3">
+                <span className="material-symbols-outlined text-primary">settings</span>
+                <h2 className="text-sm font-black uppercase tracking-widest text-primary">General Configuration</h2>
               </div>
-              <div className="md:col-span-3">
-                <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">
-                  Duration (min)
+              <div className="p-8 space-y-8">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">
+                    Exam Title
+                  </label>
+                  <input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className="h-14 w-full px-6 bg-slate-50 border border-slate-200 rounded-2xl focus:border-primary focus:bg-white outline-none transition-all font-bold text-lg"
+                    placeholder="e.g. EST 1 Math Core - Practice 2"
+                  />
                 </div>
-                <input
-                  value={durationMin}
-                  onChange={(e) => setDurationMin(e.target.value)}
-                  className="h-12 w-full px-4 bg-background border border-border/60 focus:border-primary outline-none transition-colors"
-                />
-              </div>
-              <div className="md:col-span-3">
-                <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">
-                  Pass %
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">
+                      Exam Number
+                    </label>
+                    <input
+                      type="number"
+                      value={examNumber}
+                      onChange={(e) => setExamNumber(e.target.value)}
+                      className="h-12 w-full px-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-primary focus:bg-white outline-none transition-all font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">
+                      Duration (min)
+                    </label>
+                    <input
+                      type="number"
+                      value={durationMin}
+                      onChange={(e) => setDurationMin(e.target.value)}
+                      className="h-12 w-full px-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-primary focus:bg-white outline-none transition-all font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">
+                      Pass %
+                    </label>
+                    <input
+                      type="number"
+                      value={passPercent}
+                      onChange={(e) => setPassPercent(e.target.value)}
+                      className="h-12 w-full px-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-primary focus:bg-white outline-none transition-all font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">
+                      Max Attempts
+                    </label>
+                    <input
+                      value={maxAttempts}
+                      onChange={(e) => setMaxAttempts(e.target.value)}
+                      placeholder="∞"
+                      className="h-12 w-full px-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-primary focus:bg-white outline-none transition-all font-bold"
+                    />
+                  </div>
                 </div>
-                <input
-                  value={passPercent}
-                  onChange={(e) => setPassPercent(e.target.value)}
-                  className="h-12 w-full px-4 bg-background border border-border/60 focus:border-primary outline-none transition-colors"
-                />
-              </div>
-              <div className="md:col-span-3">
-                <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">
-                  Max attempts
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">
+                      Min Score
+                    </label>
+                    <input
+                      type="number"
+                      value={minScore}
+                      onChange={(e) => setMinScore(e.target.value)}
+                      className="h-12 w-full px-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-primary focus:bg-white outline-none transition-all font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">
+                      Total Points
+                    </label>
+                    <input
+                      type="number"
+                      value={totalPoints}
+                      onChange={(e) => setTotalPoints(e.target.value)}
+                      className="h-12 w-full px-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-primary focus:bg-white outline-none transition-all font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">
+                      Access Type
+                    </label>
+                    <label className={`h-12 w-full flex items-center justify-center gap-3 px-4 border-2 rounded-xl cursor-pointer transition-all active:scale-[0.98] ${isFree ? "border-emerald-500 bg-emerald-50" : "border-slate-200 bg-slate-50"}`}>
+                      <input
+                        type="checkbox"
+                        checked={isFree}
+                        onChange={(e) => setIsFree(e.target.checked)}
+                        className="hidden"
+                      />
+                      <span className={`material-symbols-outlined text-[20px] ${isFree ? "text-emerald-600" : "text-slate-400"}`}>
+                        {isFree ? "lock_open" : "lock"}
+                      </span>
+                      <span className={`text-sm font-black uppercase tracking-widest ${isFree ? "text-emerald-700" : "text-slate-500"}`}>
+                        {isFree ? "Free Access" : "Paid Only"}
+                      </span>
+                    </label>
+                  </div>
                 </div>
-                <input
-                  value={maxAttempts}
-                  onChange={(e) => setMaxAttempts(e.target.value)}
-                  placeholder="empty = unlimited"
-                  className="h-12 w-full px-4 bg-background border border-border/60 focus:border-primary outline-none transition-colors"
-                />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-              <div className="md:col-span-4">
-                <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">
-                  Min score
+            {/* Passages Section */}
+            <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden">
+               <div className="p-6 border-b border-outline/40 bg-violet-50/50 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined text-violet-600">view_cozy</span>
+                  <h2 className="text-sm font-black uppercase tracking-widest text-violet-700">Passages & Reference Blocks (HTML)</h2>
                 </div>
-                <input
-                  value={minScore}
-                  onChange={(e) => setMinScore(e.target.value)}
-                  className="h-12 w-full px-4 bg-background border border-border/60 focus:border-primary outline-none transition-colors"
-                />
-              </div>
-              <div className="md:col-span-4">
-                <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">
-                  Total points
-                </div>
-                <input
-                  value={totalPoints}
-                  onChange={(e) => setTotalPoints(e.target.value)}
-                  className="h-12 w-full px-4 bg-background border border-border/60 focus:border-primary outline-none transition-colors"
-                />
-              </div>
-              <div className="md:col-span-4">
-                <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">
-                  Access
-                </div>
-                <label className="h-12 w-full flex items-center gap-3 px-4 bg-background border border-border/60 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={isFree}
-                    onChange={(e) => setIsFree(e.target.checked)}
-                    className="h-4 w-4"
-                  />
-                  <span className="text-sm font-bold text-primary">{isFree ? "Free" : "Paid"}</span>
-                </label>
-              </div>
-            </div>
-
-            <div className="bg-surface-variant border border-outline/40 p-6">
-              <div className="text-xs font-bold text-primary uppercase tracking-widest mb-4">
-                Reference sheets
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-                <div className="md:col-span-8">
-                  <input
-                    value={assetUrl}
-                    onChange={(e) => setAssetUrl(e.target.value)}
-                    placeholder="https://..."
-                    className="h-12 w-full px-4 bg-white border border-outline/60 focus:border-primary outline-none transition-colors"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <input
-                    value={assetSort}
-                    onChange={(e) => setAssetSort(e.target.value)}
-                    placeholder="Sort"
-                    className="h-12 w-full px-4 bg-white border border-outline/60 focus:border-primary outline-none transition-colors"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <button
-                    type="button"
-                    onClick={addAsset}
-                    disabled={saving}
-                    className="h-12 w-full bg-primary text-white font-bold text-sm hover:bg-slate-800 transition-colors disabled:opacity-60"
-                  >
-                    Add
-                  </button>
+                <div className="text-[10px] font-black text-violet-400 uppercase tracking-widest bg-violet-100 px-3 py-1 rounded-full">
+                  Total: {passages.length}
                 </div>
               </div>
-              <div className="mt-5 space-y-3">
-                {assets
-                  .slice()
-                  .sort((a, b) => a.sort_order - b.sort_order)
-                  .map((a) => (
-                    <div key={a.id} className="flex items-center justify-between gap-4 bg-white border border-outline/40 px-4 py-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-extrabold text-primary break-all">
-                          {a.url || a.storage_path || a.id}
-                        </div>
-                        <div className="text-xs text-on-surface-variant font-medium mt-1">
-                          Sort: {a.sort_order}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
+              <div className="p-8 space-y-8">
+                 <div className="bg-slate-50 p-6 rounded-2xl space-y-4 border border-slate-100">
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                      <div className="md:col-span-6">
                         <input
-                          defaultValue={String(a.sort_order)}
-                          onBlur={(e) => {
-                            const n = Math.trunc(Number(e.target.value));
-                            if (!Number.isFinite(n) || n === a.sort_order) return;
-                            updateAsset(a.id, { sort_order: n });
-                          }}
-                          className="h-10 w-20 px-3 bg-background border border-border/60 focus:border-primary outline-none transition-colors text-sm"
+                          value={passageTitle}
+                          onChange={(e) => setPassageTitle(e.target.value)}
+                          placeholder="Passage/Reference title (optional)"
+                          className="h-12 w-full px-5 bg-white border border-slate-200 rounded-xl focus:border-violet-500 outline-none transition-all font-bold"
                         />
-                        <button
-                          type="button"
-                          onClick={() => deleteAsset(a.id)}
-                          disabled={saving}
-                          className="text-sm font-bold text-rose-700 hover:text-rose-900 transition-colors disabled:opacity-60"
-                        >
-                          Delete
-                        </button>
+                      </div>
+                      <div className="md:col-span-3">
+                         <select
+                           value={passageKind}
+                           onChange={(e) => setPassageKind(e.target.value as "reading"|"reference")}
+                           className="h-12 w-full px-4 bg-white border border-slate-200 rounded-xl focus:border-violet-500 outline-none transition-all font-bold appearance-none"
+                         >
+                           <option value="reading">Reading Passage</option>
+                           <option value="reference">Reference Block</option>
+                         </select>
+                      </div>
+                      <div className="md:col-span-3">
+                         <input
+                          type="number"
+                          value={passageSort}
+                          onChange={(e) => setPassageSort(e.target.value)}
+                          placeholder="Sort order"
+                          className="h-12 w-full px-5 bg-white border border-slate-200 rounded-xl focus:border-violet-500 outline-none transition-all font-bold"
+                        />
                       </div>
                     </div>
-                  ))}
+                    <textarea
+                      value={passageBody}
+                      onChange={(e) => setPassageBody(e.target.value)}
+                      placeholder="Paste your HTML content here..."
+                      rows={5}
+                      className="w-full px-5 py-4 bg-white border border-slate-200 rounded-xl focus:border-violet-500 outline-none transition-all font-medium text-sm leading-relaxed resize-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={addPassage}
+                      disabled={saving || !passageBody.trim()}
+                      className="w-full h-12 bg-violet-600 text-white font-black text-xs uppercase tracking-[0.2em] rounded-xl hover:bg-violet-700 transition-all shadow-md shadow-violet-200 active:scale-[0.99] disabled:opacity-50"
+                    >
+                      Add New Passage
+                    </button>
+                 </div>
+
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                   {passages.map((p) => (
+                      <div key={p.id} className="group flex flex-col bg-white border border-slate-200 rounded-2xl overflow-hidden hover:border-violet-300 hover:shadow-lg transition-all">
+                        <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                          <div className="flex items-center gap-3 overflow-hidden">
+                            <div className="w-8 h-8 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center font-black text-xs flex-shrink-0">
+                               {p.sort_order}
+                            </div>
+                            <h3 className="text-sm font-black text-slate-800 truncate uppercase mt-0.5 tracking-tight flex items-center gap-2">
+                              {p.title || "Untitled Block"}
+                              <span className={`px-2 py-0.5 rounded text-[9px] ${p.kind === 'reference' ? 'bg-blue-100 text-blue-700' : 'bg-violet-100 text-violet-700'}`}>
+                                {p.kind === 'reference' ? 'Reference' : 'Reading'}
+                              </span>
+                            </h3>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => deletePassage(p.id)}
+                            className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-rose-600 transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-[20px]">delete</span>
+                          </button>
+                        </div>
+                        <div className="p-4 space-y-4">
+                          <textarea
+                             defaultValue={p.body_html}
+                             onBlur={(e) => {
+                               const v = e.target.value.trim();
+                               if (v && v !== p.body_html) updatePassage(p.id, { body_html: v });
+                             }}
+                             rows={4}
+                             className="w-full bg-slate-50 text-[11px] font-medium leading-relaxed p-3 rounded-lg border border-transparent focus:border-violet-200 focus:bg-white transition-all outline-none"
+                          />
+                          <div className="flex gap-2">
+                            <input
+                              defaultValue={p.title ?? ""}
+                              onBlur={(e) => {
+                                const v = e.target.value.trim();
+                                if (v !== (p.title ?? "")) updatePassage(p.id, { title: v || null });
+                              }}
+                              className="flex-1 px-3 py-2 bg-slate-50 border border-slate-100 rounded-lg text-xs font-bold focus:border-violet-200 outline-none"
+                              placeholder="Update title"
+                            />
+                            <select
+                              value={p.kind}
+                              onChange={(e) => {
+                                const k = e.target.value as "reading"|"reference";
+                                if (k !== p.kind) updatePassage(p.id, { kind: k });
+                              }}
+                              className="w-28 px-2 py-2 bg-slate-50 border border-slate-100 rounded-lg text-xs font-bold focus:border-violet-200 outline-none"
+                            >
+                              <option value="reading">Reading</option>
+                              <option value="reference">Reference</option>
+                            </select>
+                            <input
+                              type="number"
+                              defaultValue={String(p.sort_order)}
+                              onBlur={(e) => {
+                                const n = Math.trunc(Number(e.target.value));
+                                if (Number.isFinite(n) && n !== p.sort_order) updatePassage(p.id, { sort_order: n });
+                              }}
+                              className="w-16 px-3 py-2 bg-slate-50 border border-slate-100 rounded-lg text-xs font-bold text-center focus:border-violet-200 outline-none"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                   ))}
+                 </div>
               </div>
             </div>
           </div>
 
-          <div className="lg:col-span-5 space-y-6">
-            <div className="bg-surface-variant border border-outline/40 p-6">
-              <div className="text-xs font-bold text-primary uppercase tracking-widest mb-4">
-                Add question
-              </div>
-              <button
-                type="button"
-                onClick={() => router.push(`/dashboard/exams/${examId}/questions/new`)}
-                disabled={saving}
-                className="h-12 w-full bg-primary text-white font-bold text-sm hover:bg-slate-800 transition-colors disabled:opacity-60"
-              >
-                Add question
-              </button>
-              <div className="text-xs text-on-surface-variant font-medium mt-3">
-                Opens a full page editor for MCQ and Fill questions.
-              </div>
+          {/* Right Panel: Questions & Reference Sheets */}
+          <div className="xl:col-span-4 space-y-8">
+            {/* Action Bar */}
+            <div className="bg-primary rounded-3xl p-8 shadow-soft-xl text-white relative overflow-hidden group">
+               <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-1000" />
+               <div className="relative z-10 flex flex-col gap-6">
+                  <div>
+                    <h3 className="text-xl font-black tracking-tight mb-2">Build Questions</h3>
+                    <p className="text-slate-300 text-xs font-bold leading-relaxed">Create engaging MCQ and Fill-in-the-gap questions with explanation support.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/dashboard/exams/${examId}/questions/new`)}
+                    className="w-full h-14 bg-white text-primary rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-slate-100 transition-all active:scale-95"
+                  >
+                    + Create New Question
+                  </button>
+               </div>
             </div>
 
-            <div className="bg-white border border-outline/60 shadow-soft-xl overflow-hidden">
-              <div className="p-5 border-b border-outline/40 flex items-center justify-between gap-4">
-                <div className="text-xs font-bold text-primary uppercase tracking-widest">
-                  Questions ({questions.length})
-                </div>
-                <button
-                  type="button"
-                  onClick={saveOrder}
-                  disabled={saving || questions.length === 0}
-                  className="h-10 px-4 bg-secondary text-white font-bold text-xs hover:bg-primary transition-colors disabled:opacity-60"
-                >
-                  Save order
-                </button>
-              </div>
-              {questions.length === 0 ? (
-                <div className="p-6 text-on-surface-variant font-medium">No questions yet.</div>
-              ) : (
-                <div className="divide-y divide-outline/40">
-                  {questions.map((q, idx) => (
-                    <div
-                      key={q.id}
-                      draggable
-                      onDragStart={() => {
-                        dragFromIdx.current = idx;
-                      }}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={() => {
-                        const from = dragFromIdx.current;
-                        dragFromIdx.current = null;
-                        if (from === null || from === idx) return;
-                        reorderLocal(from, idx);
-                      }}
-                      className="p-5 bg-white hover:bg-surface-variant transition-colors cursor-move"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <div className="text-sm font-extrabold text-primary">
-                            #{idx + 1} • {q.type.toUpperCase()} • {q.points} pts
-                          </div>
-                          <div className="text-xs text-on-surface-variant font-medium mt-2 line-clamp-3">
-                            {q.prompt_text || "—"}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <Link
-                            href={`/dashboard/exams/questions/${q.id}`}
-                            className="text-sm font-bold text-primary hover:text-secondary transition-colors"
-                          >
-                            Edit
-                          </Link>
-                          <button
-                            type="button"
-                            onClick={() => deleteQuestion(q.id)}
-                            disabled={saving}
-                            className="text-sm font-bold text-rose-700 hover:text-rose-900 transition-colors disabled:opacity-60"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
+            {/* Questions List */}
+            <div className="bg-white border border-outline/60 shadow-soft-xl rounded-2xl overflow-hidden">
+               <div className="p-5 border-b border-outline/40 bg-slate-50/50 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="material-symbols-outlined text-primary text-[20px]">list_alt</span>
+                    <h2 className="text-[10px] font-black uppercase tracking-widest text-primary">Question Bank ({questions.length})</h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={saveOrder}
+                    disabled={saving || questions.length === 0}
+                    className="h-8 px-4 bg-secondary text-white font-black text-[9px] uppercase tracking-widest rounded-lg hover:bg-primary transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    Save Order
+                  </button>
+               </div>
+               <div className="max-h-[600px] overflow-y-auto divide-y divide-outline/30 scroll-smooth">
+                  {questions.length === 0 ? (
+                    <div className="p-12 text-center text-slate-300 font-bold text-xs uppercase tracking-widest italic">
+                      No questions built yet.
                     </div>
-                  ))}
+                  ) : (
+                    questions.map((q, idx) => {
+                      const hasPassage = q.passage_id;
+                      return (
+                        <div
+                          key={q.id}
+                          draggable
+                          onDragStart={() => { dragFromIdx.current = idx; }}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={() => {
+                            const from = dragFromIdx.current;
+                            dragFromIdx.current = null;
+                            if (from === null || from === idx) return;
+                            reorderLocal(from, idx);
+                          }}
+                          className="p-5 hover:bg-slate-50 transition-colors cursor-move group animate-fade-in"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                               <div className="flex items-center gap-2 mb-2">
+                                  <div className="px-2 py-0.5 bg-primary text-white text-[9px] font-bold rounded uppercase">
+                                     Q{idx + 1}
+                                  </div>
+                                  <div className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[9px] font-bold rounded uppercase tracking-widest">
+                                     {q.type}
+                                  </div>
+                                  <div className="px-2 py-0.5 bg-secondary/10 text-secondary text-[9px] font-bold rounded uppercase tracking-widest">
+                                     {q.points} PTS
+                                  </div>
+                                  {hasPassage && (
+                                    <div className="px-2 py-0.5 bg-violet-100 text-violet-600 text-[9px] font-bold rounded uppercase tracking-widest flex items-center gap-1">
+                                      <span className="material-symbols-outlined text-[10px]">menu_book</span>
+                                      P
+                                    </div>
+                                  )}
+                               </div>
+                               <div className="text-xs font-bold text-on-surface line-clamp-2 leading-relaxed opacity-80 group-hover:opacity-100 transition-opacity">
+                                 {q.prompt_text || "No prompt text provided."}
+                               </div>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                               <Link
+                                 href={`/dashboard/exams/questions/${q.id}`}
+                                 className="w-8 h-8 flex items-center justify-center bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-primary transition-all rounded-lg active:scale-90"
+                               >
+                                 <span className="material-symbols-outlined text-[18px]">edit</span>
+                               </Link>
+                               <button
+                                 type="button"
+                                 onClick={() => deleteQuestion(q.id)}
+                                 disabled={saving}
+                                 className="w-8 h-8 flex items-center justify-center bg-slate-100 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-all rounded-lg active:scale-90"
+                               >
+                                 <span className="material-symbols-outlined text-[18px]">delete</span>
+                               </button>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
+               </div>
+            </div>
+
+            {/* Reference Sheets Panel */}
+            <div className="bg-white border border-outline/60 shadow-soft-xl rounded-2xl overflow-hidden">
+                <div className="p-5 border-b border-outline/40 bg-slate-50/50 flex items-center gap-3">
+                  <span className="material-symbols-outlined text-primary text-[20px]">attachment</span>
+                  <h2 className="text-[10px] font-black uppercase tracking-widest text-primary">Reference Sheets</h2>
                 </div>
-              )}
+                <div className="p-6 space-y-6">
+                  <div className="flex flex-col gap-3">
+                    <input
+                      value={assetUrl}
+                      onChange={(e) => setAssetUrl(e.target.value)}
+                      placeholder="Image URL (Manual entry)"
+                      className="h-10 w-full px-4 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:border-primary outline-none transition-all"
+                    />
+                    <div className="flex gap-2">
+                       <input
+                         type="number"
+                         value={assetSort}
+                         onChange={(e) => setAssetSort(e.target.value)}
+                         placeholder="Sort"
+                         className="h-10 w-20 px-3 text-xs font-bold bg-slate-50 border border-slate-100 rounded-xl text-center focus:border-primary outline-none"
+                       />
+                       <button
+                         type="button"
+                         onClick={addAsset}
+                         disabled={saving || !assetUrl.trim()}
+                         className="flex-1 h-10 bg-primary text-white font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-800 transition-all active:scale-[0.98] disabled:opacity-50"
+                       >
+                         Add Reference
+                       </button>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {assets.map((a) => (
+                      <div key={a.id} className="group p-3 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3 min-w-0">
+                           <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center group-hover:border-primary transition-colors overflow-hidden">
+                              {a.url ? (
+                                <img src={a.url} alt="Ref" className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="material-symbols-outlined text-slate-300 text-[18px]">image</span>
+                              )}
+                           </div>
+                           <div className="min-w-0">
+                              <div className="text-[10px] font-black text-primary truncate tracking-tighter uppercase">{a.url?.split('/').pop() || "Sheet"}</div>
+                              <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Order: {a.sort_order}</div>
+                           </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => deleteAsset(a.id)}
+                          className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-rose-600 transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">close</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
             </div>
           </div>
         </div>

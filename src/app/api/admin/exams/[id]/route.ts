@@ -37,6 +37,18 @@ type QuestionRow = {
   points: number;
   allow_multiple: boolean;
   correct_text: string | null;
+  passage_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type PassageRow = {
+  id: string;
+  exam_id: string;
+  sort_order: number;
+  kind: "reading" | "reference";
+  title: string | null;
+  body_html: string;
   created_at: string;
   updated_at: string;
 };
@@ -78,15 +90,23 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { data: questions } = await admin
     .from("exam_questions")
     .select(
-      "id,exam_id,question_number,type,prompt_text,explanation_text,points,allow_multiple,correct_text,created_at,updated_at",
+      "id,exam_id,question_number,type,prompt_text,explanation_text,points,allow_multiple,correct_text,passage_id,created_at,updated_at",
     )
     .eq("exam_id", id)
     .order("question_number", { ascending: true });
+
+  const { data: passages } = await admin
+    .from("exam_passages")
+    .select("id,exam_id,sort_order,kind,title,body_html,created_at,updated_at")
+    .eq("exam_id", id)
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: true });
 
   return NextResponse.json({
     exam: exam as ExamRow,
     assets: (assets ?? []) as ExamAssetRow[],
     questions: (questions ?? []) as QuestionRow[],
+    passages: (passages ?? []) as PassageRow[],
   });
 }
 
@@ -195,6 +215,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             action: "create_question";
             type: "mcq" | "fill";
             question_number?: number;
+            passage_id?: string | null;
             prompt_text?: string | null;
             explanation_text?: string | null;
             points?: number;
@@ -203,6 +224,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           }
         | { action: "delete_question"; question_id: string }
         | { action: "reorder_questions"; question_ids_in_order: string[] }
+        | {
+            action: "create_passage";
+            title?: string | null;
+            body_html: string;
+            sort_order?: number;
+          }
+        | {
+            action: "update_passage";
+            passage_id: string;
+            title?: string | null;
+            body_html?: string;
+            sort_order?: number;
+          }
+        | { action: "delete_passage"; passage_id: string }
       )
     | null;
 
@@ -277,6 +312,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         exam_id: examId,
         question_number: nextNum,
         type: body.type,
+        passage_id: body.passage_id ?? null,
         prompt_text: body.prompt_text ?? null,
         explanation_text: body.explanation_text ?? null,
         points: Math.max(0, Math.trunc(body.points ?? 0)),
@@ -284,7 +320,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         correct_text: body.type === "fill" ? (body.correct_text ?? null) : null,
       })
       .select(
-        "id,exam_id,question_number,type,prompt_text,explanation_text,points,allow_multiple,correct_text,created_at,updated_at",
+        "id,exam_id,question_number,type,prompt_text,explanation_text,points,allow_multiple,correct_text,passage_id,created_at,updated_at",
       )
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
@@ -311,6 +347,56 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }));
 
     const { error } = await admin.from("exam_questions").upsert(updates, { onConflict: "id" });
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (body.action === "create_passage") {
+    const p = body as Partial<PassageRow>;
+    if (typeof p.body_html !== "string" || !p.body_html.trim()) {
+      return NextResponse.json({ error: "Passage body_html required." }, { status: 400 });
+    }
+    const kind = p.kind === "reference" ? "reference" : "reading";
+    const { data, error } = await admin
+      .from("exam_passages")
+      .insert({
+        exam_id: examId,
+        title: p.title?.trim() || null,
+        body_html: p.body_html.trim(),
+        kind: kind,
+        sort_order: typeof p.sort_order === "number" ? Math.trunc(p.sort_order) : 0,
+      })
+      .select("id,exam_id,sort_order,title,body_html,kind,created_at,updated_at")
+      .single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ passage: data as PassageRow });
+  }
+
+  if (body.action === "update_passage") {
+    const pid = body.passage_id;
+    if (!pid) return NextResponse.json({ error: "Missing passage_id." }, { status: 400 });
+    const p = body as Partial<PassageRow>;
+    const patch: Record<string, unknown> = {};
+    if ("title" in p) patch.title = typeof p.title === "string" ? p.title.trim() : null;
+    if ("body_html" in p && typeof p.body_html === "string") patch.body_html = p.body_html.trim();
+    if ("sort_order" in p && typeof p.sort_order === "number") patch.sort_order = Math.trunc(p.sort_order);
+    if ("kind" in p && (p.kind === "reading" || p.kind === "reference")) patch.kind = p.kind;
+
+    const { data, error } = await admin
+      .from("exam_passages")
+      .update(patch)
+      .eq("id", pid)
+      .eq("exam_id", examId)
+      .select("id,exam_id,sort_order,title,body_html,kind,created_at,updated_at")
+      .single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ passage: data as PassageRow });
+  }
+
+  if (body.action === "delete_passage") {
+    const pid = body.passage_id;
+    if (!pid) return NextResponse.json({ error: "Missing passage_id." }, { status: 400 });
+    const { error } = await admin.from("exam_passages").delete().eq("id", pid).eq("exam_id", examId);
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json({ ok: true });
   }

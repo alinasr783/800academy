@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
@@ -14,8 +15,15 @@ type QuestionRow = {
   points: number;
   allow_multiple: boolean;
   correct_text: string | null;
+  passage_id: string | null;
   created_at: string;
   updated_at: string;
+};
+
+type PassageRow = {
+  id: string;
+  title: string | null;
+  kind: "reading" | "reference";
 };
 
 type QuestionAssetRow = {
@@ -53,6 +61,7 @@ export default function DashboardQuestionDetails() {
   const [question, setQuestion] = useState<QuestionRow | null>(null);
   const [assets, setAssets] = useState<QuestionAssetRow[]>([]);
   const [options, setOptions] = useState<OptionRow[]>([]);
+  const [passages, setPassages] = useState<PassageRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -61,6 +70,7 @@ export default function DashboardQuestionDetails() {
   const [allowMultiple, setAllowMultiple] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [correctText, setCorrectText] = useState("");
+  const [passageId, setPassageId] = useState("");
   const [explanationText, setExplanationText] = useState("");
 
   const [assetUrl, setAssetUrl] = useState("");
@@ -112,6 +122,11 @@ export default function DashboardQuestionDetails() {
       setPrompt(json.question.prompt_text ?? "");
       setExplanationText(json.question.explanation_text ?? "");
       setCorrectText(json.question.correct_text ?? "");
+      setPassageId(json.question.passage_id ?? "");
+
+      // Fetch passages for the same exam
+      const examJson = await adminFetch(`/api/admin/exams/${json.question.exam_id}`);
+      setPassages(examJson.passages ?? []);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Something went wrong.";
       setError(msg);
@@ -143,6 +158,7 @@ export default function DashboardQuestionDetails() {
           prompt_text: prompt.trim() || null,
           explanation_text: explanationText.trim() || null,
           correct_text: type === "fill" ? correctText.trim() || null : null,
+          passage_id: passageId || null,
         }),
       })) as { question: QuestionRow };
       setQuestion(json.question);
@@ -401,466 +417,375 @@ export default function DashboardQuestionDetails() {
   const explanationAssets = useMemo(() => assets.filter((a) => a.kind === "explanation"), [assets]);
 
   return (
-    <div className="bg-white border border-outline/60 shadow-soft-xl overflow-hidden">
-      <div className="p-8 border-b border-outline/40">
-        <div className="flex items-start justify-between gap-8">
+    <div className="max-w-full">
+      {/* Sticky Top Header */}
+      <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border border-outline/60 shadow-soft-xl rounded-2xl mb-8 p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
+        <div className="flex items-center gap-4">
+          <Link
+            href={question ? `/dashboard/exams/${question.exam_id}` : "/dashboard/exams"}
+            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 text-on-surface hover:bg-slate-200 transition-all active:scale-95"
+          >
+            <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+          </Link>
           <div>
-            <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
-              Question
-            </div>
-            <h1 className="font-headline text-4xl font-extrabold text-primary tracking-tighter">
-              Question Builder
+            <h1 className="font-headline text-2xl font-black text-primary tracking-tighter">
+              Edit Question
             </h1>
-            <p className="text-on-surface-variant font-medium mt-3">{header}</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-secondary mt-1">
+              {question ? `Question #${question.question_number} • ID: ${questionId.slice(0, 8)}...` : "Loading..."}
+            </p>
           </div>
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={deleteQuestion}
-              disabled={saving}
-              className="bg-white text-rose-700 border border-rose-200 px-6 py-3 font-bold text-sm hover:bg-rose-50 transition-all disabled:opacity-60"
-            >
-              Delete
-            </button>
-            <button
-              type="button"
-              onClick={saveQuestion}
-              disabled={saving}
-              className="bg-secondary text-white px-6 py-3 font-bold text-sm hover:bg-primary transition-all disabled:opacity-60"
-            >
-              Save
-            </button>
-          </div>
+        </div>
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={deleteQuestion}
+            disabled={saving}
+            className="flex-1 sm:flex-none px-6 py-3 font-black text-xs uppercase tracking-widest rounded-xl text-rose-700 bg-rose-50 border border-rose-100 hover:bg-rose-100 transition-all active:scale-95 disabled:opacity-50"
+          >
+            Delete
+          </button>
+          <button
+            type="button"
+            onClick={saveQuestion}
+            disabled={saving}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-primary text-white px-8 py-3 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-slate-800 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 active:scale-95"
+          >
+             <span className="material-symbols-outlined text-[18px]">save</span>
+            {saving ? "Saving..." : "Save Changes"}
+          </button>
         </div>
       </div>
 
       {error ? (
-        <div className="p-6 border-b border-outline/40 bg-rose-50 text-rose-700">{error}</div>
+        <div className="mb-8 p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl flex items-center gap-3 animate-slide-up">
+          <span className="material-symbols-outlined text-rose-500">error</span>
+          <span className="text-sm font-bold">{error}</span>
+        </div>
       ) : null}
 
       {message ? (
-        <div className="p-6 border-b border-outline/40 bg-surface-variant text-on-surface">{message}</div>
+        <div className="mb-8 p-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl flex items-center gap-3 animate-slide-up">
+          <span className="material-symbols-outlined text-emerald-500">check_circle</span>
+          <span className="text-sm font-bold">{message}</span>
+        </div>
       ) : null}
 
       {loading ? (
-        <div className="p-10 text-on-surface-variant font-medium">Loading…</div>
+        <div className="flex flex-col items-center justify-center py-24 gap-4">
+          <div className="w-12 h-12 border-4 border-slate-200 border-t-primary rounded-full animate-spin" />
+          <div className="text-slate-400 font-black text-xs uppercase tracking-widest animate-pulse transition-all">
+            Loading Builder...
+          </div>
+        </div>
       ) : (
-        <div className="p-8 grid grid-cols-1 lg:grid-cols-12 gap-10">
-          <div className="lg:col-span-7 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-              <div className="md:col-span-4">
-                <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">Type</div>
-                <select
-                  value={type}
-                  onChange={(e) => setType(e.target.value === "fill" ? "fill" : "mcq")}
-                  className="h-12 w-full px-4 bg-background border border-border/60 focus:border-primary outline-none transition-colors"
-                >
-                  <option value="mcq">MCQ</option>
-                  <option value="fill">Fill</option>
-                </select>
-              </div>
-              <div className="md:col-span-4">
-                <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">Points</div>
-                <input
-                  value={points}
-                  onChange={(e) => setPoints(e.target.value)}
-                  className="h-12 w-full px-4 bg-background border border-border/60 focus:border-primary outline-none transition-colors"
-                />
-              </div>
-              <div className="md:col-span-4">
-                <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">
-                  Options mode
-                </div>
-                <label className="h-12 w-full flex items-center gap-3 px-4 bg-background border border-border/60 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={allowMultiple}
-                    onChange={(e) => setAllowMultiple(e.target.checked)}
-                    disabled={type !== "mcq"}
-                    className="h-4 w-4"
-                  />
-                  <span className="text-sm font-bold text-primary">
-                    {type === "mcq" ? "Allow multiple" : "—"}
-                  </span>
-                </label>
-              </div>
-            </div>
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-10 items-start pb-24">
+          {/* Main Question Content */}
+          <div className="xl:col-span-8 space-y-10">
+            {/* Split View for Prompt and Assets */}
+            <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden">
+               <div className="p-6 border-b border-outline/40 bg-slate-50/50 flex items-center gap-3">
+                  <span className="material-symbols-outlined text-primary">edit_note</span>
+                  <h2 className="text-sm font-black uppercase tracking-widest text-primary">Question Content</h2>
+               </div>
+               <div className="p-8 space-y-8">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">
+                      Question Prompt
+                    </label>
+                    <textarea
+                      value={prompt}
+                      onChange={(e) => setPrompt(e.target.value)}
+                      rows={8}
+                      className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl focus:border-primary focus:bg-white outline-none transition-all font-medium text-lg leading-relaxed resize-none"
+                    />
+                  </div>
 
-            <div>
-              <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">Prompt</div>
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                rows={7}
-                className="w-full px-4 py-3 bg-background border border-border/60 focus:border-primary outline-none transition-colors resize-none"
-              />
-            </div>
-
-            {type === "fill" ? (
-              <div>
-                <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">
-                  Correct text
-                </div>
-                <input
-                  value={correctText}
-                  onChange={(e) => setCorrectText(e.target.value)}
-                  className="h-12 w-full px-4 bg-background border border-border/60 focus:border-primary outline-none transition-colors"
-                />
-              </div>
-            ) : null}
-
-            <div>
-              <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">
-                Explanation
-              </div>
-              <textarea
-                value={explanationText}
-                onChange={(e) => setExplanationText(e.target.value)}
-                rows={6}
-                className="w-full px-4 py-3 bg-background border border-border/60 focus:border-primary outline-none transition-colors resize-none"
-              />
-            </div>
-
-            <div className="bg-surface-variant border border-outline/40 p-6">
-              <div className="text-xs font-bold text-primary uppercase tracking-widest mb-4">
-                Question assets
-              </div>
-              <div className="text-xs text-on-surface-variant font-medium mb-4">
-                Upload images to Supabase Storage ({storageBucket}) or use a direct URL.
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-                <div className="md:col-span-6">
-                  <select
-                    value={assetKind}
-                    onChange={(e) => setAssetKind(e.target.value === "explanation" ? "explanation" : "prompt")}
-                    className="h-12 w-full px-4 bg-white border border-outline/60 focus:border-primary outline-none transition-colors"
-                  >
-                    <option value="prompt">Prompt</option>
-                    <option value="explanation">Explanation</option>
-                  </select>
-                </div>
-                <div className="md:col-span-6">
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={(e) => setAssetFiles(Array.from(e.target.files ?? []))}
-                    className="h-12 w-full px-4 bg-white border border-outline/60 focus:border-primary outline-none transition-colors"
-                  />
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={uploadAssets}
-                disabled={saving || assetFiles.length === 0}
-                className="mt-3 h-12 w-full bg-primary text-white font-bold text-sm hover:bg-slate-800 transition-colors disabled:opacity-60"
-              >
-                Upload selected images
-              </button>
-              <div className="my-6 border-t border-outline/40" />
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-                <div className="md:col-span-7">
-                  <input
-                    value={assetUrl}
-                    onChange={(e) => setAssetUrl(e.target.value)}
-                    placeholder="https://..."
-                    className="h-12 w-full px-4 bg-white border border-outline/60 focus:border-primary outline-none transition-colors"
-                  />
-                </div>
-                <div className="md:col-span-3">
-                  <input
-                    value={assetAlt}
-                    onChange={(e) => setAssetAlt(e.target.value)}
-                    placeholder="Alt"
-                    className="h-12 w-full px-4 bg-white border border-outline/60 focus:border-primary outline-none transition-colors"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <input
-                    value={assetSort}
-                    onChange={(e) => setAssetSort(e.target.value)}
-                    placeholder="Sort"
-                    className="h-12 w-full px-4 bg-white border border-outline/60 focus:border-primary outline-none transition-colors"
-                  />
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={addAsset}
-                disabled={saving}
-                className="mt-3 h-12 w-full bg-white text-primary border border-outline font-bold text-sm hover:bg-surface-variant transition-all disabled:opacity-60"
-              >
-                Add asset by URL
-              </button>
-              <div className="mt-5 space-y-3">
-                {promptAssets
-                  .slice()
-                  .sort((a, b) => a.sort_order - b.sort_order)
-                  .map((a) => (
-                    <div key={a.id} className="bg-white border border-outline/40 p-4">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <div className="text-sm font-extrabold text-primary break-all">
-                            {a.url || a.storage_path || a.id}
-                          </div>
-                          <div className="text-xs text-on-surface-variant font-medium mt-1">
-                            Kind: {a.kind} • Sort: {a.sort_order}
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => deleteAsset(a.id)}
-                          disabled={saving}
-                          className="text-sm font-bold text-rose-700 hover:text-rose-900 transition-colors disabled:opacity-60"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mt-4">
-                        <div className="md:col-span-7">
-                          <input
-                            defaultValue={a.url ?? ""}
-                            onBlur={(e) => {
-                              const v = e.target.value.trim();
-                              if (v !== (a.url ?? "")) updateAsset(a.id, { url: v || null });
-                            }}
-                            placeholder="URL"
-                            className="h-10 w-full px-3 bg-background border border-border/60 focus:border-primary outline-none transition-colors text-sm"
-                          />
-                        </div>
-                        <div className="md:col-span-3">
-                          <input
-                            defaultValue={a.alt ?? ""}
-                            onBlur={(e) => {
-                              const v = e.target.value.trim();
-                              if (v !== (a.alt ?? "")) updateAsset(a.id, { alt: v || null });
-                            }}
-                            placeholder="Alt"
-                            className="h-10 w-full px-3 bg-background border border-border/60 focus:border-primary outline-none transition-colors text-sm"
-                          />
-                        </div>
-                        <div className="md:col-span-2">
-                          <input
-                            defaultValue={String(a.sort_order)}
-                            onBlur={(e) => {
-                              const n = Math.trunc(Number(e.target.value));
-                              if (!Number.isFinite(n) || n === a.sort_order) return;
-                              updateAsset(a.id, { sort_order: n });
-                            }}
-                            placeholder="Sort"
-                            className="h-10 w-full px-3 bg-background border border-border/60 focus:border-primary outline-none transition-colors text-sm"
-                          />
-                        </div>
-                      </div>
+                  {type === "fill" && (
+                    <div className="animate-fade-in">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">
+                        Correct Answer (Fill Only)
+                      </label>
+                      <input
+                        value={correctText}
+                        onChange={(e) => setCorrectText(e.target.value)}
+                        className="h-14 w-full px-6 bg-emerald-50 border border-emerald-100 rounded-2xl focus:border-emerald-500 focus:bg-white outline-none transition-all font-bold text-lg text-emerald-900"
+                        placeholder="Exact text for correct answer..."
+                      />
                     </div>
-                  ))}
-                {explanationAssets.length ? (
-                  <div className="pt-2">
-                    <div className="text-xs font-bold text-primary uppercase tracking-widest mb-3">
-                      Explanation assets
-                    </div>
-                    <div className="space-y-3">
-                      {explanationAssets
-                        .slice()
-                        .sort((a, b) => a.sort_order - b.sort_order)
-                        .map((a) => (
-                          <div key={a.id} className="bg-white border border-outline/40 p-4">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="min-w-0">
-                                <div className="text-sm font-extrabold text-primary break-all">
-                                  {a.url || a.storage_path || a.id}
+                  )}
+
+                  <div className="pt-4 border-t border-outline/20">
+                      <div className="text-xs font-black text-primary uppercase tracking-widest mb-6 flex items-center gap-2">
+                         <span className="material-symbols-outlined text-[18px]">imagesmode</span>
+                         Attached Assets (Images)
+                      </div>
+                      
+                      <div className="flex flex-wrap gap-4 mb-8">
+                        {assets.map((a) => (
+                           <div key={a.id} className="group relative w-24 h-24 rounded-2xl overflow-hidden border border-outline/40 shadow-sm hover:shadow-md transition-all">
+                              {a.url ? (
+                                <img src={a.url} alt="asset" className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full bg-slate-50 flex items-center justify-center">
+                                   <span className="material-symbols-outlined text-slate-300">image</span>
                                 </div>
-                                <div className="text-xs text-on-surface-variant font-medium mt-1">
-                                  Kind: {a.kind} • Sort: {a.sort_order}
-                                </div>
-                              </div>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => deleteAsset(a.id)}
-                                disabled={saving}
-                                className="text-sm font-bold text-rose-700 hover:text-rose-900 transition-colors disabled:opacity-60"
+                                className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                               >
-                                Delete
+                                <span className="material-symbols-outlined text-[14px]">close</span>
                               </button>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mt-4">
-                              <div className="md:col-span-7">
-                                <input
-                                  defaultValue={a.url ?? ""}
-                                  onBlur={(e) => {
-                                    const v = e.target.value.trim();
-                                    if (v !== (a.url ?? "")) updateAsset(a.id, { url: v || null });
-                                  }}
-                                  placeholder="URL"
-                                  className="h-10 w-full px-3 bg-background border border-border/60 focus:border-primary outline-none transition-colors text-sm"
-                                />
-                              </div>
-                              <div className="md:col-span-3">
-                                <input
-                                  defaultValue={a.alt ?? ""}
-                                  onBlur={(e) => {
-                                    const v = e.target.value.trim();
-                                    if (v !== (a.alt ?? "")) updateAsset(a.id, { alt: v || null });
-                                  }}
-                                  placeholder="Alt"
-                                  className="h-10 w-full px-3 bg-background border border-border/60 focus:border-primary outline-none transition-colors text-sm"
-                                />
-                              </div>
-                              <div className="md:col-span-2">
-                                <input
-                                  defaultValue={String(a.sort_order)}
-                                  onBlur={(e) => {
-                                    const n = Math.trunc(Number(e.target.value));
-                                    if (!Number.isFinite(n) || n === a.sort_order) return;
-                                    updateAsset(a.id, { sort_order: n });
-                                  }}
-                                  placeholder="Sort"
-                                  className="h-10 w-full px-3 bg-background border border-border/60 focus:border-primary outline-none transition-colors text-sm"
-                                />
-                              </div>
-                            </div>
-                          </div>
+                           </div>
                         ))}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </div>
+                      </div>
 
-          <div className="lg:col-span-5 space-y-6">
-            <div className="bg-surface-variant border border-outline/40 p-6">
-              <div className="text-xs font-bold text-primary uppercase tracking-widest mb-4">
-                Add option
-              </div>
-              <div className="space-y-3">
-                <input
-                  value={optText}
-                  onChange={(e) => setOptText(e.target.value)}
-                  placeholder="Option text"
-                  disabled={type !== "mcq"}
-                  className="h-12 w-full px-4 bg-white border border-outline/60 focus:border-primary outline-none transition-colors disabled:opacity-60"
-                />
-                <input
-                  value={optUrl}
-                  onChange={(e) => setOptUrl(e.target.value)}
-                  placeholder="Option image URL"
-                  disabled={type !== "mcq"}
-                  className="h-12 w-full px-4 bg-white border border-outline/60 focus:border-primary outline-none transition-colors disabled:opacity-60"
-                />
-                <label className="flex items-center gap-3 text-sm font-bold text-primary">
-                  <input
-                    type="checkbox"
-                    checked={optCorrect}
-                    onChange={(e) => setOptCorrect(e.target.checked)}
-                    disabled={type !== "mcq"}
-                    className="h-4 w-4"
-                  />
-                  Mark as correct
-                </label>
-                <button
-                  type="button"
-                  onClick={addOption}
-                  disabled={saving || type !== "mcq"}
-                  className="h-12 w-full bg-primary text-white font-bold text-sm hover:bg-slate-800 transition-colors disabled:opacity-60"
-                >
-                  Add option
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-white border border-outline/60 shadow-soft-xl overflow-hidden">
-              <div className="p-5 border-b border-outline/40 flex items-center justify-between gap-4">
-                <div className="text-xs font-bold text-primary uppercase tracking-widest">
-                  Options ({options.length})
-                </div>
-                <button
-                  type="button"
-                  onClick={saveOrder}
-                  disabled={saving || options.length === 0 || type !== "mcq"}
-                  className="h-10 px-4 bg-secondary text-white font-bold text-xs hover:bg-primary transition-colors disabled:opacity-60"
-                >
-                  Save order
-                </button>
-              </div>
-              {type !== "mcq" ? (
-                <div className="p-6 text-on-surface-variant font-medium">Options are for MCQ only.</div>
-              ) : options.length === 0 ? (
-                <div className="p-6 text-on-surface-variant font-medium">No options yet.</div>
-              ) : (
-                <div className="divide-y divide-outline/40">
-                  {options.map((o, idx) => (
-                    <div
-                      key={o.id}
-                      draggable
-                      onDragStart={() => {
-                        dragFromIdx.current = idx;
-                      }}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={() => {
-                        const from = dragFromIdx.current;
-                        dragFromIdx.current = null;
-                        if (from === null || from === idx) return;
-                        reorderLocal(from, idx);
-                      }}
-                      className="p-5 bg-white hover:bg-surface-variant transition-colors cursor-move"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <div className="text-sm font-extrabold text-primary">#{idx + 1}</div>
-                          <div className="text-xs text-on-surface-variant font-medium mt-2 break-all">
-                            {o.text || o.url || "—"}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <label className="flex items-center gap-2 text-sm font-bold text-primary">
-                            <input
-                              type="checkbox"
-                              checked={o.is_correct}
-                              onChange={(e) => updateOption(o.id, { is_correct: e.target.checked })}
-                              className="h-4 w-4"
-                            />
-                            Correct
-                          </label>
+                      <div className="bg-slate-50 p-6 rounded-2xl space-y-4 border border-slate-100">
+                        <div className="flex flex-col sm:flex-row gap-4">
+                          <input
+                            value={assetUrl}
+                            onChange={(e) => setAssetUrl(e.target.value)}
+                            placeholder="Direct image URL..."
+                            className="flex-1 h-12 px-5 bg-white border border-slate-200 rounded-xl focus:border-primary outline-none transition-all text-sm font-bold"
+                          />
+                          <select
+                             value={assetKind}
+                             onChange={(e) => setAssetKind(e.target.value as "prompt" | "explanation")}
+                             className="h-12 px-4 bg-white border border-slate-200 rounded-xl focus:border-primary outline-none transition-all text-xs font-black uppercase tracking-widest"
+                          >
+                             <option value="prompt">For Prompt</option>
+                             <option value="explanation">For Explanation</option>
+                          </select>
                           <button
                             type="button"
-                            onClick={() => deleteOption(o.id)}
-                            disabled={saving}
-                            className="text-sm font-bold text-rose-700 hover:text-rose-900 transition-colors disabled:opacity-60"
+                            onClick={addAsset}
+                            disabled={saving || !assetUrl.trim()}
+                            className="h-12 px-6 bg-slate-800 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all active:scale-[0.98]"
                           >
-                            Delete
+                            Add Asset
                           </button>
                         </div>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mt-4">
-                        <div className="md:col-span-7">
-                          <input
-                            defaultValue={o.text ?? ""}
-                            onBlur={(e) => {
-                              const v = e.target.value.trim();
-                              if (v !== (o.text ?? "")) updateOption(o.id, { text: v || null });
-                            }}
-                            placeholder="Text"
-                            className="h-10 w-full px-3 bg-background border border-border/60 focus:border-primary outline-none transition-colors text-sm"
-                          />
-                        </div>
-                        <div className="md:col-span-5">
-                          <input
-                            defaultValue={o.url ?? ""}
-                            onBlur={(e) => {
-                              const v = e.target.value.trim();
-                              if (v !== (o.url ?? "")) updateOption(o.id, { url: v || null });
-                            }}
-                            placeholder="Image URL"
-                            className="h-10 w-full px-3 bg-background border border-border/60 focus:border-primary outline-none transition-colors text-sm"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                  </div>
+               </div>
             </div>
+
+            {/* Explanation Content */}
+            <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden">
+               <div className="p-6 border-b border-outline/40 bg-amber-50/50 flex items-center gap-3">
+                  <span className="material-symbols-outlined text-amber-600">psychology</span>
+                  <h2 className="text-sm font-black uppercase tracking-widest text-amber-700">Detailed Explanation</h2>
+               </div>
+               <div className="p-8">
+                  <textarea
+                    value={explanationText}
+                    onChange={(e) => setExplanationText(e.target.value)}
+                    rows={6}
+                    className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl focus:border-amber-400 focus:bg-white outline-none transition-all font-medium text-base leading-relaxed resize-none"
+                    placeholder="Provide a step-by-step explanation for the students..."
+                  />
+               </div>
+            </div>
+
+            {/* MCQ Options */}
+            {type === "mcq" && (
+              <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden animate-fade-in">
+                 <div className="p-6 border-b border-outline/40 bg-indigo-50/50 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="material-symbols-outlined text-indigo-600">checklist</span>
+                      <h2 className="text-sm font-black uppercase tracking-widest text-indigo-700">Answer Options</h2>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={saveOrder}
+                          className="px-4 py-2 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-indigo-700 active:scale-95 transition-all"
+                        >
+                          Save Order
+                        </button>
+                    </div>
+                 </div>
+                 <div className="p-8 space-y-6">
+                    {options.map((o, idx) => (
+                      <div 
+                        key={o.id} 
+                        draggable
+                        onDragStart={() => { dragFromIdx.current = idx; }}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={() => {
+                          const from = dragFromIdx.current;
+                          dragFromIdx.current = null;
+                          if (from === null || from === idx) return;
+                          reorderLocal(from, idx);
+                        }}
+                        className="group relative border border-slate-100 bg-slate-50/50 rounded-2xl p-6 hover:border-indigo-200 hover:bg-white transition-all cursor-move"
+                      >
+                         <div className="flex items-center justify-between gap-4 mb-4">
+                            <div className="flex items-center gap-2">
+                                <span className="material-symbols-outlined text-slate-300">drag_indicator</span>
+                                <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center font-black text-xs">
+                                   {o.option_number}
+                                </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => deleteOption(o.id)}
+                              className="text-slate-400 hover:text-rose-600 transition-colors"
+                            >
+                              <span className="material-symbols-outlined text-[20px]">delete</span>
+                            </button>
+                         </div>
+                         <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                            <div className="md:col-span-10 flex flex-col gap-4">
+                              <input
+                                defaultValue={o.text ?? ""}
+                                onBlur={(e) => {
+                                  const v = e.target.value.trim();
+                                  if (v !== (o.text ?? "")) updateOption(o.id, { text: v || null });
+                                }}
+                                placeholder="Option text (optional if using image)"
+                                className="h-12 w-full px-5 bg-white border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition-all font-bold"
+                              />
+                               <input
+                                defaultValue={o.url ?? ""}
+                                onBlur={(e) => {
+                                  const v = e.target.value.trim();
+                                  if (v !== (o.url ?? "")) updateOption(o.id, { url: v || null });
+                                }}
+                                placeholder="Image URL (optional)"
+                                className="h-10 w-full px-5 bg-white border border-slate-100 rounded-xl focus:border-indigo-500 outline-none transition-all text-xs font-bold italic"
+                              />
+                            </div>
+                            <div className="md:col-span-2">
+                               <label className={`h-12 w-full flex items-center justify-center gap-2 border-2 rounded-xl cursor-pointer transition-all active:scale-95 ${o.is_correct ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-100 bg-white text-slate-400"}`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={o.is_correct}
+                                    onChange={(e) => updateOption(o.id, { is_correct: e.target.checked })}
+                                    className="hidden"
+                                  />
+                                  <span className="material-symbols-outlined text-[20px]">{o.is_correct ? "check_circle" : "radio_button_unchecked"}</span>
+                                  <span className="text-[10px] font-black uppercase tracking-widest">Correct</span>
+                               </label>
+                            </div>
+                         </div>
+                      </div>
+                    ))}
+                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 space-y-4">
+                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Quick Add Option</div>
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                            <div className="md:col-span-10">
+                                <input
+                                    value={optText}
+                                    onChange={(e) => setOptText(e.target.value)}
+                                    placeholder="Option text..."
+                                    className="h-12 w-full px-5 bg-white border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition-all font-bold"
+                                />
+                            </div>
+                             <div className="md:col-span-2">
+                                <label className={`h-12 w-full flex items-center justify-center gap-2 border-2 rounded-xl cursor-pointer transition-all active:scale-95 ${optCorrect ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-100 bg-white text-slate-400"}`}>
+                                    <input
+                                        type="checkbox"
+                                        checked={optCorrect}
+                                        onChange={(e) => setOptCorrect(e.target.checked)}
+                                        className="hidden"
+                                    />
+                                    <span className="text-[10px] font-black uppercase tracking-widest">Correct</span>
+                                </label>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={addOption}
+                            className="w-full h-12 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all active:scale-[0.98]"
+                        >
+                            + Add Option
+                        </button>
+                    </div>
+                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Configuration Sidebar */}
+          <div className="xl:col-span-4 space-y-8 sticky top-32">
+             <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden">
+                <div className="p-6 border-b border-outline/40 bg-slate-50 flex items-center gap-3">
+                   <span className="material-symbols-outlined text-primary">tune</span>
+                   <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Core Settings</h2>
+                </div>
+                <div className="p-8 space-y-6">
+                   <div className="grid grid-cols-2 gap-4">
+                      <button
+                         type="button"
+                         onClick={() => setType("mcq")}
+                         className={`h-14 flex flex-col items-center justify-center gap-1 border-2 rounded-2xl transition-all active:scale-[0.98] ${type === "mcq" ? "border-primary bg-primary/5 text-primary" : "border-slate-100 bg-slate-50 text-slate-400"}`}
+                      >
+                         <span className="material-symbols-outlined">quiz</span>
+                         <span className="text-[10px] font-black uppercase tracking-widest">MCQ</span>
+                      </button>
+                      <button
+                         type="button"
+                         onClick={() => setType("fill")}
+                         className={`h-14 flex flex-col items-center justify-center gap-1 border-2 rounded-2xl transition-all active:scale-[0.98] ${type === "fill" ? "border-primary bg-primary/5 text-primary" : "border-slate-100 bg-slate-50 text-slate-400"}`}
+                      >
+                         <span className="material-symbols-outlined">stylus</span>
+                         <span className="text-[10px] font-black uppercase tracking-widest">Fill</span>
+                      </button>
+                   </div>
+
+                   <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">Points</label>
+                      <input
+                        value={points}
+                        onChange={(e) => setPoints(e.target.value)}
+                        className="h-12 w-full px-5 bg-slate-50 border border-slate-100 rounded-xl focus:border-primary outline-none transition-all font-black text-center"
+                      />
+                   </div>
+
+                   <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">Mode</label>
+                      <label className={`h-14 w-full flex items-center justify-center gap-3 border-2 rounded-2xl cursor-pointer transition-all ${allowMultiple ? "border-primary bg-primary/5 text-primary" : "border-slate-100 bg-slate-50 text-slate-400"}`}>
+                        <input
+                          type="checkbox"
+                          checked={allowMultiple}
+                          onChange={(e) => setAllowMultiple(e.target.checked)}
+                          disabled={type !== "mcq"}
+                          className="hidden"
+                        />
+                        <span className="material-symbols-outlined">{allowMultiple ? "check_box" : "check_box_outline_blank"}</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest">Multiple Answers</span>
+                      </label>
+                   </div>
+                </div>
+             </div>
+
+             <div className="bg-indigo-600 rounded-3xl p-8 shadow-soft-xl text-white relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-1000" />
+                <div className="relative z-10 space-y-6 text-center sm:text-left">
+                   <div className="flex items-center gap-3 justify-center sm:justify-start">
+                      <span className="material-symbols-outlined text-white/80">view_cozy</span>
+                      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/90">Linked Content</h3>
+                   </div>
+                   <select
+                      value={passageId}
+                      onChange={(e) => setPassageId(e.target.value)}
+                      className="h-12 w-full px-4 bg-white/20 border border-white/20 text-white rounded-xl focus:bg-white focus:text-indigo-900 outline-none transition-all font-bold text-sm backdrop-blur-sm cursor-pointer"
+                   >
+                      <option value="" className="text-gray-900">None (Independent)</option>
+                      {passages.map((p) => (
+                        <option key={p.id} value={p.id} className="text-gray-900">
+                           {p.kind === 'reference' ? '[Reference]' : '[Reading]'} {p.title || `Passage #${p.id.slice(0, 4)}`}
+                        </option>
+                      ))}
+                   </select>
+                   <p className="text-[9px] font-bold text-white/50 bg-black/10 p-3 rounded-lg leading-relaxed">
+                      Link this question to a shared reading passage or a reference block (like a math chart).
+                   </p>
+                </div>
+             </div>
           </div>
         </div>
       )}

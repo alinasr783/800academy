@@ -51,6 +51,13 @@ type Option = {
   is_correct: boolean;
 };
 
+type Passage = {
+  id: string;
+  title: string | null;
+  body_html: string;
+  kind: "reading" | "reference";
+};
+
 type Question = {
   id: string;
   question_number: number;
@@ -63,6 +70,7 @@ type Question = {
   prompt_assets: Asset[];
   explanation_assets: Asset[];
   options: Option[];
+  passage_id: string | null;
 };
 
 type Props = {
@@ -217,6 +225,7 @@ export default function ExamClient({
   const [contentLoading, setContentLoading] = useState(true);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [referenceSheets, setReferenceSheets] = useState<Asset[]>([]);
+  const [passagesById, setPassagesById] = useState<Map<string, Passage>>(new Map());
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [remaining, setRemaining] = useState(exam.duration_seconds);
@@ -304,10 +313,18 @@ export default function ExamClient({
           .order("sort_order", { ascending: true })
           .returns<Asset[]>();
 
+        /* Fetch passages */
+        const { data: passageRows } = await supabase
+          .from("exam_passages")
+          .select("id, title, body_html, kind")
+          .eq("exam_id", exam.id)
+          .order("sort_order", { ascending: true })
+          .returns<{ id: string; title: string | null; body_html: string; kind: "reading" | "reference" }[]>();
+
         const { data: qRows } = await supabase
           .from("exam_questions")
           .select(
-            "id, question_number, type, prompt_text, explanation_text, points, allow_multiple, correct_text",
+            "id, question_number, type, prompt_text, explanation_text, points, allow_multiple, correct_text, passage_id",
           )
           .eq("exam_id", exam.id)
           .order("question_number", { ascending: true })
@@ -321,6 +338,7 @@ export default function ExamClient({
               points: number;
               allow_multiple: boolean;
               correct_text: string | null;
+              passage_id: string | null;
             }[]
           >();
 
@@ -402,11 +420,19 @@ export default function ExamClient({
           prompt_assets: promptAssetsByQ.get(q.id) ?? [],
           explanation_assets: explanationAssetsByQ.get(q.id) ?? [],
           options: optionsByQ.get(q.id) ?? [],
+          passage_id: q.passage_id ?? null,
         }));
+
+        /* Build passages map */
+        const pMap = new Map<string, Passage>();
+        for (const p of passageRows ?? []) {
+          pMap.set(p.id, { id: p.id, title: p.title, body_html: p.body_html, kind: p.kind ?? "reading" });
+        }
 
         if (!mounted) return;
         setReferenceSheets(sheetRows ?? []);
         setQuestions(qs);
+        setPassagesById(pMap);
       } finally {
         if (mounted) setContentLoading(false);
       }
@@ -1311,7 +1337,10 @@ export default function ExamClient({
                         return false;
                       })();
 
-                return (
+                return (() => {
+                  const passage = q.passage_id ? passagesById.get(q.passage_id) : null;
+
+                  const reviewCard = (
                   <div key={q.id} className="bg-white border-2 border-outline/30 shadow-sm rounded-2xl overflow-hidden">
                     <div className="p-4 sm:p-6 border-b border-outline/30 flex items-start justify-between gap-4 sm:gap-6 bg-slate-50">
                       <div>
@@ -1335,6 +1364,13 @@ export default function ExamClient({
                     </div>
 
                     <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
+                      {passage ? (
+                        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-violet-50 border border-violet-200 text-[10px] sm:text-xs font-extrabold text-violet-700 rounded-lg">
+                          <span className="material-symbols-outlined text-[14px] sm:text-[16px] text-violet-500">menu_book</span>
+                          Related to passage{passage.title ? `: ${passage.title}` : ""}
+                        </div>
+                      ) : null}
+
                       {q.prompt_text ? (
                         <div className="text-on-surface font-medium leading-relaxed text-sm sm:text-base">{q.prompt_text}</div>
                       ) : null}
@@ -1440,12 +1476,12 @@ export default function ExamClient({
                                 return (
                                   <div
                                     key={a.id}
-                                    className="border-2 border-outline/30 bg-white overflow-hidden rounded-xl max-w-2xl w-full"
+                                    className="border-2 border-outline/30 bg-slate-50 overflow-hidden rounded-xl max-w-full"
                                   >
                                     {url ? (
-                                      <img src={url} alt="Explanation asset" className="w-full h-auto" />
+                                      <img src={url} alt="Question asset" className="max-w-full h-auto mx-auto block" />
                                     ) : (
-                                      <div className="h-56" />
+                                      <div className="h-56 w-64" />
                                     )}
                                   </div>
                                 );
@@ -1456,7 +1492,57 @@ export default function ExamClient({
                       ) : null}
                     </div>
                   </div>
-                );
+                  );
+
+                  if (!passage) return reviewCard;
+
+                  /* Passage + review card layout */
+                  const isReference = passage.kind === "reference";
+
+                  const reviewPassagePanel = (
+                    <div className={`border-2 ${isReference ? 'border-sky-200 bg-gradient-to-br from-sky-50 to-white' : 'border-violet-200 bg-gradient-to-br from-violet-50 to-white'} rounded-2xl overflow-hidden flex flex-col`}>
+                      <div className={`px-4 py-3 ${isReference ? 'bg-sky-100/60 border-b border-sky-200' : 'bg-violet-100/60 border-b border-violet-200'} flex items-center gap-2`}>
+                        <span className={`material-symbols-outlined ${isReference ? 'text-sky-600' : 'text-violet-600'} text-lg`}>
+                          {isReference ? 'view_cozy' : 'menu_book'}
+                        </span>
+                        <div className={`text-xs font-black uppercase tracking-[0.15em] ${isReference ? 'text-sky-700' : 'text-violet-700'}`}>
+                          {isReference ? 'Reference Block' : 'Passage'}
+                        </div>
+                        {passage.title ? (
+                          <div className={`ml-2 text-sm font-extrabold ${isReference ? 'text-sky-900' : 'text-violet-900'} truncate`}>{passage.title}</div>
+                        ) : null}
+                      </div>
+                      <div
+                        className={`p-4 sm:p-6 prose prose-sm max-w-none text-on-surface leading-relaxed break-words [&_img]:mx-auto [&_img]:max-w-full [&_img]:h-auto [&_table]:mx-auto [&_table]:max-w-full [&_table]:w-auto [&_pre]:whitespace-pre-wrap ${isReference ? 'overflow-visible' : 'overflow-y-auto lg:max-h-[65vh] max-h-[40vh]'}`}
+                        dangerouslySetInnerHTML={{ __html: passage.body_html }}
+                      />
+                    </div>
+                  );
+
+                  if (isReference) {
+                    return (
+                      <div key={q.id} className="space-y-4 sm:space-y-6">
+                        {reviewPassagePanel}
+                        {reviewCard}
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={q.id}>
+                      {/* Mobile: stacked */}
+                      <div className="lg:hidden space-y-4">
+                        {reviewPassagePanel}
+                        {reviewCard}
+                      </div>
+                      {/* Desktop: side by side */}
+                      <div className="hidden lg:grid lg:grid-cols-2 gap-6">
+                        {reviewPassagePanel}
+                        {reviewCard}
+                      </div>
+                    </div>
+                  );
+                })();
               })}
             </div>
           </div>
@@ -1608,127 +1694,191 @@ export default function ExamClient({
                     </button>
                   </div>
 
-                  <div className="mt-4 sm:mt-8 space-y-4 sm:space-y-6 bg-gradient-to-br from-white to-slate-50 border-2 border-outline/30 shadow-sm rounded-2xl p-4 sm:p-6 md:p-8">
-                    {currentQuestion.prompt_text ? (
-                      <div className="text-base sm:text-lg text-on-surface leading-relaxed font-medium">
-                        {currentQuestion.prompt_text}
-                      </div>
-                    ) : null}
+                  {/* Passage + Question layout */}
+                  {(() => {
+                    const passage = currentQuestion.passage_id ? passagesById.get(currentQuestion.passage_id) : null;
+                    const isReference = passage?.kind === "reference";
 
-                    {currentQuestion.prompt_assets.length ? (
-                      <div className="flex flex-col items-center gap-4">
-                        {currentQuestion.prompt_assets.map((a) => {
-                          const url = assetUrl(a);
-                          return (
-                            <div
-                              key={a.id}
-                              className="border-2 border-outline/30 bg-slate-50 overflow-hidden rounded-xl max-w-2xl w-full"
-                            >
-                              {url ? (
-                                <img src={url} alt="Question asset" className="w-full h-auto" />
-                              ) : (
-                                <div className="h-56" />
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : null}
+                    const questionBody = (
+                      <div className="space-y-4 sm:space-y-6 bg-gradient-to-br from-white to-slate-50 border-2 border-outline/30 shadow-sm rounded-2xl p-4 sm:p-6 md:p-8">
+                        {passage && !isReference ? (
+                          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-violet-50 border border-violet-200 text-[10px] sm:text-xs font-extrabold text-violet-700 rounded-lg">
+                            <span className="material-symbols-outlined text-[14px] sm:text-[16px] text-violet-500">menu_book</span>
+                            Related to passage{passage.title ? `: ${passage.title}` : ""}
+                          </div>
+                        ) : null}
 
-                    {currentQuestion.type === "fill" ? (
-                      <div className="border-2 border-outline/30 bg-white p-4 sm:p-6 rounded-xl">
-                        <input
-                          value={qState.get(currentQuestion.id)?.fillText ?? ""}
-                          onChange={(e) => {
-                            const v = e.target.value;
-                            setQState((prev) => {
-                              const next = new Map(prev);
-                              const st = next.get(currentQuestion.id);
-                              if (!st) return prev;
-                              next.set(currentQuestion.id, { ...st, fillText: v });
-                              return next;
-                            });
-                          }}
-                          className="h-11 sm:h-12 w-full px-4 bg-white border-2 border-outline/40 rounded-lg focus:border-primary outline-none transition-colors"
-                          placeholder="Type your answer"
-                        />
-                      </div>
-                    ) : (
-                      <div className="space-y-2 sm:space-y-3">
-                        {(() => {
-                          const st = qState.get(currentQuestion.id);
-                          const selected = new Set(st?.selectedOptionIds ?? []);
-                          const order = optionOrder.get(currentQuestion.id);
-                          const byId = new Map(currentQuestion.options.map((o) => [o.id, o]));
-                          const ordered = (order ?? []).map((id) => byId.get(id)).filter((o): o is Option => !!o);
-                          const seen = new Set(ordered.map((o) => o.id));
-                          const leftovers = currentQuestion.options.filter((o) => !seen.has(o.id));
-                          const list = [...ordered, ...leftovers];
+                        {currentQuestion.prompt_text ? (
+                          <div className="text-base sm:text-lg text-on-surface leading-relaxed font-medium">
+                            {currentQuestion.prompt_text}
+                          </div>
+                        ) : null}
 
-                          return list.map((opt) => {
-                            const selectedNow = selected.has(opt.id);
-                            return (
-                              <button
-                                key={opt.id}
-                                type="button"
-                                onClick={() => {
-                                  setQState((prev) => {
-                                    const next = new Map(prev);
-                                    const cur = next.get(currentQuestion.id);
-                                    if (!cur) return prev;
-                                    const set = new Set(cur.selectedOptionIds);
-                                    if (currentQuestion.allow_multiple) {
-                                      if (set.has(opt.id)) set.delete(opt.id);
-                                      else set.add(opt.id);
-                                    } else {
-                                      set.clear();
-                                      set.add(opt.id);
-                                    }
-                                    next.set(currentQuestion.id, {
-                                      ...cur,
-                                      selectedOptionIds: Array.from(set),
-                                    });
-                                    return next;
-                                  });
-                                }}
-                                className={
-                                  selectedNow
-                                    ? "w-full text-left border-2 border-primary bg-primary/5 px-4 sm:px-6 py-3 sm:py-4 font-bold text-primary transition-all rounded-xl"
-                                    : "w-full text-left border-2 border-outline/30 bg-white px-4 sm:px-6 py-3 sm:py-4 font-bold text-on-surface hover:bg-primary/5 hover:border-primary/30 transition-all rounded-xl"
-                                }
-                              >
-                                <div className="flex items-start justify-between gap-3 sm:gap-4">
-                                  <div className="text-sm font-extrabold min-w-0">
-                                    {opt.text ? opt.text : `Option ${opt.option_number}`}
-                                  </div>
-                                  <span
+                        {currentQuestion.prompt_assets.length ? (
+                          <div className="flex flex-col items-center gap-4">
+                            {currentQuestion.prompt_assets.map((a) => {
+                              const url = assetUrl(a);
+                              return (
+                                <div
+                                  key={a.id}
+                                  className="border-2 border-outline/30 bg-slate-50 overflow-hidden rounded-xl max-w-full"
+                                >
+                                  {url ? (
+                                    <img src={url} alt="Question asset" className="max-w-full h-auto mx-auto block" />
+                                  ) : (
+                                    <div className="h-56 w-64" />
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+
+                        {currentQuestion.type === "fill" ? (
+                          <div className="border-2 border-outline/30 bg-white p-4 sm:p-6 rounded-xl">
+                            <input
+                              value={qState.get(currentQuestion.id)?.fillText ?? ""}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setQState((prev) => {
+                                  const next = new Map(prev);
+                                  const st = next.get(currentQuestion.id);
+                                  if (!st) return prev;
+                                  next.set(currentQuestion.id, { ...st, fillText: v });
+                                  return next;
+                                });
+                              }}
+                              className="h-11 sm:h-12 w-full px-4 bg-white border-2 border-outline/40 rounded-lg focus:border-primary outline-none transition-colors"
+                              placeholder="Type your answer"
+                            />
+                          </div>
+                        ) : (
+                          <div className="space-y-2 sm:space-y-3">
+                            {(() => {
+                              const st = qState.get(currentQuestion.id);
+                              const selected = new Set(st?.selectedOptionIds ?? []);
+                              const order = optionOrder.get(currentQuestion.id);
+                              const byId = new Map(currentQuestion.options.map((o) => [o.id, o]));
+                              const ordered = (order ?? []).map((id) => byId.get(id)).filter((o): o is Option => !!o);
+                              const seen = new Set(ordered.map((o) => o.id));
+                              const leftovers = currentQuestion.options.filter((o) => !seen.has(o.id));
+                              const list = [...ordered, ...leftovers];
+
+                              return list.map((opt) => {
+                                const selectedNow = selected.has(opt.id);
+                                return (
+                                  <button
+                                    key={opt.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setQState((prev) => {
+                                        const next = new Map(prev);
+                                        const cur = next.get(currentQuestion.id);
+                                        if (!cur) return prev;
+                                        const set = new Set(cur.selectedOptionIds);
+                                        if (currentQuestion.allow_multiple) {
+                                          if (set.has(opt.id)) set.delete(opt.id);
+                                          else set.add(opt.id);
+                                        } else {
+                                          set.clear();
+                                          set.add(opt.id);
+                                        }
+                                        next.set(currentQuestion.id, {
+                                          ...cur,
+                                          selectedOptionIds: Array.from(set),
+                                        });
+                                        return next;
+                                      });
+                                    }}
                                     className={
                                       selectedNow
-                                        ? "w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center flex-shrink-0"
-                                        : "w-5 h-5 rounded-full border-2 border-outline/40 flex items-center justify-center flex-shrink-0"
+                                        ? "w-full text-left border-2 border-primary bg-primary/5 px-4 sm:px-6 py-3 sm:py-4 font-bold text-primary transition-all rounded-xl"
+                                        : "w-full text-left border-2 border-outline/30 bg-white px-4 sm:px-6 py-3 sm:py-4 font-bold text-on-surface hover:bg-primary/5 hover:border-primary/30 transition-all rounded-xl"
                                     }
                                   >
-                                    {selectedNow ? (
-                                      <span className="material-symbols-outlined text-[16px]">
-                                        check
+                                    <div className="flex items-start justify-between gap-3 sm:gap-4">
+                                      <div className="text-sm font-extrabold min-w-0">
+                                        {opt.text ? opt.text : `Option ${opt.option_number}`}
+                                      </div>
+                                      <span
+                                        className={
+                                          selectedNow
+                                            ? "w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center flex-shrink-0"
+                                            : "w-5 h-5 rounded-full border-2 border-outline/40 flex items-center justify-center flex-shrink-0"
+                                        }
+                                      >
+                                        {selectedNow ? (
+                                          <span className="material-symbols-outlined text-[16px]">
+                                            check
+                                          </span>
+                                        ) : null}
                                       </span>
+                                    </div>
+                                    {opt.url ? (
+                                      <img
+                                        src={opt.url}
+                                        alt="Option"
+                                        className="mt-4 mx-auto max-w-full max-h-56 object-contain border-2 border-outline/30 bg-white rounded-lg"
+                                      />
                                     ) : null}
-                                  </span>
-                                </div>
-                                {opt.url ? (
-                                  <img
-                                    src={opt.url}
-                                    alt="Option"
-                                    className="mt-4 mx-auto max-w-full max-h-56 object-contain border-2 border-outline/30 bg-white rounded-lg"
-                                  />
-                                ) : null}
-                              </button>
-                            );
-                          });
-                        })()}
+                                  </button>
+                                );
+                              });
+                            })()}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
+                    );
+
+                    if (!passage) {
+                      return <div className="mt-4 sm:mt-8">{questionBody}</div>;
+                    }
+
+                    /* Passage panel */
+                    const passagePanel = (
+                      <div className={`border-2 ${isReference ? 'border-sky-200 bg-gradient-to-br from-sky-50 to-white' : 'border-violet-200 bg-gradient-to-br from-violet-50 to-white'} rounded-2xl overflow-hidden flex flex-col`}>
+                        <div className={`px-4 py-3 ${isReference ? 'bg-sky-100/60 border-b border-sky-200' : 'bg-violet-100/60 border-b border-violet-200'} flex items-center gap-2`}>
+                          <span className={`material-symbols-outlined ${isReference ? 'text-sky-600' : 'text-violet-600'} text-lg`}>
+                            {isReference ? 'view_cozy' : 'menu_book'}
+                          </span>
+                          <div className={`text-xs font-black uppercase tracking-[0.15em] ${isReference ? 'text-sky-700' : 'text-violet-700'}`}>
+                            {isReference ? 'Reference Block' : 'Passage'}
+                          </div>
+                          {passage.title ? (
+                            <div className={`ml-2 text-sm font-extrabold ${isReference ? 'text-sky-900' : 'text-violet-900'} truncate`}>{passage.title}</div>
+                          ) : null}
+                        </div>
+                        <div
+                          className={`p-4 sm:p-6 prose prose-sm max-w-none text-on-surface leading-relaxed break-words [&_img]:mx-auto [&_img]:max-w-full [&_img]:h-auto [&_table]:mx-auto [&_table]:max-w-full [&_table]:w-auto [&_pre]:whitespace-pre-wrap ${isReference ? 'overflow-visible' : 'overflow-y-auto lg:max-h-[65vh] max-h-[40vh]'}`}
+                          dangerouslySetInnerHTML={{ __html: passage.body_html }}
+                        />
+                      </div>
+                    );
+
+                    if (isReference) {
+                      return (
+                        <div className="mt-4 sm:mt-8 space-y-4 sm:space-y-6">
+                          {passagePanel}
+                          {questionBody}
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="mt-4 sm:mt-8">
+                        {/* Mobile: stacked */}
+                        <div className="lg:hidden space-y-4">
+                          {passagePanel}
+                          {questionBody}
+                        </div>
+                        {/* Desktop: side by side */}
+                        <div className="hidden lg:grid lg:grid-cols-2 gap-6">
+                          {passagePanel}
+                          {questionBody}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   <div className="mt-6 sm:mt-10 flex items-center justify-between gap-3 sm:gap-4">
                     <button
