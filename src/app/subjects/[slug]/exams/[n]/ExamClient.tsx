@@ -7,6 +7,10 @@ import BackButton from "@/components/BackButton";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import MathText from "@/components/MathText";
 
+// @ts-ignore
+import renderMathInElement from 'katex/dist/contrib/auto-render';
+import 'katex/dist/katex.min.css';
+
 type Exam = {
   id: string;
   title: string;
