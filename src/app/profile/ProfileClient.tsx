@@ -59,6 +59,17 @@ type MistakeRow = {
   } | null;
 };
 
+type PracticeSessionRow = {
+  id: string;
+  topic_ids: string[];
+  total_questions: number;
+  correct_questions: number;
+  duration_seconds: number;
+  target_accuracy: number;
+  percent_correct: number;
+  created_at: string;
+};
+
 type OrderRow = {
   id: string;
   status: string;
@@ -127,8 +138,10 @@ export default function ProfileClient() {
   const [attempts, setAttempts] = useState<AttemptRow[]>([]);
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [mistakes, setMistakes] = useState<MistakeRow[]>([]);
+  const [practiceSessions, setPracticeSessions] = useState<PracticeSessionRow[]>([]);
+  const [allTopics, setAllTopics] = useState<{ id: string; title: string; subject_id: string }[]>([]);
 
-  const [currentTab, setCurrentTab] = useState<"overview" | "mistakes">("overview");
+  const [currentTab, setCurrentTab] = useState<"overview" | "mistakes" | "braingym">("overview");
   const [visibleMistakes, setVisibleMistakes] = useState(10);
 
   const [quote, setQuote] = useState<string>("");
@@ -139,6 +152,13 @@ export default function ProfileClient() {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [bio, setBio] = useState("");
+
+  // Brain Gym Wizard State
+  const [gymTopics, setGymTopics] = useState<string[]>([]);
+  const [gymLimit, setGymLimit] = useState(20);
+  const [gymTime, setGymTime] = useState(15);
+  const [gymTarget, setGymTarget] = useState(80);
+  const [gymStep, setGymStep] = useState<1 | 2>(1);
 
   useEffect(() => {
     const q = motivations[Math.floor(Math.random() * motivations.length)] ?? "";
@@ -210,6 +230,12 @@ export default function ProfileClient() {
         .limit(1000)
         .returns<MistakeRow[]>();
 
+      const { data: gymRes } = await supabase.from("practice_sessions")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(50);
+
       if (!mounted) return;
 
       if (profileErr) {
@@ -233,6 +259,7 @@ export default function ProfileClient() {
         return a.difficulty_score - b.difficulty_score;
       });
       setMistakes(finalMistakes);
+      setPracticeSessions((gymRes as any) ?? []);
 
       setLoading(false);
     }
@@ -242,6 +269,16 @@ export default function ProfileClient() {
       mounted = false;
     };
   }, [router]);
+
+  useEffect(() => {
+    if (currentTab !== 'braingym' || allTopics.length > 0) return;
+    
+    async function loadTopics() {
+      const { data } = await supabase.from('topics').select('id, title, subject_id');
+      setAllTopics(data ?? []);
+    }
+    loadTopics();
+  }, [currentTab, allTopics.length]);
 
   const activeEntitlements = useMemo(() => {
     const now = Date.now();
@@ -369,6 +406,20 @@ export default function ProfileClient() {
     }
   }
 
+  function startGymSession() {
+    if (gymTopics.length === 0) {
+      setError("Please select at least one topic.");
+      return;
+    }
+    const params = new URLSearchParams({
+      topic_ids: gymTopics.join(","),
+      limit: gymLimit.toString(),
+      time: gymTime.toString(),
+      target: gymTarget.toString()
+    });
+    router.push(`/profile/brain-gym/session?${params.toString()}`);
+  }
+
   async function onLogout() {
     await supabase.auth.signOut();
     router.push("/");
@@ -393,7 +444,12 @@ export default function ProfileClient() {
 
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-8 bg-surface-variant/30 p-2 rounded-2xl w-full sm:w-fit">
         <button
-          onClick={() => setCurrentTab("overview")}
+          onClick={() => {
+            setCurrentTab("overview");
+            if (window.innerWidth < 1024) {
+              document.getElementById('profile-content-main')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          }}
           className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-extrabold transition-all outline-none ${
             currentTab === "overview"
               ? "bg-primary text-white shadow-md"
@@ -403,7 +459,12 @@ export default function ProfileClient() {
           Overview
         </button>
         <button
-          onClick={() => setCurrentTab("mistakes")}
+          onClick={() => {
+            setCurrentTab("mistakes");
+            if (window.innerWidth < 1024) {
+              document.getElementById('profile-content-main')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          }}
           className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-extrabold transition-all outline-none flex items-center justify-center gap-2 ${
             currentTab === "mistakes"
               ? "bg-rose-500 text-white shadow-md"
@@ -414,6 +475,23 @@ export default function ProfileClient() {
           <span className={`px-2 py-0.5 rounded-full text-[10px] ${currentTab === 'mistakes' ? 'bg-white/20' : 'bg-surface-variant text-on-surface-variant border border-outline/40'}`}>
             {mistakes.length}
           </span>
+        </button>
+
+        <button
+          onClick={() => {
+            setCurrentTab("braingym");
+            if (window.innerWidth < 1024) {
+              document.getElementById('profile-content-main')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          }}
+          className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-extrabold outline-none flex items-center justify-center gap-2 ${
+            currentTab === "braingym"
+              ? "bg-primary text-white shadow-md"
+              : "text-on-surface-variant hover:bg-surface-variant hover:text-primary transition-all"
+          }`}
+        >
+          <span className="material-symbols-outlined text-[20px]">fitness_center</span>
+          Brain Gym
         </button>
       </div>
 
@@ -560,7 +638,7 @@ export default function ProfileClient() {
         </div>
 
         {/* ── Main content ── */}
-        <div className="lg:col-span-8 space-y-10">
+        <div id="profile-content-main" className="lg:col-span-8 space-y-10 scroll-mt-20">
           {currentTab === "overview" && (
             <>
               {/* Active Subscriptions */}
@@ -922,6 +1000,238 @@ export default function ProfileClient() {
                   <div className="text-lg font-bold text-primary mb-2">You're all caught up!</div>
                   All practice questions answered incorrectly will automatically appear here.
                 </div>
+              )}
+            </div>
+          )}
+
+          {currentTab === "braingym" && (
+            <div className="space-y-8 animate-fade-in">
+              {/* Eligibility Check */}
+              {activeEntitlements.length === 0 ? (
+                <div className="bg-white border-2 border-dashed border-outline/60 p-12 text-center rounded-3xl">
+                  <div className="w-20 h-20 bg-slate-50 text-secondary rounded-full flex items-center justify-center mx-auto mb-6">
+                    <span className="material-symbols-outlined text-4xl">lock</span>
+                  </div>
+                  <h3 className="text-2xl font-black text-primary mb-3 tracking-tight">Premium Practice Tool</h3>
+                  <p className="max-w-md mx-auto text-on-surface-variant font-medium leading-relaxed">
+                    Brain Gym is a premium feature for subscribed students. Unlock a subject to start building custom practice sets.
+                  </p>
+                  <button 
+                    onClick={() => router.push('/')}
+                    className="mt-8 bg-primary text-white px-8 py-3.5 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-lg active:scale-95"
+                  >
+                    Explore Packages
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* Setup Wizard */}
+                  <div className="bg-white border-2 border-outline/30 shadow-none overflow-hidden rounded-3xl">
+                    <div className="p-8 border-b border-outline/20 flex flex-col md:flex-row md:items-center justify-between gap-6 bg-slate-50/50">
+                      <div>
+                        <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4 flex items-center gap-2">
+                          <span className="material-symbols-outlined text-[18px]">bolt</span>
+                          Step {gymStep} of 2
+                        </div>
+                        <h2 className="font-headline text-2xl md:text-3xl font-extrabold text-primary tracking-tighter">
+                          {gymStep === 1 ? 'Select Your Topics' : 'Configure Session'}
+                        </h2>
+                      </div>
+                    </div>
+
+                    <div className="p-8">
+                      {gymStep === 1 ? (
+                        <div className="animate-fade-in">
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            {activeEntitlements.map(ent => {
+                              const subjTopics = allTopics.filter(t => t.subject_id === ent.subject_id);
+                              if (subjTopics.length === 0) return null;
+                              return (
+                                <div key={ent.id} className="bg-white p-6 rounded-2xl border-2 border-outline/30">
+                                  <div className="text-[10px] font-black text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-[16px] text-secondary">bookmark</span>
+                                    {ent.subjects?.title}
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    {subjTopics.map(t => (
+                                      <button
+                                        key={t.id}
+                                        onClick={() => {
+                                          setGymTopics(prev => 
+                                            prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id]
+                                          );
+                                        }}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border-2 ${
+                                          gymTopics.includes(t.id)
+                                            ? "bg-primary border-primary text-white shadow-sm"
+                                            : "bg-white border-outline/60 text-on-surface-variant hover:border-secondary"
+                                        }`}
+                                      >
+                                        {t.title}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="animate-fade-in">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 max-w-5xl">
+                            {/* Step 2: Question Count */}
+                            <div>
+                              <div className="text-xs font-black text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <span className="w-6 h-6 bg-slate-100 text-secondary rounded-lg flex items-center justify-center text-[12px]">1</span>
+                                Questions
+                              </div>
+                              <div className="flex items-center justify-between mb-4">
+                                <span className="text-lg font-black text-primary">{gymLimit}</span>
+                                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">items</span>
+                              </div>
+                              <input 
+                                type="range" min="1" max="50" step="1"
+                                value={gymLimit}
+                                onChange={(e) => setGymLimit(Number(e.target.value))}
+                                className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-secondary"
+                              />
+                            </div>
+
+                            {/* Step 3: Duration */}
+                            <div>
+                              <div className="text-xs font-black text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <span className="w-6 h-6 bg-slate-100 text-secondary rounded-lg flex items-center justify-center text-[12px]">2</span>
+                                Duration (Min)
+                              </div>
+                              <div className="flex items-center justify-between mb-4">
+                                <span className="text-lg font-black text-primary">{gymTime}</span>
+                                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">minutes</span>
+                              </div>
+                              <input 
+                                type="range" min="1" max="60" step="1"
+                                value={gymTime}
+                                onChange={(e) => setGymTime(Number(e.target.value))}
+                                className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-secondary"
+                              />
+                            </div>
+
+                            {/* Step 4: Target accuracy */}
+                            <div>
+                              <div className="text-xs font-black text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <span className="w-6 h-6 bg-slate-100 text-secondary rounded-lg flex items-center justify-center text-[12px]">3</span>
+                                Pass Target
+                              </div>
+                              <div className="flex items-center justify-between mb-4">
+                                <span className="text-lg font-black text-primary">{gymTarget}%</span>
+                                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">accuracy</span>
+                              </div>
+                              <input 
+                                type="range" min="1" max="100" step="1"
+                                value={gymTarget}
+                                onChange={(e) => setGymTarget(Number(e.target.value))}
+                                className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-secondary"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Bottom Action Footer */}
+                      <div className="mt-12 pt-8 border-t border-outline/20 flex items-center justify-between">
+                         <div className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">
+                            {gymStep === 1 ? `Selected ${gymTopics.length} topics` : 'Ready to start workout'}
+                         </div>
+                         <div className="flex items-center gap-3">
+                            {gymStep === 2 && (
+                              <button 
+                                onClick={() => setGymStep(1)}
+                                className="px-8 py-3.5 rounded-2xl font-black text-sm text-primary border-2 border-outline/40 hover:bg-slate-50 transition-all active:scale-95"
+                              >
+                                Back
+                              </button>
+                            )}
+                            {gymStep === 1 ? (
+                              <button 
+                                disabled={gymTopics.length === 0}
+                                onClick={() => setGymStep(2)}
+                                className="bg-primary text-white px-10 py-3.5 rounded-2xl font-black text-sm hover:bg-slate-800 transition-all shadow-xl active:scale-95 flex items-center gap-3 disabled:opacity-50"
+                              >
+                                Next Step
+                                <span className="material-symbols-outlined text-[20px]">chevron_right</span>
+                              </button>
+                            ) : (
+                              <button 
+                                onClick={startGymSession}
+                                className="bg-secondary text-primary px-14 py-4.5 rounded-2xl font-black text-sm uppercase tracking-[0.15em] hover:brightness-110 transition-all shadow-2xl shadow-amber-200 active:scale-95 flex items-center gap-3 border-2 border-white/20"
+                              >
+                                <span className="material-symbols-outlined text-[24px]">bolt</span>
+                                Start Workout
+                              </button>
+                            )}
+                         </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Gym History */}
+                  <div className="bg-white border-2 border-outline/30 shadow-soft-xl p-6 md:p-8 rounded-2xl mt-12">
+                    <div className="flex items-end justify-between gap-4 mb-8">
+                      <div>
+                        <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
+                          Consistency
+                        </div>
+                        <h2 className="font-headline text-2xl md:text-3xl font-extrabold text-primary tracking-tighter">
+                          Gym History
+                        </h2>
+                      </div>
+                      <div className="text-[10px] md:text-xs uppercase tracking-widest text-on-surface-variant font-bold">
+                        {practiceSessions.length} sessions
+                      </div>
+                    </div>
+
+                    {practiceSessions.length > 0 ? (
+                      <div className="space-y-4">
+                        {practiceSessions.map((s) => {
+                          const passed = s.percent_correct >= s.target_accuracy;
+                          return (
+                            <div key={s.id} className="group border border-outline/40 bg-white p-5 rounded-2xl hover:border-secondary/40 hover:shadow-md transition-all flex flex-col md:flex-row md:items-center justify-between gap-6">
+                              <div className="flex items-center gap-5">
+                                <div className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center border-2 ${passed ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-rose-50 border-rose-100 text-rose-600'}`}>
+                                  <div className="text-sm font-black leading-none">{s.percent_correct}%</div>
+                                  <div className="text-[8px] font-black uppercase mt-1">Score</div>
+                                </div>
+                                <div>
+                                  <div className="text-sm font-extrabold text-primary mb-1">
+                                    {s.total_questions} Questions Workout
+                                  </div>
+                                  <div className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
+                                    {new Date(s.created_at).toLocaleDateString()} · Target: {s.target_accuracy}%
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <div className="text-right hidden sm:block">
+                                  <div className="text-xs font-black text-primary">Time Spent</div>
+                                  <div className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mt-0.5">
+                                    {formatDuration(s.duration_seconds)}
+                                  </div>
+                                </div>
+                                <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border ${passed ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-rose-500 text-white border-rose-600'}`}>
+                                  {passed ? 'Passed' : 'Failed'}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="border border-outline/40 bg-slate-50/50 p-12 text-center rounded-2xl">
+                         <span className="material-symbols-outlined text-4xl text-slate-300 mb-3 block">history</span>
+                         <p className="text-sm font-bold text-slate-400">No sessions recorded yet. Start your first workout!</p>
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
             </div>
           )}

@@ -7,10 +7,6 @@ import BackButton from "@/components/BackButton";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import MathText from "@/components/MathText";
 
-// @ts-ignore
-import renderMathInElement from 'katex/dist/contrib/auto-render';
-import 'katex/dist/katex.min.css';
-
 type Exam = {
   id: string;
   title: string;
@@ -76,6 +72,7 @@ type Question = {
   explanation_assets: Asset[];
   options: Option[];
   passage_id: string | null;
+  topic_id: string | null;
 };
 
 type Props = {
@@ -194,6 +191,7 @@ type SubmitResult = {
   totalQuestions: number;
   questionsPercent: number;
   durationSeconds: number;
+  topicResults: { topicId: string; title: string; correct: number; total: number; percent: number }[];
 };
 
 function buildInitialQState(questions: Question[]) {
@@ -231,6 +229,7 @@ export default function ExamClient({
   const [questions, setQuestions] = useState<Question[]>([]);
   const [referenceSheets, setReferenceSheets] = useState<Asset[]>([]);
   const [passagesById, setPassagesById] = useState<Map<string, Passage>>(new Map());
+  const [topicsById, setTopicsById] = useState<Map<string, string>>(new Map());
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [remaining, setRemaining] = useState(exam.duration_seconds);
@@ -329,7 +328,7 @@ export default function ExamClient({
         const { data: qRows } = await supabase
           .from("exam_questions")
           .select(
-            "id, question_number, type, prompt_text, explanation_text, points, allow_multiple, correct_text, passage_id",
+            "id, question_number, type, prompt_text, explanation_text, points, allow_multiple, correct_text, passage_id, topic_id",
           )
           .eq("exam_id", exam.id)
           .order("question_number", { ascending: true })
@@ -344,6 +343,7 @@ export default function ExamClient({
               allow_multiple: boolean;
               correct_text: string | null;
               passage_id: string | null;
+              topic_id: string | null;
             }[]
           >();
 
@@ -434,10 +434,22 @@ export default function ExamClient({
           pMap.set(p.id, { id: p.id, title: p.title, body_html: p.body_html, kind: p.kind ?? "reading" });
         }
 
+        /* Fetch topics */
+        const { data: topicRows } = await supabase
+          .from("topics")
+          .select("id, title")
+          .returns<{ id: string; title: string }[]>();
+
+        const tMap = new Map<string, string>();
+        for (const t of topicRows ?? []) {
+          tMap.set(t.id, t.title);
+        }
+
         if (!mounted) return;
         setReferenceSheets(sheetRows ?? []);
         setQuestions(qs);
         setPassagesById(pMap);
+        setTopicsById(tMap);
       } finally {
         if (mounted) setContentLoading(false);
       }
@@ -746,6 +758,53 @@ export default function ExamClient({
       const correctness = computeQuestionCorrectness();
       const answers = buildAnswersPayload();
 
+      // Topic Analysis
+      const topicsMap = new Map<string, { correct: number; total: number }>();
+      for (const q of questions) {
+        const tId = q.topic_id || "none";
+        const cur = topicsMap.get(tId) ?? { correct: 0, total: 0 };
+        cur.total += 1;
+        
+        // Use the same correctness logic
+        const st = qState.get(q.id);
+        let isCorrect = false;
+        if (st) {
+          if (q.type === "fill") {
+            const expected = (q.correct_text ?? "").trim();
+            const got = st.fillText.trim();
+            if (expected && normalizeText(got) === normalizeText(expected)) isCorrect = true;
+          } else {
+            const selected = new Set(st.selectedOptionIds);
+            const correctIds = new Set(q.options.filter((o) => o.is_correct).map((o) => o.id));
+            if (selected.size > 0) {
+              if (q.allow_multiple) {
+                if (selected.size === correctIds.size) {
+                  let ok = true;
+                  for (const id of selected) if (!correctIds.has(id)) ok = false;
+                  if (ok) isCorrect = true;
+                }
+              } else {
+                if (selected.size === 1) {
+                  for (const id of selected) if (correctIds.has(id)) isCorrect = true;
+                }
+              }
+            }
+          }
+        }
+        if (isCorrect) cur.correct += 1;
+        topicsMap.set(tId, cur);
+      }
+
+      const topicResults = Array.from(topicsMap.entries()).map(([topicId, stats]) => {
+        return {
+          topicId,
+          title: topicsById.get(topicId) ?? (topicId === 'none' ? 'General' : 'Other'),
+          correct: stats.correct,
+          total: stats.total,
+          percent: Math.round((stats.correct / stats.total) * 100)
+        };
+      }).sort((a, b) => a.title.localeCompare(b.title));
+
       const { data, error: insErr } = await supabase
         .from("exam_attempts")
         .insert({
@@ -765,12 +824,11 @@ export default function ExamClient({
 
       // Add to mistake bank silently
       if (correctness.incorrectQuestionIds.length > 0) {
-        // We don't await/throw here to prevent failing the exam submission if mistake bank fails
         supabase.rpc('record_mistakes', {
           p_user_id: user.id,
           p_question_ids: correctness.incorrectQuestionIds
-        }).then(({ error: rpcErr }) => {
-          if (rpcErr) console.error("Failed to add to mistake bank:", rpcErr);
+        }).then(({ error: rpcError }) => {
+          if (rpcError) console.error("Mistake bank record error:", rpcError);
         });
       }
 
@@ -785,6 +843,7 @@ export default function ExamClient({
         totalQuestions: correctness.total,
         questionsPercent: correctness.percent,
         durationSeconds,
+        topicResults,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Something went wrong.";
@@ -1288,6 +1347,54 @@ export default function ExamClient({
             </div>
           </div>
           </div>
+
+          {/* Topic Performance Analysis */}
+          {result.topicResults && result.topicResults.length > 0 && (
+            <div className="mt-12 bg-white border-2 border-outline/30 shadow-soft-xl rounded-3xl overflow-hidden animate-slide-up">
+              <div className="p-6 sm:p-8 border-b border-outline/30 bg-slate-50 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined text-primary">analytics</span>
+                  <h3 className="text-sm font-black uppercase tracking-widest text-primary">Performance by Topic</h3>
+                </div>
+                <div className="text-[10px] sm:text-xs font-bold text-on-surface-variant uppercase tracking-widest">
+                  {result.topicResults.length} topics analyzed
+                </div>
+              </div>
+              <div className="p-6 sm:p-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 sm:gap-10">
+                  {result.topicResults.map((tr) => (
+                    <div key={tr.topicId} className="group">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm transition-all group-hover:scale-110 ${tr.percent >= 75 ? 'bg-emerald-100 text-emerald-700' : tr.percent >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
+                            {tr.percent}%
+                          </div>
+                          <div>
+                            <div className="text-sm font-black text-primary group-hover:text-secondary transition-colors">{tr.title}</div>
+                            <div className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mt-0.5">
+                              {tr.correct} of {tr.total} correct
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="relative h-2.5 bg-slate-100 rounded-full overflow-hidden border border-outline/30">
+                        <div 
+                          className={`absolute top-0 left-0 h-full transition-all duration-1000 ease-out rounded-full ${tr.percent >= 75 ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.3)]' : tr.percent >= 50 ? 'bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.3)]' : 'bg-rose-500 shadow-[0_0_12px_rgba(239,68,68,0.3)]'}`}
+                          style={{ width: `${tr.percent}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="px-8 py-5 bg-slate-50/80 border-t border-outline/30 flex items-center gap-3">
+                <span className="material-symbols-outlined text-blue-500 text-sm">info</span>
+                <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest leading-relaxed">
+                  Use this analysis to focus your practice on topics where your accuracy is lower.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Review overview grid */}
           <div className="mt-8 sm:mt-10 px-0">

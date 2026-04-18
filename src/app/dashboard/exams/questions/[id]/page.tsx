@@ -17,6 +17,7 @@ type QuestionRow = {
   allow_multiple: boolean;
   correct_text: string | null;
   passage_id: string | null;
+  topic_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -26,6 +27,10 @@ type PassageRow = {
   title: string | null;
   kind: "reading" | "reference";
 };
+
+type TopicRow = { id: string; title: string };
+
+type ExamRow = { id: string; title: string };
 
 type QuestionAssetRow = {
   id: string;
@@ -62,7 +67,9 @@ export default function DashboardQuestionDetails() {
   const [question, setQuestion] = useState<QuestionRow | null>(null);
   const [assets, setAssets] = useState<QuestionAssetRow[]>([]);
   const [options, setOptions] = useState<OptionRow[]>([]);
+  const [exam, setExam] = useState<ExamRow | null>(null);
   const [passages, setPassages] = useState<PassageRow[]>([]);
+  const [topics, setTopics] = useState<TopicRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -72,6 +79,7 @@ export default function DashboardQuestionDetails() {
   const [prompt, setPrompt] = useState("");
   const [correctText, setCorrectText] = useState("");
   const [passageId, setPassageId] = useState("");
+  const [topicId, setTopicId] = useState("");
   const [explanationText, setExplanationText] = useState("");
 
   const [assetUrl, setAssetUrl] = useState("");
@@ -107,12 +115,14 @@ export default function DashboardQuestionDetails() {
     setLoading(true);
     setError(null);
     setMessage(null);
+    let mounted = true;
     try {
       const json = (await adminFetch(`/api/admin/questions/${questionId}`)) as {
         question: QuestionRow;
         assets: QuestionAssetRow[];
         options: OptionRow[];
       };
+      if (!mounted) return;
       setQuestion(json.question);
       setAssets(json.assets ?? []);
       setOptions((json.options ?? []).slice().sort((a, b) => a.option_number - b.option_number));
@@ -124,16 +134,23 @@ export default function DashboardQuestionDetails() {
       setExplanationText(json.question.explanation_text ?? "");
       setCorrectText(json.question.correct_text ?? "");
       setPassageId(json.question.passage_id ?? "");
+      setTopicId(json.question.topic_id ?? "");
 
-      // Fetch passages for the same exam
       const examJson = await adminFetch(`/api/admin/exams/${json.question.exam_id}`);
+      if (!mounted) return;
+      setExam(examJson.exam);
       setPassages(examJson.passages ?? []);
+
+      const topicsJson = await adminFetch(`/api/admin/topics?subject_id=${examJson.exam.subject_id}`);
+      if (!mounted) return;
+      setTopics(topicsJson.items ?? []);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Something went wrong.";
       setError(msg);
     } finally {
       setLoading(false);
     }
+    return () => { mounted = false; };
   }
 
   useEffect(() => {
@@ -158,8 +175,9 @@ export default function DashboardQuestionDetails() {
           allow_multiple: type === "mcq" ? allowMultiple : false,
           prompt_text: prompt.trim() || null,
           explanation_text: explanationText.trim() || null,
-          correct_text: type === "fill" ? correctText.trim() || null : null,
+          correct_text: type === "fill" ? correctText.trim() : null,
           passage_id: passageId || null,
+          topic_id: topicId || null,
         }),
       })) as { question: QuestionRow };
       setQuestion(json.question);
@@ -220,70 +238,6 @@ export default function DashboardQuestionDetails() {
       setAssetAlt("");
       setAssetSort("0");
       setAssetKind("prompt");
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Something went wrong.";
-      setError(msg);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function uploadAssets() {
-    if (assetFiles.length === 0) {
-      setError("Select one or more files.");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const existing = assets.filter((a) => (a.kind ?? "prompt") === assetKind);
-      const baseSort = existing.length ? Math.max(...existing.map((a) => a.sort_order ?? 0)) + 1 : 0;
-
-      for (let i = 0; i < assetFiles.length; i++) {
-        const file = assetFiles[i]!;
-        const safeName = file.name.replaceAll(" ", "-");
-        const path = `questions/${questionId}/${assetKind}/${Date.now()}-${i}-${safeName}`;
-        const { error: upErr } = await supabase.storage.from(storageBucket).upload(path, file, { upsert: false });
-        if (upErr) throw new Error(upErr.message);
-        const publicUrl = supabase.storage.from(storageBucket).getPublicUrl(path).data.publicUrl;
-
-        const json = (await adminFetch(`/api/admin/questions/${questionId}`, {
-          method: "POST",
-          body: JSON.stringify({
-            action: "create_asset",
-            bucket: storageBucket,
-            storage_path: path,
-            url: publicUrl,
-            alt: file.name,
-            kind: assetKind,
-            sort_order: baseSort + i,
-          }),
-        })) as { asset: QuestionAssetRow };
-
-        setAssets((prev) => [...prev, json.asset]);
-      }
-
-      setAssetFiles([]);
-      setMessage("Assets uploaded.");
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Something went wrong.";
-      setError(msg);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function updateAsset(assetId: string, patch: Partial<QuestionAssetRow>) {
-    setSaving(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const json = (await adminFetch(`/api/admin/questions/${questionId}`, {
-        method: "POST",
-        body: JSON.stringify({ action: "update_asset", asset_id: assetId, ...patch }),
-      })) as { asset: QuestionAssetRow };
-      setAssets((prev) => prev.map((a) => (a.id === assetId ? json.asset : a)));
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Something went wrong.";
       setError(msg);
@@ -409,17 +363,8 @@ export default function DashboardQuestionDetails() {
     }
   }
 
-  const header = useMemo(() => {
-    if (!question) return questionId;
-    return `Q${question.question_number} • ${question.type.toUpperCase()} • ${question.points} pts`;
-  }, [question, questionId]);
-
-  const promptAssets = useMemo(() => assets.filter((a) => a.kind !== "explanation"), [assets]);
-  const explanationAssets = useMemo(() => assets.filter((a) => a.kind === "explanation"), [assets]);
-
   return (
     <div className="max-w-full">
-      {/* Sticky Top Header */}
       <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border border-outline/60 shadow-soft-xl rounded-2xl mb-8 p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
         <div className="flex items-center gap-4">
           <Link
@@ -481,9 +426,7 @@ export default function DashboardQuestionDetails() {
         </div>
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-10 items-start pb-24">
-          {/* Main Question Content */}
           <div className="xl:col-span-8 space-y-10">
-            {/* Split View for Prompt and Assets */}
             <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden">
                <div className="p-6 border-b border-outline/40 bg-slate-50/50 flex items-center gap-3">
                   <span className="material-symbols-outlined text-primary">edit_note</span>
@@ -584,7 +527,6 @@ export default function DashboardQuestionDetails() {
                </div>
             </div>
 
-            {/* Explanation Content */}
             <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden">
                <div className="p-6 border-b border-outline/40 bg-amber-50/50 flex items-center gap-3">
                   <span className="material-symbols-outlined text-amber-600">psychology</span>
@@ -607,7 +549,6 @@ export default function DashboardQuestionDetails() {
                </div>
             </div>
 
-            {/* MCQ Options */}
             {type === "mcq" && (
               <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden animate-fade-in">
                  <div className="p-6 border-b border-outline/40 bg-indigo-50/50 flex items-center justify-between">
@@ -732,7 +673,6 @@ export default function DashboardQuestionDetails() {
             )}
           </div>
 
-          {/* Configuration Sidebar */}
           <div className="xl:col-span-4 space-y-8 sticky top-32">
              <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden">
                 <div className="p-6 border-b border-outline/40 bg-slate-50 flex items-center gap-3">
@@ -806,6 +746,31 @@ export default function DashboardQuestionDetails() {
                    </select>
                    <p className="text-[9px] font-bold text-white/50 bg-black/10 p-3 rounded-lg leading-relaxed">
                       Link this question to a shared reading passage or a reference block (like a math chart).
+                   </p>
+                </div>
+             </div>
+
+             <div className="bg-emerald-600 rounded-3xl p-8 shadow-soft-xl text-white relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-1000" />
+                <div className="relative z-10 space-y-6 text-center sm:text-left">
+                   <div className="flex items-center gap-3 justify-center sm:justify-start">
+                      <span className="material-symbols-outlined text-white/80">category</span>
+                      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/90">Topic / Category</h3>
+                   </div>
+                   <select
+                      value={topicId}
+                      onChange={(e) => setTopicId(e.target.value)}
+                      className="h-12 w-full px-4 bg-white/20 border border-white/20 text-white rounded-xl focus:bg-white focus:text-emerald-900 outline-none transition-all font-bold text-sm backdrop-blur-sm cursor-pointer"
+                   >
+                      <option value="" className="text-gray-900">No Specific Topic</option>
+                      {topics.map((t) => (
+                        <option key={t.id} value={t.id} className="text-gray-900">
+                           {t.title}
+                        </option>
+                      ))}
+                   </select>
+                   <p className="text-[9px] font-bold text-white/50 bg-black/10 p-3 rounded-lg leading-relaxed">
+                      Assigning a topic enables detailed performance analysis for students after submission.
                    </p>
                 </div>
              </div>

@@ -8,6 +8,7 @@ import MathText from "@/components/MathText";
 
 type ExamRow = { id: string; exam_number: number; title: string; subject_id: string; passages: PassageRow[] };
 type PassageRow = { id: string; title: string | null; kind: "reading" | "reference" };
+type TopicRow = { id: string; title: string };
 
 type NewOption = {
   key: string;
@@ -30,6 +31,7 @@ function NewQuestionContent() {
   const [saving, setSaving] = useState(false);
   const [exam, setExam] = useState<ExamRow | null>(null);
   const [passages, setPassages] = useState<PassageRow[]>([]);
+  const [topics, setTopics] = useState<TopicRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -39,6 +41,7 @@ function NewQuestionContent() {
   const [prompt, setPrompt] = useState("");
   const [correctText, setCorrectText] = useState("");
   const [passageId, setPassageId] = useState("");
+  const [topicId, setTopicId] = useState("");
   const [explanationText, setExplanationText] = useState("");
 
   const [questionFiles, setQuestionFiles] = useState<File[]>([]);
@@ -83,6 +86,11 @@ function NewQuestionContent() {
         if (!mounted) return;
         setExam(json.exam);
         setPassages(json.passages ?? []);
+
+        // Fetch topics filtered by exam's subject
+        const topicsJson = await adminFetch(`/api/admin/topics?subject_id=${json.exam.subject_id}`);
+        if (!mounted) return;
+        setTopics(topicsJson.items ?? []);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Something went wrong.";
         if (!mounted) return;
@@ -160,6 +168,7 @@ function NewQuestionContent() {
           explanation_text: explanationText.trim() || null,
           correct_text: type === "fill" ? correctText.trim() : null,
           passage_id: passageId || null,
+          topic_id: topicId || null,
         }),
       })) as { question: { id: string } };
 
@@ -595,6 +604,32 @@ function NewQuestionContent() {
                    </select>
                    <p className="text-[9px] font-bold text-white/50 bg-black/10 p-3 rounded-lg leading-relaxed">
                       Link this question to a shared reading passage or a reference block (like a math chart).
+                   </p>
+                </div>
+             </div>
+
+             {/* Topic Selection */}
+             <div className="bg-emerald-600 rounded-3xl p-8 shadow-soft-xl text-white relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-1000" />
+                <div className="relative z-10 space-y-6 text-center sm:text-left">
+                   <div className="flex items-center gap-3 justify-center sm:justify-start">
+                      <span className="material-symbols-outlined text-white/80">category</span>
+                      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/90">Topic / Category</h3>
+                   </div>
+                   <select
+                      value={topicId}
+                      onChange={(e) => setTopicId(e.target.value)}
+                      className="h-12 w-full px-4 bg-white/20 border border-white/20 text-white rounded-xl focus:bg-white focus:text-emerald-900 outline-none transition-all font-bold text-sm backdrop-blur-sm cursor-pointer"
+                   >
+                      <option value="" className="text-gray-900">No Specific Topic</option>
+                      {topics.map((t) => (
+                        <option key={t.id} value={t.id} className="text-gray-900">
+                           {t.title}
+                        </option>
+                      ))}
+                   </select>
+                   <p className="text-[9px] font-bold text-white/50 bg-black/10 p-3 rounded-lg leading-relaxed">
+                      Assigning a topic enables detailed performance analysis for students after submission.
                    </p>
                 </div>
              </div>
