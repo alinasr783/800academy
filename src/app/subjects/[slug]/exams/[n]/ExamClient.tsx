@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import BackButton from "@/components/BackButton";
 import Breadcrumbs from "@/components/Breadcrumbs";
+import MathText from "@/components/MathText";
 
 type Exam = {
   id: string;
@@ -453,6 +454,20 @@ export default function ExamClient({
   }, [accessAllowed, accessChecked, exam.id]);
 
   useEffect(() => {
+    // Auto-render math in any element with class 'prose' after content loads
+    const elements = document.querySelectorAll('.prose');
+    elements.forEach(el => {
+      renderMathInElement(el as HTMLElement, {
+        delimiters: [
+          { left: "$$", right: "$$", display: true },
+          { left: "$", right: "$", display: false },
+        ],
+        throwOnError: false
+      });
+    });
+  }, [contentLoading, currentIndex, qState, result]); // Re-run when navigation or state changes
+
+  useEffect(() => {
     setQState(buildInitialQState(questions));
     setCurrentIndex(0);
     setStarted(false);
@@ -664,34 +679,49 @@ export default function ExamClient({
 
   function computeQuestionCorrectness() {
     let correct = 0;
+    const incorrectQuestionIds: string[] = [];
+
     for (const q of questions) {
       const st = qState.get(q.id);
-      if (!st) continue;
+      if (!st) {
+        incorrectQuestionIds.push(q.id);
+        continue;
+      }
 
+      let isCorrect = false;
       if (q.type === "fill") {
         const expected = (q.correct_text ?? "").trim();
         const got = st.fillText.trim();
-        if (expected && normalizeText(got) === normalizeText(expected)) correct += 1;
+        if (expected && normalizeText(got) === normalizeText(expected)) isCorrect = true;
       } else {
         const selected = new Set(st.selectedOptionIds);
         const correctIds = new Set(q.options.filter((o) => o.is_correct).map((o) => o.id));
-        if (selected.size === 0) continue;
-        if (q.allow_multiple) {
-          if (selected.size !== correctIds.size) continue;
-          let ok = true;
-          for (const id of selected) if (!correctIds.has(id)) ok = false;
-          if (ok) correct += 1;
-        } else {
-          if (selected.size !== 1) continue;
-          for (const id of selected) {
-            if (correctIds.has(id)) correct += 1;
+        if (selected.size > 0) {
+          if (q.allow_multiple) {
+            if (selected.size === correctIds.size) {
+              let ok = true;
+              for (const id of selected) if (!correctIds.has(id)) ok = false;
+              if (ok) isCorrect = true;
+            }
+          } else {
+            if (selected.size === 1) {
+              for (const id of selected) {
+                if (correctIds.has(id)) isCorrect = true;
+              }
+            }
           }
         }
+      }
+
+      if (isCorrect) {
+        correct += 1;
+      } else {
+        incorrectQuestionIds.push(q.id);
       }
     }
     const total = questions.length;
     const percent = total ? (correct / total) * 100 : 0;
-    return { correct, total, percent };
+    return { correct, total, percent, incorrectQuestionIds };
   }
 
   async function onSubmit(auto: boolean) {
@@ -728,6 +758,17 @@ export default function ExamClient({
         .single<{ id: string }>();
 
       if (insErr) throw insErr;
+
+      // Add to mistake bank silently
+      if (correctness.incorrectQuestionIds.length > 0) {
+        // We don't await/throw here to prevent failing the exam submission if mistake bank fails
+        supabase.rpc('record_mistakes', {
+          p_user_id: user.id,
+          p_question_ids: correctness.incorrectQuestionIds
+        }).then(({ error: rpcErr }) => {
+          if (rpcErr) console.error("Failed to add to mistake bank:", rpcErr);
+        });
+      }
 
       setResult({
         attemptId: data.id,
@@ -1372,7 +1413,9 @@ export default function ExamClient({
                       ) : null}
 
                       {q.prompt_text ? (
-                        <div className="text-on-surface font-medium leading-relaxed text-sm sm:text-base">{q.prompt_text}</div>
+                        <div className="text-on-surface font-medium leading-relaxed text-sm sm:text-base">
+                          <MathText text={q.prompt_text} />
+                        </div>
                       ) : null}
 
                       {q.prompt_assets.length ? (
@@ -1401,13 +1444,17 @@ export default function ExamClient({
                             <div className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">
                               Your answer
                             </div>
-                            <div className="text-base sm:text-lg font-extrabold text-primary mt-2">{fill || "—"}</div>
+                            <div className="text-base sm:text-lg font-extrabold text-primary mt-2">
+                              <MathText text={fill || "—"} />
+                            </div>
                           </div>
                           <div className="border-2 border-emerald-200 bg-emerald-50 p-4 sm:p-5 rounded-xl">
                             <div className="text-xs font-bold text-emerald-600 uppercase tracking-widest">
                               Correct answer
                             </div>
-                            <div className="text-base sm:text-lg font-extrabold text-emerald-700 mt-2">{correctFill || "—"}</div>
+                            <div className="text-base sm:text-lg font-extrabold text-emerald-700 mt-2">
+                              <MathText text={correctFill || "—"} />
+                            </div>
                           </div>
                         </div>
                       ) : (
@@ -1432,7 +1479,7 @@ export default function ExamClient({
                               >
                                 <div className="min-w-0">
                                   <div className="text-sm font-bold text-primary">
-                                    {o.text ?? `Option ${o.option_number}`}
+                                    <MathText text={o.text ?? `Option ${o.option_number}`} />
                                   </div>
                                   {o.url ? (
                                     <img
@@ -1467,7 +1514,9 @@ export default function ExamClient({
                             Explanation
                           </div>
                           {q.explanation_text ? (
-                            <div className="text-on-surface font-medium leading-relaxed text-sm sm:text-base">{q.explanation_text}</div>
+                            <div className="text-on-surface font-medium leading-relaxed text-sm sm:text-base">
+                              <MathText text={q.explanation_text} />
+                            </div>
                           ) : null}
                           {q.explanation_assets.length ? (
                             <div className="flex flex-col items-center gap-4 mt-4 sm:mt-5">
@@ -1710,7 +1759,7 @@ export default function ExamClient({
 
                         {currentQuestion.prompt_text ? (
                           <div className="text-base sm:text-lg text-on-surface leading-relaxed font-medium">
-                            {currentQuestion.prompt_text}
+                            <MathText text={currentQuestion.prompt_text} />
                           </div>
                         ) : null}
 
@@ -1798,7 +1847,7 @@ export default function ExamClient({
                                   >
                                     <div className="flex items-start justify-between gap-3 sm:gap-4">
                                       <div className="text-sm font-extrabold min-w-0">
-                                        {opt.text ? opt.text : `Option ${opt.option_number}`}
+                                        <MathText text={opt.text ?? `Option ${opt.option_number}`} />
                                       </div>
                                       <span
                                         className={

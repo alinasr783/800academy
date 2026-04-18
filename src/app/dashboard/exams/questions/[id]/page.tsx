@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import MathText from "@/components/MathText";
 
 type QuestionRow = {
   id: string;
@@ -499,6 +500,12 @@ export default function DashboardQuestionDetails() {
                       rows={8}
                       className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl focus:border-primary focus:bg-white outline-none transition-all font-medium text-lg leading-relaxed resize-none"
                     />
+                    {prompt && (
+                      <div className="mt-4 p-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl">
+                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Live Preview</div>
+                        <MathText text={prompt} />
+                      </div>
+                    )}
                   </div>
 
                   {type === "fill" && (
@@ -512,6 +519,11 @@ export default function DashboardQuestionDetails() {
                         className="h-14 w-full px-6 bg-emerald-50 border border-emerald-100 rounded-2xl focus:border-emerald-500 focus:bg-white outline-none transition-all font-bold text-lg text-emerald-900"
                         placeholder="Exact text for correct answer..."
                       />
+                      {correctText && (
+                        <div className="mt-2 p-3 bg-emerald-50/50 border border-dashed border-emerald-200 rounded-xl">
+                          <MathText text={correctText} />
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -586,6 +598,12 @@ export default function DashboardQuestionDetails() {
                     className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl focus:border-amber-400 focus:bg-white outline-none transition-all font-medium text-base leading-relaxed resize-none"
                     placeholder="Provide a step-by-step explanation for the students..."
                   />
+                  {explanationText && (
+                    <div className="mt-4 p-4 bg-amber-50/30 border border-dashed border-amber-200 rounded-xl">
+                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Live Preview</div>
+                      <MathText text={explanationText} />
+                    </div>
+                  )}
                </div>
             </div>
 
@@ -648,6 +666,11 @@ export default function DashboardQuestionDetails() {
                                 placeholder="Option text (optional if using image)"
                                 className="h-12 w-full px-5 bg-white border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition-all font-bold"
                               />
+                              {(o.text ?? "") && (
+                                <div className="p-2 bg-indigo-50/30 border border-dashed border-indigo-200 rounded-lg">
+                                  <MathText text={o.text ?? ""} />
+                                </div>
+                              )}
                                <input
                                 defaultValue={o.url ?? ""}
                                 onBlur={(e) => {

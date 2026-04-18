@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import MathText from "@/components/MathText";
 
 type ExamRow = { id: string; exam_number: number; title: string; subject_id: string; passages: PassageRow[] };
 type PassageRow = { id: string; title: string | null; kind: "reading" | "reference" };
@@ -19,10 +20,10 @@ function uid() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-export default function DashboardNewQuestion() {
-  const params = useParams<{ id: string }>();
+function NewQuestionContent() {
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const examId = params.id;
+  const examId = searchParams.get("examId");
   const storageBucket = process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || "assets";
 
   const [loading, setLoading] = useState(true);
@@ -67,6 +68,12 @@ export default function DashboardNewQuestion() {
   }
 
   useEffect(() => {
+    if (!examId) {
+      setError("Exam ID is missing in query parameters.");
+      setLoading(false);
+      return;
+    }
+
     let mounted = true;
     async function run() {
       setLoading(true);
@@ -105,6 +112,7 @@ export default function DashboardNewQuestion() {
   }
 
   async function submit() {
+    if (!examId) return;
     const pts = Math.trunc(Number(points));
     if (!Number.isFinite(pts) || pts < 0) {
       setError("Invalid points.");
@@ -325,6 +333,12 @@ export default function DashboardNewQuestion() {
                       className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl focus:border-primary focus:bg-white outline-none transition-all font-medium text-lg leading-relaxed resize-none"
                       placeholder="Enter the question text here..."
                     />
+                    {prompt && (
+                      <div className="mt-4 p-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl">
+                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Live Preview</div>
+                        <MathText text={prompt} />
+                      </div>
+                    )}
                   </div>
 
                   {type === "fill" && (
@@ -338,6 +352,11 @@ export default function DashboardNewQuestion() {
                         className="h-14 w-full px-6 bg-emerald-50 border border-emerald-100 rounded-2xl focus:border-emerald-500 focus:bg-white outline-none transition-all font-bold text-lg text-emerald-900"
                         placeholder="Exact text for correct answer..."
                       />
+                      {correctText && (
+                        <div className="mt-2 p-3 bg-emerald-50/50 border border-dashed border-emerald-200 rounded-xl">
+                          <MathText text={correctText} />
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -402,6 +421,12 @@ export default function DashboardNewQuestion() {
                     className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl focus:border-amber-400 focus:bg-white outline-none transition-all font-medium text-base leading-relaxed resize-none"
                     placeholder="Provide a step-by-step explanation for the students..."
                   />
+                  {explanationText && (
+                    <div className="mt-4 p-4 bg-amber-50/30 border border-dashed border-amber-200 rounded-xl">
+                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Live Preview</div>
+                      <MathText text={explanationText} />
+                    </div>
+                  )}
                </div>
             </div>
 
@@ -444,6 +469,11 @@ export default function DashboardNewQuestion() {
                                 placeholder="Option text (optional if using image)"
                                 className="h-12 w-full px-5 bg-white border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition-all font-bold"
                               />
+                              {o.text && (
+                                <div className="mt-2 p-2 bg-indigo-50/30 border border-dashed border-indigo-200 rounded-lg">
+                                  <MathText text={o.text} />
+                                </div>
+                              )}
                             </div>
                             <div className="md:col-span-2">
                                <label className={`h-12 w-full flex items-center justify-center gap-2 border-2 rounded-xl cursor-pointer transition-all active:scale-95 ${o.is_correct ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-100 bg-white text-slate-400"}`}>
@@ -572,5 +602,13 @@ export default function DashboardNewQuestion() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function DashboardNewQuestion() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center py-24 text-slate-400 font-bold uppercase tracking-widest animate-pulse">Initializing...</div>}>
+      <NewQuestionContent />
+    </Suspense>
   );
 }

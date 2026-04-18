@@ -41,6 +41,24 @@ type AttemptRow = {
   } | null;
 };
 
+type MistakeRow = {
+  id: string;
+  question_id: string;
+  error_count: number;
+  difficulty_score: number;
+  added_at: string;
+  exam_questions: {
+    prompt_text: string | null;
+    question_number: number;
+    exams: {
+      title: string;
+      subjects: {
+        title: string;
+      } | null;
+    } | null;
+  } | null;
+};
+
 type OrderRow = {
   id: string;
   status: string;
@@ -108,6 +126,10 @@ export default function ProfileClient() {
   const [entitlements, setEntitlements] = useState<EntitlementRow[]>([]);
   const [attempts, setAttempts] = useState<AttemptRow[]>([]);
   const [orders, setOrders] = useState<OrderRow[]>([]);
+  const [mistakes, setMistakes] = useState<MistakeRow[]>([]);
+
+  const [currentTab, setCurrentTab] = useState<"overview" | "mistakes">("overview");
+  const [visibleMistakes, setVisibleMistakes] = useState(10);
 
   const [quote, setQuote] = useState<string>("");
   const [saving, setSaving] = useState(false);
@@ -164,6 +186,30 @@ export default function ProfileClient() {
         .limit(50)
         .returns<OrderRow[]>();
 
+      const { data: mistakeRows } = await supabase
+        .from("mistake_bank")
+        .select(`
+          id,
+          question_id,
+          error_count,
+          difficulty_score,
+          added_at,
+          exam_questions (
+            prompt_text,
+            question_number,
+            exams (
+              title,
+              subjects (
+                title
+              )
+            )
+          )
+        `)
+        .eq("user_id", userId)
+        .order("difficulty_score", { ascending: true })
+        .limit(1000)
+        .returns<MistakeRow[]>();
+
       if (!mounted) return;
 
       if (profileErr) {
@@ -178,6 +224,16 @@ export default function ProfileClient() {
       setEntitlements(entRows ?? []);
       setAttempts(attRows ?? []);
       setOrders(orderRows ?? []);
+      
+      // Shuffle mistakeRows with identical difficulty to maintain secondary arbitrary sort
+      const finalMistakes = (mistakeRows ?? []).sort((a, b) => {
+        if (a.difficulty_score === b.difficulty_score) {
+          return Math.random() - 0.5;
+        }
+        return a.difficulty_score - b.difficulty_score;
+      });
+      setMistakes(finalMistakes);
+
       setLoading(false);
     }
 
@@ -334,6 +390,33 @@ export default function ProfileClient() {
         <BackButton fallbackHref="/" />
         <Breadcrumbs items={[{ label: "Home", href: "/" }, { label: "My Account" }]} />
       </div>
+
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-8 bg-surface-variant/30 p-2 rounded-2xl w-full sm:w-fit">
+        <button
+          onClick={() => setCurrentTab("overview")}
+          className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-extrabold transition-all outline-none ${
+            currentTab === "overview"
+              ? "bg-primary text-white shadow-md"
+              : "text-on-surface-variant hover:bg-surface-variant hover:text-primary"
+          }`}
+        >
+          Overview
+        </button>
+        <button
+          onClick={() => setCurrentTab("mistakes")}
+          className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-extrabold transition-all outline-none flex items-center justify-center gap-2 ${
+            currentTab === "mistakes"
+              ? "bg-rose-500 text-white shadow-md"
+              : "text-on-surface-variant hover:bg-surface-variant hover:text-rose-500"
+          }`}
+        >
+          Mistake Bank
+          <span className={`px-2 py-0.5 rounded-full text-[10px] ${currentTab === 'mistakes' ? 'bg-white/20' : 'bg-surface-variant text-on-surface-variant border border-outline/40'}`}>
+            {mistakes.length}
+          </span>
+        </button>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
         {/* ── Sidebar ── */}
         <div className="lg:col-span-4">
@@ -478,8 +561,10 @@ export default function ProfileClient() {
 
         {/* ── Main content ── */}
         <div className="lg:col-span-8 space-y-10">
-          {/* Active Subscriptions */}
-          <div className="bg-white border border-outline/60 shadow-soft-xl p-6 md:p-8 rounded-2xl">
+          {currentTab === "overview" && (
+            <>
+              {/* Active Subscriptions */}
+              <div className="bg-white border border-outline/60 shadow-soft-xl p-6 md:p-8 rounded-2xl">
             <div className="flex items-end justify-between gap-4 md:gap-8 mb-8">
               <div>
                 <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
@@ -750,6 +835,96 @@ export default function ProfileClient() {
               </div>
             )}
           </div>
+            </>
+          )}
+
+          {currentTab === "mistakes" && (
+            <div className="bg-white border border-outline/60 shadow-soft-xl p-6 md:p-8 rounded-2xl">
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
+                <div>
+                  <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
+                    Review & Practice
+                  </div>
+                  <h2 className="font-headline text-2xl md:text-4xl font-extrabold text-primary tracking-tighter">
+                    Mistake Bank
+                  </h2>
+                </div>
+                {mistakes.length > 0 && (
+                  <button
+                    onClick={() => router.push("/profile/mistake-bank")}
+                    className="bg-primary text-white px-8 py-3.5 text-sm font-extrabold hover:bg-slate-800 transition-all btn-sharp flex items-center gap-2 whitespace-nowrap"
+                  >
+                    <span className="material-symbols-outlined text-lg">play_arrow</span>
+                    Start Practice Test
+                  </button>
+                )}
+              </div>
+
+              {mistakes.length > 0 ? (
+                 <div className="space-y-4">
+                   {mistakes.slice(0, visibleMistakes).map((m, idx) => {
+                     const subjTitle = m.exam_questions?.exams?.subjects?.title ?? "Subject";
+                     const examTitle = m.exam_questions?.exams?.title ?? "Exam";
+                     return (
+                       <div
+                         key={m.id}
+                         className="border border-outline/60 bg-surface-variant/30 p-5 flex flex-col md:flex-row md:items-center justify-between gap-6 rounded-xl hover:shadow-md transition-shadow"
+                       >
+                         <div className="min-w-0 flex-1">
+                           <div className="flex items-center gap-3 mb-2">
+                             <span className="inline-flex items-center gap-1 bg-white border border-outline/40 px-2 py-0.5 rounded-md text-[10px] font-black text-on-surface-variant uppercase tracking-widest">
+                               <span className="material-symbols-outlined text-[14px]">book</span>
+                               {subjTitle}
+                             </span>
+                             <span className="text-[10px] uppercase font-bold text-on-surface-variant/70 tracking-widest truncate">
+                               {examTitle}
+                             </span>
+                           </div>
+                           
+                           <div className="text-sm font-bold text-primary truncate">
+                             {m.exam_questions?.prompt_text ? (
+                               <div className="line-clamp-2" dangerouslySetInnerHTML={{ __html: m.exam_questions.prompt_text }} />
+                             ) : (
+                               `Question #${m.exam_questions?.question_number ?? "?"}`
+                             )}
+                           </div>
+                           <div className="text-xs font-medium text-on-surface-variant mt-3 flex items-center gap-4">
+                             <span className="flex items-center gap-1.5 text-rose-600 font-bold bg-rose-50 px-2 py-1 rounded-md">
+                               <span className="material-symbols-outlined text-[14px]">error</span>
+                               {m.error_count} mistake{m.error_count !== 1 ? 's' : ''}
+                             </span>
+                             <span className="flex items-center gap-1.5 bg-white border border-outline/40 px-2 py-1 rounded-md">
+                               <span className="material-symbols-outlined text-[14px] text-amber-500">signal_cellular_alt</span>
+                               Difficulty: {m.difficulty_score}
+                             </span>
+                           </div>
+                         </div>
+                       </div>
+                     );
+                   })}
+ 
+                   {mistakes.length > visibleMistakes && (
+                     <div className="pt-6 flex justify-center">
+                       <button
+                         onClick={() => setVisibleMistakes(prev => prev + 10)}
+                         className="px-10 py-3 rounded-xl border-2 border-outline/40 font-extrabold text-sm text-on-surface-variant hover:bg-slate-50 transition-all active:scale-95"
+                       >
+                         Show More Mistake Questions
+                       </button>
+                     </div>
+                   )}
+                 </div>
+              ) : (
+                <div className="border border-outline/60 bg-surface-variant px-6 py-12 text-on-surface-variant font-medium rounded-xl text-center">
+                  <span className="material-symbols-outlined text-5xl text-on-surface-variant/30 mb-4 block">
+                    task_alt
+                  </span>
+                  <div className="text-lg font-bold text-primary mb-2">You're all caught up!</div>
+                  All practice questions answered incorrectly will automatically appear here.
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </section>

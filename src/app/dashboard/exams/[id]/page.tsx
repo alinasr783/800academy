@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import MathText from "@/components/MathText";
+// @ts-ignore
+import renderMathInElement from 'katex/dist/contrib/auto-render';
+import 'katex/dist/katex.min.css';
 
 type ExamRow = {
   id: string;
@@ -145,6 +149,20 @@ export default function DashboardExamDetails() {
   useEffect(() => {
     load();
   }, [examId]);
+
+  useEffect(() => {
+    // Auto-render math in passage previews
+    const elements = document.querySelectorAll('.prose-preview');
+    elements.forEach(el => {
+      renderMathInElement(el as HTMLElement, {
+        delimiters: [
+          { left: "$$", right: "$$", display: true },
+          { left: "$", right: "$", display: false },
+        ],
+        throwOnError: false
+      });
+    });
+  }, [passages, passageBody]);
 
   async function saveExam() {
     const num = Math.trunc(Number(examNumber));
@@ -654,6 +672,12 @@ export default function DashboardExamDetails() {
                       rows={5}
                       className="w-full px-5 py-4 bg-white border border-slate-200 rounded-xl focus:border-violet-500 outline-none transition-all font-medium text-sm leading-relaxed resize-none"
                     />
+                    {passageBody && (
+                      <div className="mt-4 p-5 bg-white border border-dashed border-slate-200 rounded-xl overflow-hidden">
+                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Live Rich Preview</div>
+                        <MathText text={passageBody} />
+                      </div>
+                    )}
                     <button
                       type="button"
                       onClick={addPassage}
@@ -748,7 +772,7 @@ export default function DashboardExamDetails() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => router.push(`/dashboard/exams/${examId}/questions/new`)}
+                    onClick={() => router.push(`/dashboard/exams/questions/new?examId=${examId}`)}
                     className="w-full h-14 bg-white text-primary rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-slate-100 transition-all active:scale-95"
                   >
                     + Create New Question
