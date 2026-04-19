@@ -39,6 +39,7 @@ type QuestionRow = {
   correct_text: string | null;
   passage_id: string | null;
   topic_id: string | null;
+  subtopic_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -91,7 +92,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { data: questions } = await admin
     .from("exam_questions")
     .select(
-      "id,exam_id,question_number,type,prompt_text,explanation_text,points,allow_multiple,correct_text,passage_id,created_at,updated_at",
+      "id,exam_id,question_number,type,prompt_text,explanation_text,points,allow_multiple,correct_text,passage_id,topic_id,subtopic_id,created_at,updated_at",
     )
     .eq("exam_id", id)
     .order("question_number", { ascending: true });
@@ -223,6 +224,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             allow_multiple?: boolean;
             correct_text?: string | null;
             topic_id?: string | null;
+            subtopic_id?: string | null;
           }
         | { action: "delete_question"; question_id: string }
         | { action: "reorder_questions"; question_ids_in_order: string[] }
@@ -321,9 +323,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         allow_multiple: !!body.allow_multiple,
         correct_text: body.type === "fill" ? (body.correct_text ?? null) : null,
         topic_id: body.topic_id ?? null,
+        subtopic_id: body.subtopic_id ?? null,
       })
       .select(
-        "id,exam_id,question_number,type,prompt_text,explanation_text,points,allow_multiple,correct_text,passage_id,topic_id,created_at,updated_at",
+        "id,exam_id,question_number,type,prompt_text,explanation_text,points,allow_multiple,correct_text,passage_id,topic_id,subtopic_id,created_at,updated_at",
       )
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });

@@ -14,6 +14,7 @@ export async function POST(req: Request) {
   const {
     user_id,
     topic_ids,
+    subtopic_ids,
     total_questions,
     correct_questions,
     duration_seconds,
@@ -23,7 +24,7 @@ export async function POST(req: Request) {
     answers
   } = body;
 
-  if (!user_id || !topic_ids || total_questions === undefined) {
+  if (!user_id || (!topic_ids && !subtopic_ids) || total_questions === undefined) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
@@ -31,7 +32,8 @@ export async function POST(req: Request) {
     .from("practice_sessions")
     .insert({
       user_id,
-      topic_ids,
+      topic_ids: topic_ids || [],
+      subtopic_ids: subtopic_ids || [],
       total_questions,
       correct_questions,
       duration_seconds,

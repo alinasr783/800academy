@@ -4,22 +4,38 @@ import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const topicIdsRaw = searchParams.get("topic_ids");
+  const subtopicIdsRaw = searchParams.get("subtopic_ids");
   const limit = Math.min(Math.max(Number(searchParams.get("limit") || 20), 1), 100);
 
-  if (!topicIdsRaw) {
-    return NextResponse.json({ error: "No topics provided." }, { status: 400 });
+  if (!topicIdsRaw && !subtopicIdsRaw) {
+    return NextResponse.json({ error: "No topics or subtopics provided." }, { status: 400 });
   }
 
-  const topicIds = topicIdsRaw.split(",");
   const admin = getSupabaseAdmin();
 
-  console.log("API Practice Questions: Requesting for topics:", topicIds);
+  let questions: any[] = [];
+  let error: any = null;
 
-  // Fetch questions using random RPC
-  const { data: questions, error } = await admin.rpc("get_random_questions_by_topics", {
-    p_topic_ids: topicIds,
-    p_limit: limit
-  });
+  if (subtopicIdsRaw) {
+    const subtopicIds = subtopicIdsRaw.split(",");
+    console.log("API Practice Questions: Requesting for subtopics:", subtopicIds);
+    const { data, error: stErr } = await admin.rpc("get_random_questions_by_subtopics", {
+      p_subtopic_ids: subtopicIds,
+      p_limit: limit
+    });
+    questions = data || [];
+    error = stErr;
+  } else {
+    // Fallback or Topic-only legacy support
+    const topicIds = topicIdsRaw!.split(",");
+    console.log("API Practice Questions: Requesting for topics (legacy):", topicIds);
+    const { data, error: tErr } = await admin.rpc("get_random_questions_by_topics", {
+      p_topic_ids: topicIds,
+      p_limit: limit
+    });
+    questions = data || [];
+    error = tErr;
+  }
 
   if (error) {
     console.error("API Practice Questions: RPC Error:", error.message);

@@ -77,6 +77,7 @@ type Question = {
   explanation_assets: Asset[];
   options: Option[];
   passage_id: string | null;
+  subtopic_id: string | null;
   topic_id: string | null;
 };
 
@@ -196,7 +197,14 @@ type SubmitResult = {
   totalQuestions: number;
   questionsPercent: number;
   durationSeconds: number;
-  topicResults: { topicId: string; title: string; correct: number; total: number; percent: number }[];
+  topicResults: { 
+    topicId: string; 
+    title: string; 
+    correct: number; 
+    total: number; 
+    percent: number;
+    subtopicResults: { subtopicId: string; title: string; correct: number; total: number; percent: number }[]
+  }[];
 };
 
 function buildInitialQState(questions: Question[]) {
@@ -237,6 +245,7 @@ export default function ExamClient({
   const [referenceSheets, setReferenceSheets] = useState<Asset[]>([]);
   const [passagesById, setPassagesById] = useState<Map<string, Passage>>(new Map());
   const [topicsById, setTopicsById] = useState<Map<string, string>>(new Map());
+  const [subtopicsById, setSubtopicsById] = useState<Map<string, { title: string; topicId: string }>>(new Map());
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [remaining, setRemaining] = useState(exam.duration_seconds);
@@ -335,7 +344,7 @@ export default function ExamClient({
         const { data: qRows } = await supabase
           .from("exam_questions")
           .select(
-            "id, question_number, type, prompt_text, explanation_text, points, allow_multiple, correct_text, passage_id, topic_id",
+            "id, question_number, type, prompt_text, explanation_text, points, allow_multiple, correct_text, passage_id, topic_id, subtopic_id",
           )
           .eq("exam_id", exam.id)
           .order("question_number", { ascending: true })
@@ -351,6 +360,7 @@ export default function ExamClient({
               correct_text: string | null;
               passage_id: string | null;
               topic_id: string | null;
+              subtopic_id: string | null;
             }[]
           >();
 
@@ -452,14 +462,26 @@ export default function ExamClient({
           tMap.set(t.id, t.title);
         }
 
+        /* Fetch subtopics */
+        const { data: subtopicRows } = await supabase
+          .from("subtopics")
+          .select("id, title, topic_id")
+          .returns<{ id: string; title: string; topic_id: string }[]>();
+
+        const stMap = new Map<string, { title: string; topicId: string }>();
+        for (const st of subtopicRows ?? []) {
+          stMap.set(st.id, { title: st.title, topicId: st.topic_id });
+        }
+
         if (!mounted) return;
         setReferenceSheets(sheetRows ?? []);
         setQuestions(qs);
         setPassagesById(pMap);
         setTopicsById(tMap);
+        setSubtopicsById(stMap);
 
         if (attemptIdParam) {
-          loadPastAttempt(attemptIdParam, qs, tMap);
+          loadPastAttempt(attemptIdParam, qs, tMap, stMap);
         }
       } finally {
         if (mounted) setContentLoading(false);
@@ -474,7 +496,7 @@ export default function ExamClient({
       return;
     }
 
-    async function loadPastAttempt(aid: string, currentQuestions: Question[], topicTitles: Map<string, string>) {
+    async function loadPastAttempt(aid: string, currentQuestions: Question[], topicTitles: Map<string, string>, subtopicInfo: Map<string, { title: string; topicId: string }>) {
       try {
         const { data: attempt, error: aErr } = await supabase
           .from("exam_attempts")
@@ -494,10 +516,10 @@ export default function ExamClient({
         setQState(newQState);
 
         // Recalculate topic results
-        const topicStats = new Map<string, { correct: number; total: number }>();
+        const subtopicsMap = new Map<string, { correct: number; total: number }>();
         currentQuestions.forEach(q => {
-          const tid = q.topic_id || "general";
-          const stats = topicStats.get(tid) || { correct: 0, total: 0 };
+          const sid = q.subtopic_id || "general";
+          const stats = subtopicsMap.get(sid) || { correct: 0, total: 0 };
           stats.total += 1;
           
           const ans = savedAnswers[q.id];
@@ -519,16 +541,35 @@ export default function ExamClient({
           }
           
           if (isCorrect) stats.correct++;
-          topicStats.set(tid, stats);
+          subtopicsMap.set(sid, stats);
         });
 
-        const topicResults = Array.from(topicStats.entries()).map(([tid, s]) => ({
+        // Group subtopics into topics
+        const topicsMap = new Map<string, { correct: number; total: number; subtopics: any[] }>();
+        subtopicsMap.forEach((stats, sid) => {
+          const info = subtopicInfo.get(sid);
+          const tid = info?.topicId || "none";
+          const tStats = topicsMap.get(tid) || { correct: 0, total: 0, subtopics: [] };
+          tStats.correct += stats.correct;
+          tStats.total += stats.total;
+          tStats.subtopics.push({
+            subtopicId: sid,
+            title: info?.title || 'General',
+            correct: stats.correct,
+            total: stats.total,
+            percent: Math.round((stats.correct / stats.total) * 100)
+          });
+          topicsMap.set(tid, tStats);
+        });
+
+        const topicResults = Array.from(topicsMap.entries()).map(([tid, s]) => ({
           topicId: tid,
           title: topicTitles.get(tid) || 'General',
           correct: s.correct,
           total: s.total,
-          percent: Math.round((s.correct / s.total) * 100)
-        }));
+          percent: Math.round((s.correct / s.total) * 100),
+          subtopicResults: s.subtopics.sort((a, b) => a.title.localeCompare(b.title))
+        })).sort((a, b) => a.title.localeCompare(b.title));
 
         setResult({
           attemptId: aid,
@@ -844,14 +885,13 @@ export default function ExamClient({
       const correctness = computeQuestionCorrectness();
       const answers = buildAnswersPayload();
 
-      // Topic Analysis
-      const topicsMap = new Map<string, { correct: number; total: number }>();
+      // Subtopic Analysis
+      const subtopicsMap = new Map<string, { correct: number; total: number }>();
       for (const q of questions) {
-        const tId = q.topic_id || "none";
-        const cur = topicsMap.get(tId) ?? { correct: 0, total: 0 };
+        const sid = q.subtopic_id || "none";
+        const cur = subtopicsMap.get(sid) ?? { correct: 0, total: 0 };
         cur.total += 1;
         
-        // Use the same correctness logic
         const st = qState.get(q.id);
         let isCorrect = false;
         if (st) {
@@ -878,16 +918,35 @@ export default function ExamClient({
           }
         }
         if (isCorrect) cur.correct += 1;
-        topicsMap.set(tId, cur);
+        subtopicsMap.set(sid, cur);
       }
 
-      const topicResults = Array.from(topicsMap.entries()).map(([topicId, stats]) => {
+      // Group subtopics into topics
+      const topicsGroupMap = new Map<string, { correct: number; total: number; subtopics: any[] }>();
+      subtopicsMap.forEach((stats, sid) => {
+        const info = subtopicsById.get(sid);
+        const tid = info?.topicId || "none";
+        const tStats = topicsGroupMap.get(tid) || { correct: 0, total: 0, subtopics: [] };
+        tStats.correct += stats.correct;
+        tStats.total += stats.total;
+        tStats.subtopics.push({
+          subtopicId: sid,
+          title: info?.title || 'General',
+          correct: stats.correct,
+          total: stats.total,
+          percent: Math.round((stats.correct / stats.total) * 100)
+        });
+        topicsGroupMap.set(tid, tStats);
+      });
+
+      const topicResults = Array.from(topicsGroupMap.entries()).map(([topicId, stats]) => {
         return {
           topicId,
           title: topicsById.get(topicId) ?? (topicId === 'none' ? 'General' : 'Other'),
           correct: stats.correct,
           total: stats.total,
-          percent: Math.round((stats.correct / stats.total) * 100)
+          percent: Math.round((stats.correct / stats.total) * 100),
+          subtopicResults: stats.subtopics.sort((a, b) => a.title.localeCompare(b.title))
         };
       }).sort((a, b) => a.title.localeCompare(b.title));
 
@@ -1442,25 +1501,54 @@ export default function ExamClient({
               <div className="p-6 sm:p-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 sm:gap-10">
                   {result.topicResults.map((tr) => (
-                    <div key={tr.topicId} className="group">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm transition-all group-hover:scale-110 ${tr.percent >= 75 ? 'bg-emerald-100 text-emerald-700' : tr.percent >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
+                    <div key={tr.topicId} className="group bg-slate-50/50 border border-outline/30 rounded-2xl overflow-hidden transition-all hover:shadow-md">
+                      <div className="p-5 flex items-center justify-between cursor-pointer select-none no-tap-highlight" onClick={(e) => {
+                        const content = e.currentTarget.nextElementSibling;
+                        if (content) content.classList.toggle('hidden');
+                        const icon = e.currentTarget.querySelector('.expand-icon');
+                        if (icon) icon.classList.toggle('rotate-180');
+                      }}>
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-sm transition-all group-hover:scale-110 ${tr.percent >= 75 ? 'bg-emerald-100 text-emerald-700' : tr.percent >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
                             {tr.percent}%
                           </div>
                           <div>
-                            <div className="text-sm font-black text-primary group-hover:text-secondary transition-colors">{tr.title}</div>
-                            <div className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mt-0.5">
+                            <div className="text-sm font-black text-primary group-hover:text-secondary transition-colors leading-tight">{tr.title}</div>
+                            <div className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mt-1">
                               {tr.correct} of {tr.total} correct
                             </div>
                           </div>
                         </div>
+                        <div className="flex items-center gap-3">
+                           <span className="expand-icon material-symbols-outlined text-[20px] text-slate-400 transition-transform duration-300">expand_more</span>
+                        </div>
                       </div>
-                      <div className="relative h-2.5 bg-slate-100 rounded-full overflow-hidden border border-outline/30">
-                        <div 
-                          className={`absolute top-0 left-0 h-full transition-all duration-1000 ease-out rounded-full ${tr.percent >= 75 ? 'bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.3)]' : tr.percent >= 50 ? 'bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.3)]' : 'bg-rose-500 shadow-[0_0_12px_rgba(239,68,68,0.3)]'}`}
-                          style={{ width: `${tr.percent}%` }}
-                        />
+                      
+                      <div className="hidden border-t border-outline/20 bg-white p-5 animate-slide-up">
+                        <div className="relative h-2 bg-slate-100 rounded-full overflow-hidden mb-6">
+                          <div 
+                            className={`absolute top-0 left-0 h-full transition-all duration-1000 ease-out rounded-full ${tr.percent >= 75 ? 'bg-emerald-500' : tr.percent >= 50 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                            style={{ width: `${tr.percent}%` }}
+                          />
+                        </div>
+
+                        <div className="space-y-4">
+                          <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 px-1">Subtopic Breakdown</div>
+                          {tr.subtopicResults.map(st => (
+                            <div key={st.subtopicId} className="flex flex-col gap-1.5">
+                              <div className="flex items-center justify-between text-[11px] font-bold">
+                                <span className="text-primary/80">{st.title}</span>
+                                <span className={st.percent >= 75 ? 'text-emerald-600' : st.percent >= 50 ? 'text-amber-600' : 'text-rose-600'}>{st.percent}% ({st.correct}/{st.total})</span>
+                              </div>
+                              <div className="h-1.5 bg-slate-50 rounded-full overflow-hidden border border-slate-100">
+                                <div 
+                                  className={`h-full transition-all duration-700 rounded-full ${st.percent >= 75 ? 'bg-emerald-400' : st.percent >= 50 ? 'bg-amber-400' : 'bg-rose-400'}`}
+                                  style={{ width: `${st.percent}%` }}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   ))}

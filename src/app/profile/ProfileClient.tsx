@@ -142,6 +142,7 @@ export default function ProfileClient() {
   const [mistakes, setMistakes] = useState<MistakeRow[]>([]);
   const [practiceSessions, setPracticeSessions] = useState<PracticeSessionRow[]>([]);
   const [allTopics, setAllTopics] = useState<{ id: string; title: string; subject_id: string }[]>([]);
+  const [allSubtopics, setAllSubtopics] = useState<{ id: string; title: string; topic_id: string; subject_id: string }[]>([]);
 
   const [currentTab, setCurrentTab] = useState<"overview" | "mistakes" | "braingym">("overview");
   const [visibleMistakes, setVisibleMistakes] = useState(10);
@@ -157,6 +158,7 @@ export default function ProfileClient() {
 
   // Brain Gym Wizard State
   const [gymTopics, setGymTopics] = useState<string[]>([]);
+  const [gymSubtopics, setGymSubtopics] = useState<string[]>([]);
   const [gymLimit, setGymLimit] = useState(20);
   const [gymTime, setGymTime] = useState(15);
   const [gymTarget, setGymTarget] = useState(80);
@@ -276,8 +278,10 @@ export default function ProfileClient() {
     if (currentTab !== 'braingym' || allTopics.length > 0) return;
 
     async function loadTopics() {
-      const { data } = await supabase.from('topics').select('id, title, subject_id');
-      setAllTopics(data ?? []);
+      const { data: topics } = await supabase.from('topics').select('id, title, subject_id');
+      setAllTopics(topics ?? []);
+      const { data: subtopics } = await supabase.from('subtopics').select('id, title, topic_id, subject_id');
+      setAllSubtopics(subtopics ?? []);
     }
     loadTopics();
   }, [currentTab, allTopics.length]);
@@ -409,12 +413,13 @@ export default function ProfileClient() {
   }
 
   function startGymSession() {
-    if (gymTopics.length === 0) {
-      setError("Please select at least one topic.");
+    if (gymSubtopics.length === 0 && gymTopics.length === 0) {
+      setError("Please select at least one topic or subtopic.");
       return;
     }
     const params = new URLSearchParams({
       topic_ids: gymTopics.join(","),
+      subtopic_ids: gymSubtopics.join(","),
       limit: gymLimit.toString(),
       time: gymTime.toString(),
       target: gymTarget.toString()
@@ -1056,33 +1061,76 @@ export default function ProfileClient() {
                     <div className="p-8">
                       {gymStep === 1 ? (
                         <div className="animate-fade-in">
-                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 gap-8">
                             {activeEntitlements.map(ent => {
                               const subjTopics = allTopics.filter(t => t.subject_id === ent.subject_id);
                               if (subjTopics.length === 0) return null;
                               return (
-                                <div key={ent.id} className="bg-white p-6 rounded-2xl border-2 border-outline/30">
-                                  <div className="text-[10px] font-black text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-[16px] text-secondary">bookmark</span>
-                                    {ent.subjects?.title}
+                                <div key={ent.id} className="bg-white p-6 rounded-3xl border-2 border-outline/30 space-y-8">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-primary/5 flex items-center justify-center">
+                                      <span className="material-symbols-outlined text-primary">bookmark</span>
+                                    </div>
+                                    <div className="text-sm font-black text-primary uppercase tracking-widest">
+                                      {ent.subjects?.title}
+                                    </div>
                                   </div>
-                                  <div className="flex flex-wrap gap-2">
-                                    {subjTopics.map(t => (
-                                      <button
-                                        key={t.id}
-                                        onClick={() => {
-                                          setGymTopics(prev =>
-                                            prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id]
-                                          );
-                                        }}
-                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border-2 ${gymTopics.includes(t.id)
-                                          ? "bg-primary border-primary text-white shadow-sm"
-                                          : "bg-white border-outline/60 text-on-surface-variant hover:border-secondary"
-                                          }`}
-                                      >
-                                        {t.title}
-                                      </button>
-                                    ))}
+                                  
+                                  <div className="space-y-10">
+                                    {subjTopics.map(t => {
+                                      const mySubtopics = allSubtopics.filter(st => st.topic_id === t.id);
+                                      const allSelected = mySubtopics.length > 0 && mySubtopics.every(st => gymSubtopics.includes(st.id));
+                                      const someSelected = mySubtopics.some(st => gymSubtopics.includes(st.id)) && !allSelected;
+
+                                      return (
+                                        <div key={t.id} className="space-y-4">
+                                          <div 
+                                            className="flex items-center justify-between cursor-pointer group/topic"
+                                            onClick={() => {
+                                              const ids = mySubtopics.map(st => st.id);
+                                              if (allSelected) {
+                                                setGymSubtopics(prev => prev.filter(id => !ids.includes(id)));
+                                                setGymTopics(prev => prev.filter(id => id !== t.id));
+                                              } else {
+                                                setGymSubtopics(prev => Array.from(new Set([...prev, ...ids])));
+                                                setGymTopics(prev => Array.from(new Set([...prev, t.id])));
+                                              }
+                                            }}
+                                          >
+                                            <div className="flex items-center gap-3">
+                                              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${allSelected ? 'bg-primary border-primary' : someSelected ? 'bg-primary/20 border-primary' : 'border-outline group-hover/topic:border-primary'}`}>
+                                                {allSelected && <span className="material-symbols-outlined text-white text-[16px]">check</span>}
+                                                {someSelected && <div className="w-2.5 h-0.5 bg-primary rounded-full"></div>}
+                                              </div>
+                                              <span className={`text-sm font-extrabold tracking-tight transition-colors ${allSelected || someSelected ? 'text-primary' : 'text-slate-600 group-hover/topic:text-primary'}`}>{t.title}</span>
+                                            </div>
+                                            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest group-hover/topic:text-primary/40 transition-colors">Select All</span>
+                                          </div>
+                                          
+                                          <div className="flex flex-wrap gap-2.5 pl-8">
+                                            {mySubtopics.map(st => {
+                                              const isSelected = gymSubtopics.includes(st.id);
+                                              return (
+                                                <button
+                                                  key={st.id}
+                                                  onClick={() => {
+                                                    setGymSubtopics(prev =>
+                                                      isSelected ? prev.filter(x => x !== st.id) : [...prev, st.id]
+                                                    );
+                                                  }}
+                                                  className={`px-4 py-2 rounded-xl text-[11px] font-bold transition-all border-2 ${isSelected
+                                                    ? "bg-secondary border-secondary text-white shadow-sm scale-105"
+                                                    : "bg-slate-50 border-transparent text-on-surface-variant hover:border-secondary/30 hover:bg-white"
+                                                    }`}
+                                                >
+                                                  {st.title}
+                                                </button>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 </div>
                               );

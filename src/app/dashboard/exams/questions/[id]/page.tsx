@@ -19,6 +19,7 @@ type QuestionRow = {
   correct_text: string | null;
   passage_id: string | null;
   topic_id: string | null;
+  subtopic_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -30,6 +31,7 @@ type PassageRow = {
 };
 
 type TopicRow = { id: string; title: string };
+type SubtopicRow = { id: string; topic_id: string; title: string };
 
 type ExamRow = { id: string; title: string };
 
@@ -71,6 +73,7 @@ export default function DashboardQuestionDetails() {
   const [exam, setExam] = useState<ExamRow | null>(null);
   const [passages, setPassages] = useState<PassageRow[]>([]);
   const [topics, setTopics] = useState<TopicRow[]>([]);
+  const [allSubtopics, setAllSubtopics] = useState<SubtopicRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -81,6 +84,7 @@ export default function DashboardQuestionDetails() {
   const [correctText, setCorrectText] = useState("");
   const [passageId, setPassageId] = useState("");
   const [topicId, setTopicId] = useState("");
+  const [subtopicId, setSubtopicId] = useState("");
   const [explanationText, setExplanationText] = useState("");
 
   const [assetUrl, setAssetUrl] = useState("");
@@ -136,6 +140,7 @@ export default function DashboardQuestionDetails() {
       setCorrectText(json.question.correct_text ?? "");
       setPassageId(json.question.passage_id ?? "");
       setTopicId(json.question.topic_id ?? "");
+      setSubtopicId(json.question.subtopic_id ?? "");
 
       const examJson = await adminFetch(`/api/admin/exams/${json.question.exam_id}`);
       if (!mounted) return;
@@ -143,8 +148,10 @@ export default function DashboardQuestionDetails() {
       setPassages(examJson.passages ?? []);
 
       const topicsJson = await adminFetch(`/api/admin/topics?subject_id=${examJson.exam.subject_id}`);
+      const subtopicsJson = await adminFetch(`/api/admin/subtopics?subject_id=${examJson.exam.subject_id}`);
       if (!mounted) return;
       setTopics(topicsJson.items ?? []);
+      setAllSubtopics(subtopicsJson.items ?? []);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Something went wrong.";
       setError(msg);
@@ -179,6 +186,7 @@ export default function DashboardQuestionDetails() {
           correct_text: type === "fill" ? correctText.trim() : null,
           passage_id: passageId || null,
           topic_id: topicId || null,
+          subtopic_id: subtopicId || null,
         }),
       })) as { question: QuestionRow };
       setQuestion(json.question);
@@ -334,6 +342,11 @@ export default function DashboardQuestionDetails() {
       setSaving(false);
     }
   }
+
+  const filteredSubtopics = useMemo(() => {
+    if (!topicId) return [];
+    return allSubtopics.filter(st => st.topic_id === topicId);
+  }, [topicId, allSubtopics]);
 
   function reorderLocal(from: number, to: number) {
     setOptions((prev) => {
@@ -751,22 +764,42 @@ export default function DashboardQuestionDetails() {
                 <div className="relative z-10 space-y-6 text-center sm:text-left">
                    <div className="flex items-center gap-3 justify-center sm:justify-start">
                       <span className="material-symbols-outlined text-white/80">category</span>
-                      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/90">Topic / Category</h3>
+                      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/90">Curriculum Hierarchy</h3>
                    </div>
-                   <select
-                      value={topicId}
-                      onChange={(e) => setTopicId(e.target.value)}
-                      className="h-12 w-full px-4 bg-white/20 border border-white/20 text-white rounded-xl focus:bg-white focus:text-emerald-900 outline-none transition-all font-bold text-sm backdrop-blur-sm cursor-pointer"
-                   >
-                      <option value="" className="text-gray-900">No Specific Topic</option>
-                      {topics.map((t) => (
-                        <option key={t.id} value={t.id} className="text-gray-900">
-                           {t.title}
-                        </option>
-                      ))}
-                   </select>
+                   
+                   <div className="space-y-4">
+                        <div>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-2 block">Main Topic</label>
+                            <select
+                                value={topicId}
+                                onChange={(e) => { setTopicId(e.target.value); setSubtopicId(""); }}
+                                className="h-12 w-full px-4 bg-white/20 border border-white/20 text-white rounded-xl focus:bg-white focus:text-emerald-900 outline-none transition-all font-bold text-sm backdrop-blur-sm cursor-pointer"
+                            >
+                                <option value="" className="text-gray-900">Select Topic...</option>
+                                {topics.map((t) => (
+                                    <option key={t.id} value={t.id} className="text-gray-900">{t.title}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-2 block">Subtopic</label>
+                            <select
+                                value={subtopicId}
+                                onChange={(e) => setSubtopicId(e.target.value)}
+                                disabled={!topicId}
+                                className="h-12 w-full px-4 bg-white/20 border border-white/20 text-white rounded-xl focus:bg-white focus:text-emerald-900 outline-none transition-all font-bold text-sm backdrop-blur-sm cursor-pointer disabled:opacity-50"
+                            >
+                                <option value="" className="text-gray-900">Select Subtopic...</option>
+                                {filteredSubtopics.map((st) => (
+                                    <option key={st.id} value={st.id} className="text-gray-900">{st.title}</option>
+                                ))}
+                            </select>
+                        </div>
+                   </div>
+                   
                    <p className="text-[9px] font-bold text-white/50 bg-black/10 p-3 rounded-lg leading-relaxed">
-                      Assigning a topic enables detailed performance analysis for students after submission.
+                      Questions are linked to subtopics for granular analytics. Select a topic first to see its subtopics.
                    </p>
                 </div>
              </div>

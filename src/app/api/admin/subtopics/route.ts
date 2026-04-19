@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { requireAdminFromBearer } from "@/lib/adminGuard";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
-type TopicRow = {
+type SubtopicRow = {
   id: string;
+  topic_id: string;
+  subject_id: string;
   title: string;
   description: string | null;
-  subject_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -29,22 +30,25 @@ export async function GET(req: Request) {
   if (!admin) return NextResponse.json({ error: adminErr }, { status: 500 });
 
   const url = new URL(req.url);
+  const topicId = url.searchParams.get("topic_id");
   const subjectId = url.searchParams.get("subject_id");
 
   let query = admin
-    .from("topics")
+    .from("subtopics")
     .select("*")
     .order("title", { ascending: true });
 
+  if (topicId) {
+    query = query.eq("topic_id", topicId);
+  }
   if (subjectId) {
     query = query.eq("subject_id", subjectId);
   }
 
-  const { data: topics, error } = await query;
-
+  const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  return NextResponse.json({ items: topics as TopicRow[] });
+  return NextResponse.json({ items: data as SubtopicRow[] });
 }
 
 export async function POST(req: Request) {
@@ -52,25 +56,34 @@ export async function POST(req: Request) {
   const guard = await requireAdminFromBearer(auth);
   if (!guard.ok) return new NextResponse(null, { status: guard.status });
 
-  const body = (await req.json().catch(() => null)) as { title: string; description?: string; subject_id: string } | null;
-  if (!body?.title) return NextResponse.json({ error: "Title is required." }, { status: 400 });
+  const body = (await req.json().catch(() => null)) as {
+    topic_id: string;
+    subject_id: string;
+    title: string;
+    description?: string;
+  } | null;
+
+  if (!body?.topic_id || !body?.subject_id || !body?.title) {
+    return NextResponse.json({ error: "Missing required fields (topic_id, subject_id, title)." }, { status: 400 });
+  }
 
   const { admin, error: adminErr } = getAdminOrFail();
   if (!admin) return NextResponse.json({ error: adminErr }, { status: 500 });
 
   const { data, error } = await admin
-    .from("topics")
+    .from("subtopics")
     .insert({
+      topic_id: body.topic_id,
+      subject_id: body.subject_id,
       title: body.title.trim(),
       description: body.description?.trim() || null,
-      subject_id: body.subject_id || null,
     })
     .select("*")
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  return NextResponse.json({ topic: data as TopicRow });
+  return NextResponse.json({ subtopic: data as SubtopicRow });
 }
 
 export async function PATCH(req: Request) {
@@ -85,7 +98,6 @@ export async function PATCH(req: Request) {
   const body = (await req.json().catch(() => null)) as Partial<{
     title: string;
     description: string | null;
-    subject_id: string | null;
   }> | null;
 
   if (!body) return NextResponse.json({ error: "Invalid body." }, { status: 400 });
@@ -96,10 +108,9 @@ export async function PATCH(req: Request) {
   const patch: Record<string, any> = {};
   if ("title" in body) patch.title = body.title?.trim();
   if ("description" in body) patch.description = body.description?.trim() || null;
-  if ("subject_id" in body) patch.subject_id = body.subject_id || null;
 
   const { data, error } = await admin
-    .from("topics")
+    .from("subtopics")
     .update(patch)
     .eq("id", id)
     .select("*")
@@ -107,7 +118,7 @@ export async function PATCH(req: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  return NextResponse.json({ topic: data as TopicRow });
+  return NextResponse.json({ subtopic: data as SubtopicRow });
 }
 
 export async function DELETE(req: Request) {
@@ -122,7 +133,7 @@ export async function DELETE(req: Request) {
   const { admin, error: adminErr } = getAdminOrFail();
   if (!admin) return NextResponse.json({ error: adminErr }, { status: 500 });
 
-  const { error } = await admin.from("topics").delete().eq("id", id);
+  const { error } = await admin.from("subtopics").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
   return NextResponse.json({ ok: true });

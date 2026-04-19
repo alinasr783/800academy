@@ -46,6 +46,7 @@ type Question = {
   explanation_assets: Asset[];
   options: Option[];
   passage_id: string | null;
+  subtopic_id: string | null;
   topic_id: string | null;
   passage?: Passage | null;
   subjectTitle?: string;
@@ -66,7 +67,14 @@ type SubmitResult = {
   passed: boolean;
   target: number;
   durationSeconds: number;
-  topicResults: { topicId: string; title: string; correct: number; total: number; percent: number }[];
+  topicResults: { 
+    topicId: string; 
+    title: string; 
+    correct: number; 
+    total: number; 
+    percent: number;
+    subtopicResults: { subtopicId: string; title: string; correct: number; total: number; percent: number }[]
+  }[];
 };
 
 // --- Helpers ---
@@ -92,11 +100,14 @@ export default function BrainGymClient() {
   const searchParams = useSearchParams();
   
   const topicIds = useMemo(() => searchParams.get("topic_ids")?.split(",") ?? [], [searchParams]);
+  const subtopicIds = useMemo(() => searchParams.get("subtopic_ids")?.split(",") ?? [], [searchParams]);
   const limit = useMemo(() => Number(searchParams.get("limit") || 20), [searchParams]);
   const timeMin = useMemo(() => Number(searchParams.get("time") || 15), [searchParams]);
   const targetAcc = useMemo(() => Number(searchParams.get("target") || 80), [searchParams]);
 
   const [contentLoading, setContentLoading] = useState(true);
+  const [topicsById, setTopicsById] = useState<Map<string, string>>(new Map());
+  const [subtopicsById, setSubtopicsById] = useState<Map<string, { title: string; topicId: string }>>(new Map());
   const [questions, setQuestions] = useState<Question[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
@@ -227,12 +238,31 @@ export default function BrainGymClient() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       router.push("/join?mode=login");
-      return;
-    }
-    setUser(user);
-
     try {
-      const res = await fetch(`/api/practice/questions?topic_ids=${topicIds.join(",")}&limit=${limit}`);
+      const { data: userData } = await supabase.auth.getSession();
+      if (!userData.session) {
+        router.push("/join?mode=login");
+        return;
+      }
+      setUser(userData.session.user);
+
+      // Fetch titles
+      const { data: topicData } = await supabase.from('topics').select('id, title');
+      const tMap = new Map<string, string>();
+      topicData?.forEach(t => tMap.set(t.id, t.title));
+      setTopicsById(tMap);
+
+      const { data: stData } = await supabase.from('subtopics').select('id, title, topic_id');
+      const stMap = new Map<string, { title: string; topicId: string }>();
+      stData?.forEach(st => stMap.set(st.id, { title: st.title, topicId: st.topic_id }));
+      setSubtopicsById(stMap);
+
+      const params = new URLSearchParams({
+        topic_ids: topicIds.join(","),
+        subtopic_ids: subtopicIds.join(","),
+        limit: limit.toString()
+      });
+      const res = await fetch(`/api/practice/questions?${params.toString()}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to load questions");
       
@@ -312,51 +342,79 @@ export default function BrainGymClient() {
     setSubmitting(true);
     try {
       let correct = 0;
-      const topicStats = new Map<string, { correct: number; total: number }>();
+      const subtopicStats = new Map<string, { correct: number; total: number }>();
 
       questions.forEach((q) => {
         const st = qState.get(q.id);
-        const tid = q.topic_id || "general";
-        const stats = topicStats.get(tid) || { correct: 0, total: 0 };
-        stats.total += 1;
+        const sid = q.subtopic_id || "none";
+        const cur = subtopicStats.get(sid) ?? { correct: 0, total: 0 };
+        cur.total += 1;
 
         let isCorrect = false;
-        if (q.type === "mcq") {
-          const cIds = q.options.filter(o => o.is_correct).map(o => o.id);
-          const sel = st?.selectedOptionIds || [];
-          isCorrect = cIds.length === sel.length && cIds.every(id => sel.includes(id));
-        } else {
-          isCorrect = normalizeText(st?.fillText || "") === normalizeText(q.correct_text || "") && q.correct_text !== "";
+        if (st) {
+          if (q.type === "mcq") {
+            const correctIds = q.options.filter(o => o.is_correct).map(o => o.id);
+            const sel = new Set(st.selectedOptionIds);
+            isCorrect = correctIds.length === sel.size && correctIds.every(id => sel.has(id));
+          } else {
+            isCorrect = normalizeText(st.fillText) === normalizeText(q.correct_text || "") && (q.correct_text || "").trim() !== "";
+          }
         }
-
-        if (isCorrect) { correct++; stats.correct++; }
-        topicStats.set(tid, stats);
+        if (isCorrect) {
+           correct += 1;
+           cur.correct += 1;
+        }
+        subtopicStats.set(sid, cur);
       });
 
+      // Group subtopics into topics
+      const topicsGroupMap = new Map<string, { correct: number; total: number; subtopics: any[] }>();
+      subtopicStats.forEach((stats, sid) => {
+        const info = subtopicsById.get(sid);
+        const tid = info?.topicId || "none";
+        const tStats = topicsGroupMap.get(tid) || { correct: 0, total: 0, subtopics: [] };
+        tStats.correct += stats.correct;
+        tStats.total += stats.total;
+        tStats.subtopics.push({
+          subtopicId: sid,
+          title: info?.title || 'General',
+          correct: stats.correct,
+          total: stats.total,
+          percent: Math.round((stats.correct / stats.total) * 100)
+        });
+        topicsGroupMap.set(tid, tStats);
+      });
+
+      const topicResults = Array.from(topicsGroupMap.entries()).map(([tid, s]) => ({
+        topicId: tid,
+        title: topicsById.get(tid) || (tid === 'none' ? 'General' : 'Other'),
+        correct: s.correct,
+        total: s.total,
+        percent: Math.round((s.correct / s.total) * 100),
+        subtopicResults: s.subtopics.sort((a, b) => a.title.localeCompare(b.title))
+      })).sort((a, b) => a.title.localeCompare(b.title));
+
+      const duration = Math.floor((timeMin * 60) - timeLeft);
       const percent = Math.round((correct / questions.length) * 100);
-      const duration = (timeMin * 60) - timeLeft;
 
-      const { data: topicData } = await supabase.from('topics').select('id, title').in('id', Array.from(topicStats.keys()));
-      const topicTitles = new Map((topicData || []).map(t => [t.id, t.title]));
-      const topicResults = Array.from(topicStats.entries()).map(([tid, s]) => ({
-        topicId: tid, title: topicTitles.get(tid) || 'General', correct: s.correct, total: s.total, percent: Math.round((s.correct / s.total) * 100)
-      }));
-
-      const answers: Record<string, any> = {};
+      const answers: Record<string, { selectedOptionIds: string[], fillText: string }> = {};
       questions.forEach(q => {
         const st = qState.get(q.id);
-        answers[q.id] = {
-          selectedOptionIds: st?.selectedOptionIds || [],
-          fillText: st?.fillText || ""
-        };
+        answers[q.id] = { selectedOptionIds: st?.selectedOptionIds || [], fillText: st?.fillText || "" };
       });
 
-      await fetch('/api/practice/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      await fetch("/api/practice/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          user_id: user.id, topic_ids: topicIds, total_questions: questions.length, correct_questions: correct,
-          duration_seconds: duration, target_accuracy: targetAcc, percent_correct: percent,
+          user_id: user.id, 
+          topic_ids: topicIds, 
+          subtopic_ids: subtopicIds,
+          total_questions: questions.length, 
+          correct_questions: correct,
+          duration_seconds: duration, 
+          target_accuracy: targetAcc, 
+          percent_correct: percent,
           question_ids: questions.map(q => q.id),
           answers
         })
@@ -538,15 +596,39 @@ export default function BrainGymClient() {
                </div>
              </div>
 
-             {/* Topic analysis - kept simple */}
-             <div className="mt-12 bg-slate-50 border-2 border-outline/10 rounded-2xl p-8 sm:p-10 shadow-sm">
-                <div className="text-sm font-black text-primary uppercase tracking-[0.2em] mb-8">Topic Performance</div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+             {/* Topic analysis - hierarchical expandable view */}
+             <div className="mt-12 bg-white border-2 border-outline/10 rounded-3xl p-8 sm:p-10 shadow-sm space-y-8">
+                <div className="text-sm font-black text-primary uppercase tracking-[0.2em]">Topic Performance Breakdown</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                    {result.topicResults?.map(tr => (
-                     <div key={tr.topicId} className="flex flex-col gap-2">
-                        <div className="flex justify-between text-xs font-black text-primary"><span>{tr.title}</span><span>{tr.percent}%</span></div>
-                        <div className="h-2 bg-white rounded-full overflow-hidden border border-outline/10">
-                          <div className={`h-full ${tr.percent >= targetAcc ? 'bg-emerald-500' : 'bg-rose-500'}`} style={{ width: `${tr.percent}%` }} />
+                     <div key={tr.topicId} className="group bg-slate-50/50 border border-outline/10 rounded-2xl overflow-hidden transition-all hover:bg-white hover:border-primary/20">
+                        <div className="p-4 flex items-center justify-between cursor-pointer select-none" onClick={(e) => {
+                          const content = e.currentTarget.nextElementSibling;
+                          if (content) content.classList.toggle('hidden');
+                          const icon = e.currentTarget.querySelector('.expand-icon');
+                          if (icon) icon.classList.toggle('rotate-180');
+                        }}>
+                          <div className="flex items-center gap-4">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs ${tr.percent >= targetAcc ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                              {tr.percent}%
+                            </div>
+                            <div className="text-sm font-black text-primary">{tr.title}</div>
+                          </div>
+                          <span className="expand-icon material-symbols-outlined text-[20px] text-slate-400 transition-transform">expand_more</span>
+                        </div>
+                        
+                        <div className="hidden p-4 border-t border-outline/5 space-y-4 animate-slide-up">
+                          {tr.subtopicResults.map(st => (
+                            <div key={st.subtopicId} className="space-y-1.5">
+                              <div className="flex justify-between text-[11px] font-bold">
+                                <span className="text-slate-500">{st.title}</span>
+                                <span className={st.percent >= targetAcc ? 'text-emerald-600' : 'text-rose-600'}>{st.percent}%</span>
+                              </div>
+                              <div className="h-1.5 bg-white rounded-full overflow-hidden border border-outline/5">
+                                <div className={`h-full ${st.percent >= targetAcc ? 'bg-emerald-400' : 'bg-rose-400'}`} style={{ width: `${st.percent}%` }} />
+                              </div>
+                            </div>
+                          ))}
                         </div>
                      </div>
                    ))}
