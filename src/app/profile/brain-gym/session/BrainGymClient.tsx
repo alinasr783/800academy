@@ -191,12 +191,28 @@ export default function BrainGymClient() {
       });
       setQStat(newQState);
 
+      // Fetch titles for topics and subtopics
+      const [{ data: topicData }, { data: stData }] = await Promise.all([
+        supabase.from('topics').select('id, title'),
+        supabase.from('subtopics').select('id, title, topic_id')
+      ]);
+
+      const tMap = new Map<string, string>();
+      topicData?.forEach(t => tMap.set(t.id, t.title));
+      setTopicsById(tMap);
+
+      const stMap = new Map<string, { title: string; topicId: string }>();
+      stData?.forEach(st => stMap.set(st.id, { title: st.title, topicId: st.topic_id }));
+      setSubtopicsById(stMap);
+
       // Set results
-      const topicStats = new Map<string, { correct: number; total: number }>();
+      const subtopicStats = new Map<string, { correct: number; total: number }>();
+
       sortedQuestions.forEach((q: Question) => {
-        const tid = q.topic_id || "general";
-        const stats = topicStats.get(tid) || { correct: 0, total: 0 };
+        const sid = q.subtopic_id || "none";
+        const stats = subtopicStats.get(sid) || { correct: 0, total: 0 };
         stats.total += 1;
+        
         const ans = savedAnswers[q.id];
         let isC = false;
         if (q.type === 'mcq') {
@@ -207,14 +223,35 @@ export default function BrainGymClient() {
           isC = normalizeText(ans?.fillText || "") === normalizeText(q.correct_text || "");
         }
         if (isC) stats.correct++;
-        topicStats.set(tid, stats);
+        subtopicStats.set(sid, stats);
       });
 
-      const { data: topicData } = await supabase.from('topics').select('id, title').in('id', Array.from(topicStats.keys()));
-      const topicTitles = new Map((topicData || []).map(t => [t.id, t.title]));
-      const topicResults = Array.from(topicStats.entries()).map(([tid, s]) => ({
-        topicId: tid, title: topicTitles.get(tid) || 'General', correct: s.correct, total: s.total, percent: Math.round((s.correct / s.total) * 100)
-      }));
+      // Group subtopics into topics
+      const topicsGroupMap = new Map<string, { correct: number; total: number; subtopics: any[] }>();
+      subtopicStats.forEach((stats, sid) => {
+        const info = stMap.get(sid);
+        const tid = info?.topicId || "none";
+        const tStats = topicsGroupMap.get(tid) || { correct: 0, total: 0, subtopics: [] };
+        tStats.correct += stats.correct;
+        tStats.total += stats.total;
+        tStats.subtopics.push({
+          subtopicId: sid,
+          title: info?.title || 'General',
+          correct: stats.correct,
+          total: stats.total,
+          percent: Math.round((stats.correct / stats.total) * 100)
+        });
+        topicsGroupMap.set(tid, tStats);
+      });
+
+      const topicResults = Array.from(topicsGroupMap.entries()).map(([tid, s]) => ({
+        topicId: tid,
+        title: tMap.get(tid) || (tid === 'none' ? 'General' : 'Other'),
+        correct: s.correct,
+        total: s.total,
+        percent: Math.round((s.correct / s.total) * 100),
+        subtopicResults: s.subtopics.sort((a, b) => a.title.localeCompare(b.title))
+      })).sort((a, b) => a.title.localeCompare(b.title));
 
       setResult({
         sessionId: sid,
@@ -235,16 +272,14 @@ export default function BrainGymClient() {
   }
 
   async function load() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      router.push("/join?mode=login");
+    setContentLoading(true);
     try {
-      const { data: userData } = await supabase.auth.getSession();
-      if (!userData.session) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
         router.push("/join?mode=login");
         return;
       }
-      setUser(userData.session.user);
+      setUser(user);
 
       // Fetch titles
       const { data: topicData } = await supabase.from('topics').select('id, title');
