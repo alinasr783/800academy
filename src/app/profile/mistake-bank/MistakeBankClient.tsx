@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import BackButton from "@/components/BackButton";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import MathText from "@/components/MathText";
+import LoadingAnimation from "@/components/LoadingAnimation";
 
 type Asset = {
   id: string;
@@ -462,14 +463,7 @@ export default function MistakeBankClient() {
   );
 
   if (contentLoading) {
-    return (
-      <div className="flex bg-white min-h-screen items-center justify-center">
-        <div className="text-center">
-          <span className="material-symbols-outlined text-secondary text-5xl animate-spin mb-4">progress_activity</span>
-          <div className="text-xs font-black uppercase tracking-[0.2em] text-on-surface-variant">Loading Practice...</div>
-        </div>
-      </div>
-    );
+    return <LoadingAnimation fullScreen variant="portal" />;
   }
 
   return (

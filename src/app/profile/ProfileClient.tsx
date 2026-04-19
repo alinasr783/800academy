@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import motivations from "@/data/motivations.json";
 import BackButton from "@/components/BackButton";
 import Breadcrumbs from "@/components/Breadcrumbs";
+import LoadingAnimation from "@/components/LoadingAnimation";
 
 type ProfileRow = {
   id: string;
@@ -426,13 +427,7 @@ export default function ProfileClient() {
   }
 
   if (loading) {
-    return (
-      <section className="max-w-[1440px] mx-auto px-8 lg:px-12 py-10">
-        <div className="bg-surface-variant border border-outline/40 p-10 text-on-surface-variant font-medium">
-          Loading…
-        </div>
-      </section>
-    );
+    return <LoadingAnimation fullScreen variant="official" />;
   }
 
   return (
@@ -768,7 +763,12 @@ export default function ProfileClient() {
                             return (
                               <tr
                                 key={a.id}
-                                className="border-b border-outline/20 hover:bg-surface-variant/40 transition-colors"
+                                onClick={() => {
+                                  const slug = a.exams?.subjects?.slug;
+                                  if (!slug) return;
+                                  router.push(`/subjects/${slug}/exams/${a.exams.exam_number}?attempt_id=${a.id}`);
+                                }}
+                                className="border-b border-outline/20 hover:bg-primary/5 transition-all cursor-pointer group"
                               >
                                 <td className="py-4 pr-4 text-xs text-on-surface-variant font-medium">
                                   {idx + 1}
@@ -818,7 +818,12 @@ export default function ProfileClient() {
                         return (
                           <div
                             key={a.id}
-                            className="border border-outline/40 bg-surface-variant/20 rounded-xl p-4 space-y-3"
+                            onClick={() => {
+                              const slug = a.exams?.subjects?.slug;
+                              if (!slug) return;
+                              router.push(`/subjects/${slug}/exams/${a.exams.exam_number}?attempt_id=${a.id}`);
+                            }}
+                            className="border border-outline/40 bg-surface-variant/20 rounded-xl p-4 space-y-3 cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all active:scale-95"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
@@ -1190,7 +1195,11 @@ export default function ProfileClient() {
                         {practiceSessions.map((s) => {
                           const passed = s.percent_correct >= s.target_accuracy;
                           return (
-                            <div key={s.id} className="group border border-outline/40 bg-white p-5 rounded-2xl hover:border-secondary/40 hover:shadow-md transition-all flex flex-col md:flex-row md:items-center justify-between gap-6">
+                            <div 
+                              key={s.id} 
+                              onClick={() => router.push(`/profile/brain-gym/session?session_id=${s.id}`)}
+                              className="group border border-outline/40 bg-white p-5 rounded-2xl hover:border-secondary/40 hover:shadow-md transition-all flex flex-col md:flex-row md:items-center justify-between gap-6 cursor-pointer active:scale-[0.99]"
+                            >
                               <div className="flex items-center gap-5">
                                 <div className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center border-2 ${passed ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-rose-50 border-rose-100 text-rose-600'}`}>
                                   <div className="text-sm font-black leading-none">{s.percent_correct}%</div>

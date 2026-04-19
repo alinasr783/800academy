@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import MathText from "@/components/MathText";
+import LoadingAnimation from "@/components/LoadingAnimation";
 // @ts-ignore
 import renderMathInElement from 'katex/dist/contrib/auto-render';
 import 'katex/dist/katex.min.css';
@@ -502,12 +503,7 @@ export default function DashboardExamDetails() {
       ) : null}
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-24 gap-4">
-          <div className="w-12 h-12 border-4 border-slate-200 border-t-primary rounded-full animate-spin" />
-          <div className="text-slate-400 font-black text-xs uppercase tracking-widest animate-pulse">
-            Loading Content...
-          </div>
-        </div>
+        <LoadingAnimation />
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
           {/* Main Configuration Panel */}

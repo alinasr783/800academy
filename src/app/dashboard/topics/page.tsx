@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import LoadingAnimation from "@/components/LoadingAnimation";
 
 type TopicRow = {
   id: string;
@@ -220,10 +221,7 @@ export default function DashboardTopics() {
       </div>
 
       {loading ? (
-        <div className="p-20 flex flex-col items-center justify-center gap-4">
-          <div className="w-10 h-10 border-4 border-slate-100 border-t-primary rounded-full animate-spin" />
-          <div className="text-slate-400 font-bold text-xs uppercase tracking-widest animate-pulse">Loading Topics...</div>
-        </div>
+        <LoadingAnimation />
       ) : (
         <div className="overflow-auto pb-10">
           <table className="w-full text-left">

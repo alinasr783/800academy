@@ -18,7 +18,9 @@ export async function POST(req: Request) {
     correct_questions,
     duration_seconds,
     target_accuracy,
-    percent_correct
+    percent_correct,
+    question_ids,
+    answers
   } = body;
 
   if (!user_id || !topic_ids || total_questions === undefined) {
@@ -34,7 +36,9 @@ export async function POST(req: Request) {
       correct_questions,
       duration_seconds,
       target_accuracy,
-      percent_correct
+      percent_correct,
+      question_ids,
+      answers
     })
     .select("*")
     .single();

@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import BackButton from "@/components/BackButton";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import MathText from "@/components/MathText";
+import LoadingAnimation from "@/components/LoadingAnimation";
 
 // @ts-ignore
 import renderMathInElement from 'katex/dist/contrib/auto-render';
@@ -217,6 +218,8 @@ export default function ExamClient({
   offers,
 }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const attemptIdParam = searchParams.get("attempt_id");
   const [navOpen, setNavOpen] = useState(true);
   const [tab, setTab] = useState<"test" | "reference">("test");
   const [started, setStarted] = useState(false);
@@ -454,6 +457,10 @@ export default function ExamClient({
         setQuestions(qs);
         setPassagesById(pMap);
         setTopicsById(tMap);
+
+        if (attemptIdParam) {
+          loadPastAttempt(attemptIdParam, qs, tMap);
+        }
       } finally {
         if (mounted) setContentLoading(false);
       }
@@ -465,6 +472,81 @@ export default function ExamClient({
       setReferenceSheets([]);
       setContentLoading(false);
       return;
+    }
+
+    async function loadPastAttempt(aid: string, currentQuestions: Question[], topicTitles: Map<string, string>) {
+      try {
+        const { data: attempt, error: aErr } = await supabase
+          .from("exam_attempts")
+          .select("*")
+          .eq("id", aid)
+          .single();
+        
+        if (aErr || !attempt) throw new Error("Attempt not found");
+
+        const savedAnswers = attempt.answers || {};
+        const newQState = new Map<string, QuestionState>();
+        
+        currentQuestions.forEach(q => {
+          const ans = savedAnswers[q.id] || { selectedOptionIds: [], fillText: "" };
+          newQState.set(q.id, { seen: true, marked: false, ...ans });
+        });
+        setQState(newQState);
+
+        // Recalculate topic results
+        const topicStats = new Map<string, { correct: number; total: number }>();
+        currentQuestions.forEach(q => {
+          const tid = q.topic_id || "general";
+          const stats = topicStats.get(tid) || { correct: 0, total: 0 };
+          stats.total += 1;
+          
+          const ans = savedAnswers[q.id];
+          const selected = new Set<string>(ans?.selectedOptionIds || []);
+          const fill = (ans?.fillText || "").trim();
+          
+          let isCorrect = false;
+          if (q.type === "mcq") {
+            const correctOptionIds = new Set(q.options.filter(o => o.is_correct).map(o => o.id));
+            if (selected.size > 0) {
+              if (q.allow_multiple) {
+                isCorrect = selected.size === correctOptionIds.size && Array.from(selected).every(id => correctOptionIds.has(id));
+              } else {
+                isCorrect = selected.size === 1 && correctOptionIds.has(Array.from(selected)[0]);
+              }
+            }
+          } else {
+            isCorrect = normalizeText(fill) === normalizeText(q.correct_text || "") && !!q.correct_text;
+          }
+          
+          if (isCorrect) stats.correct++;
+          topicStats.set(tid, stats);
+        });
+
+        const topicResults = Array.from(topicStats.entries()).map(([tid, s]) => ({
+          topicId: tid,
+          title: topicTitles.get(tid) || 'General',
+          correct: s.correct,
+          total: s.total,
+          percent: Math.round((s.correct / s.total) * 100)
+        }));
+
+        setResult({
+          attemptId: aid,
+          score: attempt.score,
+          percent: attempt.percent_correct,
+          passed: attempt.score >= exam.min_score,
+          earnedPoints: attempt.earned_points,
+          totalPoints: attempt.total_points,
+          correctQuestions: Math.round((attempt.percent_correct / 100) * currentQuestions.length),
+          totalQuestions: currentQuestions.length,
+          questionsPercent: attempt.percent_correct,
+          durationSeconds: attempt.duration_seconds,
+          topicResults
+        });
+        setStarted(true);
+      } catch (e) {
+        console.error("Error loading past attempt:", e);
+      }
     }
 
     loadContent();
@@ -923,20 +1005,13 @@ export default function ExamClient({
   return (
     <div className="relative bg-white border-2 border-outline/30 rounded-2xl shadow-soft-xl overflow-hidden">
       {/* ── Checking access modal ── */}
-      {checkingAccess ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm">
-          <div className="w-full max-w-lg bg-white border-2 border-outline/30 rounded-2xl shadow-2xl p-6 sm:p-8">
-            <div className="flex items-center gap-3 mb-4">
-              <span className="material-symbols-outlined text-secondary text-2xl animate-spin">progress_activity</span>
-              <div className="text-xs font-black uppercase tracking-[0.2em] text-on-surface-variant">
-                Checking access
-              </div>
-            </div>
-            <div className="text-xl sm:text-2xl font-extrabold text-primary tracking-tight">
-              Please wait…
-            </div>
-          </div>
-        </div>
+      {(checkingAccess || contentLoading) ? (
+        <LoadingAnimation fullScreen variant="portal" />
+      ) : null}
+
+      {/* ── Submitting loader ── */}
+      {submitting ? (
+        <LoadingAnimation fullScreen variant="result" />
       ) : null}
 
       {/* ── Paywall modal (ALL ENGLISH) ── */}

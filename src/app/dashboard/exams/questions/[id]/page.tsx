@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import MathText from "@/components/MathText";
+import LoadingAnimation from "@/components/LoadingAnimation";
 
 type QuestionRow = {
   id: string;
@@ -418,12 +419,7 @@ export default function DashboardQuestionDetails() {
       ) : null}
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-24 gap-4">
-          <div className="w-12 h-12 border-4 border-slate-200 border-t-primary rounded-full animate-spin" />
-          <div className="text-slate-400 font-black text-xs uppercase tracking-widest animate-pulse transition-all">
-            Loading Builder...
-          </div>
-        </div>
+        <LoadingAnimation />
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-10 items-start pb-24">
           <div className="xl:col-span-8 space-y-10">

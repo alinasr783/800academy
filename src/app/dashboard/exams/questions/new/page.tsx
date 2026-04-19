@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import MathText from "@/components/MathText";
+import LoadingAnimation from "@/components/LoadingAnimation";
 
 type ExamRow = { id: string; exam_number: number; title: string; subject_id: string; passages: PassageRow[] };
 type PassageRow = { id: string; title: string | null; kind: "reading" | "reference" };
@@ -314,12 +315,7 @@ function NewQuestionContent() {
       ) : null}
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-24 gap-4">
-          <div className="w-12 h-12 border-4 border-slate-200 border-t-primary rounded-full animate-spin" />
-          <div className="text-slate-400 font-black text-xs uppercase tracking-widest animate-pulse transition-all">
-            Loading Builder...
-          </div>
-        </div>
+        <LoadingAnimation />
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-10 items-start pb-24">
           {/* Main Question Content */}
@@ -642,7 +638,7 @@ function NewQuestionContent() {
 
 export default function DashboardNewQuestion() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center py-24 text-slate-400 font-bold uppercase tracking-widest animate-pulse">Initializing...</div>}>
+    <Suspense fallback={<LoadingAnimation />}>
       <NewQuestionContent />
     </Suspense>
   );

@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import BackButton from "@/components/BackButton";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import MathText from "@/components/MathText";
+import LoadingAnimation from "@/components/LoadingAnimation";
 
 // --- Types ---
 type Asset = {
@@ -111,9 +112,23 @@ export default function BrainGymClient() {
 
   const questionTopRef = useRef<HTMLDivElement>(null);
 
-  // Load Content
+  const sessionIdParam = searchParams.get("session_id");
+
   useEffect(() => {
-    async function load() {
+    if (sessionIdParam) {
+      loadPastSession(sessionIdParam);
+      return;
+    }
+    if (topicIds.length === 0) {
+      router.push("/profile");
+      return;
+    }
+    load();
+  }, [topicIds, limit, router, sessionIdParam]);
+
+  async function loadPastSession(sid: string) {
+    setContentLoading(true);
+    try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         router.push("/join?mode=login");
@@ -121,33 +136,126 @@ export default function BrainGymClient() {
       }
       setUser(user);
 
-      try {
-        const res = await fetch(`/api/practice/questions?topic_ids=${topicIds.join(",")}&limit=${limit}`);
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || "Failed to load questions");
-        
-        const qs = (json.items || []).map((q: any, idx: number) => ({ ...q, question_number: idx + 1 }));
-        if (qs.length === 0) throw new Error("No questions found for the selected topics. Try selecting different topics.");
-        
-        setQuestions(qs);
-        const states = new Map<string, QuestionState>();
-        qs.forEach((q: Question) => {
-          states.set(q.id, { seen: false, marked: false, selectedOptionIds: [], fillText: "" });
-        });
-        setQStat(states);
-        
-        if (qs.length > 0) {
-          states.get(qs[0].id)!.seen = true;
-          setQStat(new Map(states));
+      const { data: session, error: sErr } = await supabase
+        .from("practice_sessions")
+        .select("*")
+        .eq("id", sid)
+        .single();
+      
+      if (sErr || !session) throw new Error("Session not found");
+
+      // Load specific questions
+      const { data: qData, error: qErr } = await supabase
+        .from("exam_questions")
+        .select(`
+          *,
+          prompt_assets:exam_question_assets(*),
+          explanation_assets:exam_question_assets(*),
+          options:exam_question_options(*),
+          passage:exam_passages(*)
+        `)
+        .in("id", session.question_ids);
+
+      if (qErr) throw qErr;
+
+      // Filter assets by kind
+      const formattedQuestions = (qData || []).map((q: any) => ({
+        ...q,
+        prompt_assets: q.prompt_assets.filter((a: any) => a.kind === 'prompt'),
+        explanation_assets: q.explanation_assets.filter((a: any) => a.kind === 'explanation'),
+        options: q.options.sort((a: any, b: any) => a.option_number - b.option_number)
+      }));
+
+      // Sort questions based on the original session.question_ids order
+      const sortedQuestions = session.question_ids.map((id: string) => formattedQuestions.find(q => q.id === id)).filter(Boolean);
+
+      setQuestions(sortedQuestions);
+
+      // Reconstruct qState from saved answers
+      const savedAnswers = session.answers || {};
+      const newQState = new Map<string, QuestionState>();
+      sortedQuestions.forEach(q => {
+        const ans = savedAnswers[q.id] || { selectedOptionIds: [], fillText: "" };
+        newQState.set(q.id, { seen: true, marked: false, ...ans });
+      });
+      setQStat(newQState);
+
+      // Set results
+      const topicStats = new Map<string, { correct: number; total: number }>();
+      sortedQuestions.forEach(q => {
+        const tid = q.topic_id || "general";
+        const stats = topicStats.get(tid) || { correct: 0, total: 0 };
+        stats.total += 1;
+        const ans = savedAnswers[q.id];
+        let isC = false;
+        if (q.type === 'mcq') {
+          const cIds = q.options.filter(o => o.is_correct).map(o => o.id);
+          const sel = ans?.selectedOptionIds || [];
+          isC = cIds.length === sel.length && cIds.every(id => sel.includes(id));
+        } else {
+          isC = normalizeText(ans?.fillText || "") === normalizeText(q.correct_text || "");
         }
-      } catch (e: any) {
-        setError(e.message);
-      } finally {
-        setContentLoading(false);
-      }
+        if (isC) stats.correct++;
+        topicStats.set(tid, stats);
+      });
+
+      const { data: topicData } = await supabase.from('topics').select('id, title').in('id', Array.from(topicStats.keys()));
+      const topicTitles = new Map((topicData || []).map(t => [t.id, t.title]));
+      const topicResults = Array.from(topicStats.entries()).map(([tid, s]) => ({
+        topicId: tid, title: topicTitles.get(tid) || 'General', correct: s.correct, total: s.total, percent: Math.round((s.correct / s.total) * 100)
+      }));
+
+      setResult({
+        sessionId: sid,
+        correct: session.correct_questions,
+        total: session.total_questions,
+        percent: session.percent_correct,
+        passed: session.percent_correct >= session.target_accuracy,
+        target: session.target_accuracy,
+        durationSeconds: session.duration_seconds,
+        topicResults
+      });
+      setStarted(true);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setContentLoading(false);
     }
-    load();
-  }, [topicIds, limit, router]);
+  }
+
+  async function load() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      router.push("/join?mode=login");
+      return;
+    }
+    setUser(user);
+
+    try {
+      const res = await fetch(`/api/practice/questions?topic_ids=${topicIds.join(",")}&limit=${limit}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to load questions");
+      
+      const qs = (json.items || []).map((q: any, idx: number) => ({ ...q, question_number: idx + 1 }));
+      if (qs.length === 0) throw new Error("No questions found for the selected topics. Try selecting different topics.");
+      
+      setQuestions(qs);
+      const states = new Map<string, QuestionState>();
+      qs.forEach((q: Question) => {
+        states.set(q.id, { seen: false, marked: false, selectedOptionIds: [], fillText: "" });
+      });
+      setQStat(states);
+      
+      if (qs.length > 0) {
+        states.get(qs[0].id)!.seen = true;
+        setQStat(new Map(states));
+      }
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setContentLoading(false);
+    }
+  }
 
   // Timer logic - Match Mistake Bank
   useEffect(() => {
@@ -234,12 +342,23 @@ export default function BrainGymClient() {
         topicId: tid, title: topicTitles.get(tid) || 'General', correct: s.correct, total: s.total, percent: Math.round((s.correct / s.total) * 100)
       }));
 
+      const answers: Record<string, any> = {};
+      questions.forEach(q => {
+        const st = qState.get(q.id);
+        answers[q.id] = {
+          selectedOptionIds: st?.selectedOptionIds || [],
+          fillText: st?.fillText || ""
+        };
+      });
+
       await fetch('/api/practice/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: user.id, topic_ids: topicIds, total_questions: questions.length, correct_questions: correct,
-          duration_seconds: duration, target_accuracy: targetAcc, percent_correct: percent
+          duration_seconds: duration, target_accuracy: targetAcc, percent_correct: percent,
+          question_ids: questions.map(q => q.id),
+          answers
         })
       });
 
@@ -260,14 +379,7 @@ export default function BrainGymClient() {
   const timerUrgent = timeLeft < 60;
 
   if (contentLoading) {
-    return (
-      <div className="flex bg-white min-h-screen items-center justify-center">
-        <div className="text-center">
-          <span className="material-symbols-outlined text-secondary text-5xl animate-spin mb-4">progress_activity</span>
-          <div className="text-xs font-black uppercase tracking-[0.2em] text-on-surface-variant">Entering Gym...</div>
-        </div>
-      </div>
-    );
+    return <LoadingAnimation fullScreen variant="portal" />;
   }
 
   if (error) {
