@@ -250,7 +250,7 @@ export default function ProfileClient() {
       setEntitlements(entRows ?? []);
       setAttempts(attRows ?? []);
       setOrders(orderRows ?? []);
-      
+
       // Shuffle mistakeRows with identical difficulty to maintain secondary arbitrary sort
       const finalMistakes = (mistakeRows ?? []).sort((a, b) => {
         if (a.difficulty_score === b.difficulty_score) {
@@ -272,7 +272,7 @@ export default function ProfileClient() {
 
   useEffect(() => {
     if (currentTab !== 'braingym' || allTopics.length > 0) return;
-    
+
     async function loadTopics() {
       const { data } = await supabase.from('topics').select('id, title, subject_id');
       setAllTopics(data ?? []);
@@ -450,11 +450,10 @@ export default function ProfileClient() {
               document.getElementById('profile-content-main')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
           }}
-          className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-extrabold transition-all outline-none ${
-            currentTab === "overview"
-              ? "bg-primary text-white shadow-md"
-              : "text-on-surface-variant hover:bg-surface-variant hover:text-primary"
-          }`}
+          className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-extrabold transition-all outline-none ${currentTab === "overview"
+            ? "bg-primary text-white shadow-md"
+            : "text-on-surface-variant hover:bg-surface-variant hover:text-primary"
+            }`}
         >
           Overview
         </button>
@@ -465,11 +464,10 @@ export default function ProfileClient() {
               document.getElementById('profile-content-main')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
           }}
-          className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-extrabold transition-all outline-none flex items-center justify-center gap-2 ${
-            currentTab === "mistakes"
-              ? "bg-rose-500 text-white shadow-md"
-              : "text-on-surface-variant hover:bg-surface-variant hover:text-rose-500"
-          }`}
+          className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-extrabold transition-all outline-none flex items-center justify-center gap-2 ${currentTab === "mistakes"
+            ? "bg-rose-500 text-white shadow-md"
+            : "text-on-surface-variant hover:bg-surface-variant hover:text-rose-500"
+            }`}
         >
           Mistake Bank
           <span className={`px-2 py-0.5 rounded-full text-[10px] ${currentTab === 'mistakes' ? 'bg-white/20' : 'bg-surface-variant text-on-surface-variant border border-outline/40'}`}>
@@ -484,11 +482,10 @@ export default function ProfileClient() {
               document.getElementById('profile-content-main')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
           }}
-          className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-extrabold outline-none flex items-center justify-center gap-2 ${
-            currentTab === "braingym"
-              ? "bg-primary text-white shadow-md"
-              : "text-on-surface-variant hover:bg-surface-variant hover:text-primary transition-all"
-          }`}
+          className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-extrabold outline-none flex items-center justify-center gap-2 ${currentTab === "braingym"
+            ? "bg-primary text-white shadow-md"
+            : "text-on-surface-variant hover:bg-surface-variant hover:text-primary transition-all"
+            }`}
         >
           <span className="material-symbols-outlined text-[20px]">fitness_center</span>
           Brain Gym
@@ -643,125 +640,175 @@ export default function ProfileClient() {
             <>
               {/* Active Subscriptions */}
               <div className="bg-white border border-outline/60 shadow-soft-xl p-6 md:p-8 rounded-2xl">
-            <div className="flex items-end justify-between gap-4 md:gap-8 mb-8">
-              <div>
-                <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
-                  Access
+                <div className="flex items-end justify-between gap-4 md:gap-8 mb-8">
+                  <div>
+                    <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
+                      Access
+                    </div>
+                    <h2 className="font-headline text-2xl md:text-4xl font-extrabold text-primary tracking-tighter">
+                      Active Subscriptions
+                    </h2>
+                  </div>
+                  <div className="text-[10px] md:text-xs uppercase tracking-widest text-on-surface-variant font-bold whitespace-nowrap">
+                    {expiringSoon.length ? `${expiringSoon.length} expiring soon` : "All good"}
+                  </div>
                 </div>
-                <h2 className="font-headline text-2xl md:text-4xl font-extrabold text-primary tracking-tighter">
-                  Active Subscriptions
-                </h2>
-              </div>
-              <div className="text-[10px] md:text-xs uppercase tracking-widest text-on-surface-variant font-bold whitespace-nowrap">
-                {expiringSoon.length ? `${expiringSoon.length} expiring soon` : "All good"}
-              </div>
-            </div>
 
-            {activeEntitlements.length ? (
-              <div className="space-y-6">
-                {activeEntitlements.map((e) => {
-                  const percent = progressPercentBySubject.get(e.subject_id) ?? 0;
-                  const soon = e.daysLeft <= 7;
-                  return (
-                    <button
-                      key={e.id}
-                      type="button"
-                      onClick={() => {
-                        const slug = e.subjects?.slug;
-                        if (!slug) return;
-                        router.push(`/subjects/${slug}?focus=exams&hideOffers=1`);
-                      }}
-                      className={[
-                        "w-full text-left rounded-xl transition-all hover:shadow-md",
-                        soon
-                          ? "border border-amber-200 bg-amber-50/40 p-6"
-                          : "border border-outline/60 bg-surface-variant/30 p-6",
-                      ].join(" ")}
-                    >
-                      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
-                        <div>
-                          <div className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant">
-                            {e.subjects?.track ?? "Subject"}
-                          </div>
-                          <div className="text-xl md:text-2xl font-extrabold text-primary mt-2 tracking-tight">
-                            {e.subjects?.title ?? "Subscription"}
-                          </div>
-                          <div className="text-sm text-on-surface-variant font-medium mt-2">
-                            Expires in {e.daysLeft} day{e.daysLeft === 1 ? "" : "s"}
-                          </div>
-                        </div>
+                {activeEntitlements.length ? (
+                  <div className="space-y-6">
+                    {activeEntitlements.map((e) => {
+                      const percent = progressPercentBySubject.get(e.subject_id) ?? 0;
+                      const soon = e.daysLeft <= 7;
+                      return (
+                        <button
+                          key={e.id}
+                          type="button"
+                          onClick={() => {
+                            const slug = e.subjects?.slug;
+                            if (!slug) return;
+                            router.push(`/subjects/${slug}?focus=exams&hideOffers=1`);
+                          }}
+                          className={[
+                            "w-full text-left rounded-xl transition-all hover:shadow-md",
+                            soon
+                              ? "border border-amber-200 bg-amber-50/40 p-6"
+                              : "border border-outline/60 bg-surface-variant/30 p-6",
+                          ].join(" ")}
+                        >
+                          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
+                            <div>
+                              <div className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant">
+                                {e.subjects?.track ?? "Subject"}
+                              </div>
+                              <div className="text-xl md:text-2xl font-extrabold text-primary mt-2 tracking-tight">
+                                {e.subjects?.title ?? "Subscription"}
+                              </div>
+                              <div className="text-sm text-on-surface-variant font-medium mt-2">
+                                Expires in {e.daysLeft} day{e.daysLeft === 1 ? "" : "s"}
+                              </div>
+                            </div>
 
-                        <div className="min-w-0 md:min-w-[260px] w-full md:w-auto">
-                          <div className="flex items-center justify-between text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-3">
-                            <span>Progress</span>
-                            <span>{percent}%</span>
+                            <div className="min-w-0 md:min-w-[260px] w-full md:w-auto">
+                              <div className="flex items-center justify-between text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-3">
+                                <span>Progress</span>
+                                <span>{percent}%</span>
+                              </div>
+                              <div className="h-3 bg-white border border-outline/60 overflow-hidden rounded-full">
+                                <div
+                                  className="h-full bg-secondary rounded-full transition-all duration-500"
+                                  style={{ width: `${percent}%` }}
+                                />
+                              </div>
+                              <div className="text-xs text-on-surface-variant font-medium mt-2">
+                                {Math.round(percent / 5)} / 20 exams submitted
+                              </div>
+                            </div>
                           </div>
-                          <div className="h-3 bg-white border border-outline/60 overflow-hidden rounded-full">
-                            <div
-                              className="h-full bg-secondary rounded-full transition-all duration-500"
-                              style={{ width: `${percent}%` }}
-                            />
-                          </div>
-                          <div className="text-xs text-on-surface-variant font-medium mt-2">
-                            {Math.round(percent / 5)} / 20 exams submitted
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="border border-outline/60 bg-surface-variant px-6 py-10 text-on-surface-variant font-medium rounded-xl">
+                    No active subscriptions yet.
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="border border-outline/60 bg-surface-variant px-6 py-10 text-on-surface-variant font-medium rounded-xl">
-                No active subscriptions yet.
-              </div>
-            )}
-          </div>
 
-          {/* ── My Scores ── */}
-          <div className="bg-white border border-outline/60 shadow-soft-xl p-6 md:p-8 rounded-2xl">
-            <div className="flex items-end justify-between gap-4 md:gap-8 mb-8">
-              <div>
-                <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
-                  Performance
+              {/* ── My Scores ── */}
+              <div className="bg-white border border-outline/60 shadow-soft-xl p-6 md:p-8 rounded-2xl">
+                <div className="flex items-end justify-between gap-4 md:gap-8 mb-8">
+                  <div>
+                    <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
+                      Performance
+                    </div>
+                    <h2 className="font-headline text-2xl md:text-4xl font-extrabold text-primary tracking-tighter">
+                      My Scores
+                    </h2>
+                  </div>
+                  <div className="text-[10px] md:text-xs uppercase tracking-widest text-on-surface-variant font-bold whitespace-nowrap">
+                    {attempts.length} submission{attempts.length === 1 ? "" : "s"}
+                  </div>
                 </div>
-                <h2 className="font-headline text-2xl md:text-4xl font-extrabold text-primary tracking-tighter">
-                  My Scores
-                </h2>
-              </div>
-              <div className="text-[10px] md:text-xs uppercase tracking-widest text-on-surface-variant font-bold whitespace-nowrap">
-                {attempts.length} submission{attempts.length === 1 ? "" : "s"}
-              </div>
-            </div>
 
-            {attempts.length ? (
-              <>
-                {/* Desktop table */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b-2 border-outline/40">
-                        <th className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant py-3 pr-4">
-                          #
-                        </th>
-                        <th className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant py-3 pr-4">
-                          Exam
-                        </th>
-                        <th className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant py-3 pr-4">
-                          Subject
-                        </th>
-                        <th className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant py-3 pr-4">
-                          Score
-                        </th>
-                        <th className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant py-3 pr-4">
-                          Duration
-                        </th>
-                        <th className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant py-3">
-                          Date
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                {attempts.length ? (
+                  <>
+                    {/* Desktop table */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b-2 border-outline/40">
+                            <th className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant py-3 pr-4">
+                              #
+                            </th>
+                            <th className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant py-3 pr-4">
+                              Exam
+                            </th>
+                            <th className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant py-3 pr-4">
+                              Subject
+                            </th>
+                            <th className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant py-3 pr-4">
+                              Score
+                            </th>
+                            <th className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant py-3 pr-4">
+                              Duration
+                            </th>
+                            <th className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant py-3">
+                              Date
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {attempts.map((a, idx) => {
+                            const subjectTitle =
+                              (a.exams?.subject_id
+                                ? subjectTitleMap.get(a.exams.subject_id)
+                                : undefined) ?? "—";
+                            const scoreStyles = getScoreStyles(a.score);
+                            return (
+                              <tr
+                                key={a.id}
+                                className="border-b border-outline/20 hover:bg-surface-variant/40 transition-colors"
+                              >
+                                <td className="py-4 pr-4 text-xs text-on-surface-variant font-medium">
+                                  {idx + 1}
+                                </td>
+                                <td className="py-4 pr-4 text-sm font-bold text-primary">
+                                  {a.exams?.title ?? `Exam #${a.exams?.exam_number ?? "—"}`}
+                                </td>
+                                <td className="py-4 pr-4 text-sm text-on-surface-variant font-medium">
+                                  {subjectTitle}
+                                </td>
+                                <td className="py-4 pr-4">
+                                  <span className={`inline-flex items-center gap-1.5 border font-extrabold text-sm px-3 py-1 rounded-lg ${scoreStyles.wrapper}`}>
+                                    <span
+                                      className={`material-symbols-outlined text-sm ${scoreStyles.icon}`}
+                                      style={{ fontVariationSettings: "'FILL' 1" }}
+                                    >
+                                      star
+                                    </span>
+                                    {a.score} / 800
+                                  </span>
+                                </td>
+                                <td className="py-4 pr-4 text-sm text-on-surface-variant font-medium">
+                                  {formatDuration(a.duration_seconds)}
+                                </td>
+                                <td className="py-4 text-sm text-on-surface-variant font-medium">
+                                  {new Date(a.submitted_at).toLocaleDateString(undefined, {
+                                    year: "numeric",
+                                    month: "short",
+                                    day: "numeric",
+                                  })}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Mobile cards */}
+                    <div className="md:hidden space-y-4">
                       {attempts.map((a, idx) => {
                         const subjectTitle =
                           (a.exams?.subject_id
@@ -769,150 +816,100 @@ export default function ProfileClient() {
                             : undefined) ?? "—";
                         const scoreStyles = getScoreStyles(a.score);
                         return (
-                          <tr
+                          <div
                             key={a.id}
-                            className="border-b border-outline/20 hover:bg-surface-variant/40 transition-colors"
+                            className="border border-outline/40 bg-surface-variant/20 rounded-xl p-4 space-y-3"
                           >
-                            <td className="py-4 pr-4 text-xs text-on-surface-variant font-medium">
-                              {idx + 1}
-                            </td>
-                            <td className="py-4 pr-4 text-sm font-bold text-primary">
-                              {a.exams?.title ?? `Exam #${a.exams?.exam_number ?? "—"}`}
-                            </td>
-                            <td className="py-4 pr-4 text-sm text-on-surface-variant font-medium">
-                              {subjectTitle}
-                            </td>
-                            <td className="py-4 pr-4">
-                              <span className={`inline-flex items-center gap-1.5 border font-extrabold text-sm px-3 py-1 rounded-lg ${scoreStyles.wrapper}`}>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="text-[10px] uppercase tracking-[0.15em] font-black text-on-surface-variant mb-1">
+                                  #{idx + 1} · {subjectTitle}
+                                </div>
+                                <div className="text-sm font-bold text-primary truncate">
+                                  {a.exams?.title ?? `Exam #${a.exams?.exam_number ?? "—"}`}
+                                </div>
+                              </div>
+                              <span className={`inline-flex items-center gap-1 border font-extrabold text-xs px-2.5 py-1 rounded-lg flex-shrink-0 ${scoreStyles.wrapper}`}>
                                 <span
-                                  className={`material-symbols-outlined text-sm ${scoreStyles.icon}`}
+                                  className={`material-symbols-outlined text-xs ${scoreStyles.icon}`}
                                   style={{ fontVariationSettings: "'FILL' 1" }}
                                 >
                                   star
                                 </span>
-                                {a.score} / 800
+                                {a.score}
                               </span>
-                            </td>
-                            <td className="py-4 pr-4 text-sm text-on-surface-variant font-medium">
-                              {formatDuration(a.duration_seconds)}
-                            </td>
-                            <td className="py-4 text-sm text-on-surface-variant font-medium">
-                              {new Date(a.submitted_at).toLocaleDateString(undefined, {
-                                year: "numeric",
-                                month: "short",
-                                day: "numeric",
-                              })}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Mobile cards */}
-                <div className="md:hidden space-y-4">
-                  {attempts.map((a, idx) => {
-                    const subjectTitle =
-                      (a.exams?.subject_id
-                        ? subjectTitleMap.get(a.exams.subject_id)
-                        : undefined) ?? "—";
-                    const scoreStyles = getScoreStyles(a.score);
-                    return (
-                      <div
-                        key={a.id}
-                        className="border border-outline/40 bg-surface-variant/20 rounded-xl p-4 space-y-3"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="text-[10px] uppercase tracking-[0.15em] font-black text-on-surface-variant mb-1">
-                              #{idx + 1} · {subjectTitle}
                             </div>
-                            <div className="text-sm font-bold text-primary truncate">
-                              {a.exams?.title ?? `Exam #${a.exams?.exam_number ?? "—"}`}
+                            <div className="flex items-center gap-4 text-xs text-on-surface-variant font-medium">
+                              <span className="flex items-center gap-1">
+                                <span className="material-symbols-outlined text-sm">timer</span>
+                                {formatDuration(a.duration_seconds)}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <span className="material-symbols-outlined text-sm">calendar_today</span>
+                                {new Date(a.submitted_at).toLocaleDateString(undefined, {
+                                  month: "short",
+                                  day: "numeric",
+                                })}
+                              </span>
                             </div>
                           </div>
-                          <span className={`inline-flex items-center gap-1 border font-extrabold text-xs px-2.5 py-1 rounded-lg flex-shrink-0 ${scoreStyles.wrapper}`}>
-                            <span
-                              className={`material-symbols-outlined text-xs ${scoreStyles.icon}`}
-                              style={{ fontVariationSettings: "'FILL' 1" }}
-                            >
-                              star
-                            </span>
-                            {a.score}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-4 text-xs text-on-surface-variant font-medium">
-                          <span className="flex items-center gap-1">
-                            <span className="material-symbols-outlined text-sm">timer</span>
-                            {formatDuration(a.duration_seconds)}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <span className="material-symbols-outlined text-sm">calendar_today</span>
-                            {new Date(a.submitted_at).toLocaleDateString(undefined, {
-                              month: "short",
-                              day: "numeric",
-                            })}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            ) : (
-              <div className="border border-outline/60 bg-surface-variant px-6 py-10 text-on-surface-variant font-medium rounded-xl text-center">
-                <span className="material-symbols-outlined text-4xl text-on-surface-variant/40 mb-3 block">
-                  assignment
-                </span>
-                No submissions yet. Start an exam to see your scores here!
-              </div>
-            )}
-          </div>
-
-          {/* Previous Orders */}
-          <div className="bg-white border border-outline/60 shadow-soft-xl p-6 md:p-8 rounded-2xl">
-            <div className="flex items-end justify-between gap-4 md:gap-8 mb-8">
-              <div>
-                <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
-                  History
-                </div>
-                <h2 className="font-headline text-2xl md:text-4xl font-extrabold text-primary tracking-tighter">
-                  Previous Orders
-                </h2>
-              </div>
-            </div>
-
-            {orders.length ? (
-              <div className="space-y-4">
-                {orders.map((o) => (
-                  <div
-                    key={o.id}
-                    className="border border-outline/60 bg-surface-variant/30 p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4 rounded-xl"
-                  >
-                    <div>
-                      <div className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant">
-                        {new Date(o.created_at).toLocaleDateString()}
-                      </div>
-                      <div className="text-sm font-extrabold text-primary mt-2 tracking-tight">
-                        Order {o.id.slice(0, 8).toUpperCase()}
-                      </div>
-                      <div className="text-xs text-on-surface-variant font-medium mt-1">
-                        Status: {o.status}
-                      </div>
+                        );
+                      })}
                     </div>
-                    <div className="text-2xl font-extrabold text-primary">
-                      {formatMoney(o.total_cents, o.currency)}
-                    </div>
+                  </>
+                ) : (
+                  <div className="border border-outline/60 bg-surface-variant px-6 py-10 text-on-surface-variant font-medium rounded-xl text-center">
+                    <span className="material-symbols-outlined text-4xl text-on-surface-variant/40 mb-3 block">
+                      assignment
+                    </span>
+                    No submissions yet. Start an exam to see your scores here!
                   </div>
-                ))}
+                )}
               </div>
-            ) : (
-              <div className="border border-outline/60 bg-surface-variant px-6 py-10 text-on-surface-variant font-medium rounded-xl">
-                No orders yet.
+
+              {/* Previous Orders */}
+              <div className="bg-white border border-outline/60 shadow-soft-xl p-6 md:p-8 rounded-2xl">
+                <div className="flex items-end justify-between gap-4 md:gap-8 mb-8">
+                  <div>
+                    <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
+                      History
+                    </div>
+                    <h2 className="font-headline text-2xl md:text-4xl font-extrabold text-primary tracking-tighter">
+                      Previous Orders
+                    </h2>
+                  </div>
+                </div>
+
+                {orders.length ? (
+                  <div className="space-y-4">
+                    {orders.map((o) => (
+                      <div
+                        key={o.id}
+                        className="border border-outline/60 bg-surface-variant/30 p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4 rounded-xl"
+                      >
+                        <div>
+                          <div className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant">
+                            {new Date(o.created_at).toLocaleDateString()}
+                          </div>
+                          <div className="text-sm font-extrabold text-primary mt-2 tracking-tight">
+                            Order {o.id.slice(0, 8).toUpperCase()}
+                          </div>
+                          <div className="text-xs text-on-surface-variant font-medium mt-1">
+                            Status: {o.status}
+                          </div>
+                        </div>
+                        <div className="text-2xl font-extrabold text-primary">
+                          {formatMoney(o.total_cents, o.currency)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="border border-outline/60 bg-surface-variant px-6 py-10 text-on-surface-variant font-medium rounded-xl">
+                    No orders yet.
+                  </div>
+                )}
               </div>
-            )}
-          </div>
             </>
           )}
 
@@ -939,59 +936,59 @@ export default function ProfileClient() {
               </div>
 
               {mistakes.length > 0 ? (
-                 <div className="space-y-4">
-                   {mistakes.slice(0, visibleMistakes).map((m, idx) => {
-                     const subjTitle = m.exam_questions?.exams?.subjects?.title ?? "Subject";
-                     const examTitle = m.exam_questions?.exams?.title ?? "Exam";
-                     return (
-                       <div
-                         key={m.id}
-                         className="border border-outline/60 bg-surface-variant/30 p-5 flex flex-col md:flex-row md:items-center justify-between gap-6 rounded-xl hover:shadow-md transition-shadow"
-                       >
-                         <div className="min-w-0 flex-1">
-                           <div className="flex items-center gap-3 mb-2">
-                             <span className="inline-flex items-center gap-1 bg-white border border-outline/40 px-2 py-0.5 rounded-md text-[10px] font-black text-on-surface-variant uppercase tracking-widest">
-                               <span className="material-symbols-outlined text-[14px]">book</span>
-                               {subjTitle}
-                             </span>
-                             <span className="text-[10px] uppercase font-bold text-on-surface-variant/70 tracking-widest truncate">
-                               {examTitle}
-                             </span>
-                           </div>
-                           
-                           <div className="text-sm font-bold text-primary truncate">
-                             {m.exam_questions?.prompt_text ? (
-                               <div className="line-clamp-2" dangerouslySetInnerHTML={{ __html: m.exam_questions.prompt_text }} />
-                             ) : (
-                               `Question #${m.exam_questions?.question_number ?? "?"}`
-                             )}
-                           </div>
-                           <div className="text-xs font-medium text-on-surface-variant mt-3 flex items-center gap-4">
-                             <span className="flex items-center gap-1.5 text-rose-600 font-bold bg-rose-50 px-2 py-1 rounded-md">
-                               <span className="material-symbols-outlined text-[14px]">error</span>
-                               {m.error_count} mistake{m.error_count !== 1 ? 's' : ''}
-                             </span>
-                             <span className="flex items-center gap-1.5 bg-white border border-outline/40 px-2 py-1 rounded-md">
-                               <span className="material-symbols-outlined text-[14px] text-amber-500">signal_cellular_alt</span>
-                               Difficulty: {m.difficulty_score}
-                             </span>
-                           </div>
-                         </div>
-                       </div>
-                     );
-                   })}
- 
-                   {mistakes.length > visibleMistakes && (
-                     <div className="pt-6 flex justify-center">
-                       <button
-                         onClick={() => setVisibleMistakes(prev => prev + 10)}
-                         className="px-10 py-3 rounded-xl border-2 border-outline/40 font-extrabold text-sm text-on-surface-variant hover:bg-slate-50 transition-all active:scale-95"
-                       >
-                         Show More Mistake Questions
-                       </button>
-                     </div>
-                   )}
-                 </div>
+                <div className="space-y-4">
+                  {mistakes.slice(0, visibleMistakes).map((m, idx) => {
+                    const subjTitle = m.exam_questions?.exams?.subjects?.title ?? "Subject";
+                    const examTitle = m.exam_questions?.exams?.title ?? "Exam";
+                    return (
+                      <div
+                        key={m.id}
+                        className="border border-outline/60 bg-surface-variant/30 p-5 flex flex-col md:flex-row md:items-center justify-between gap-6 rounded-xl hover:shadow-md transition-shadow"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className="inline-flex items-center gap-1 bg-white border border-outline/40 px-2 py-0.5 rounded-md text-[10px] font-black text-on-surface-variant uppercase tracking-widest">
+                              <span className="material-symbols-outlined text-[14px]">book</span>
+                              {subjTitle}
+                            </span>
+                            <span className="text-[10px] uppercase font-bold text-on-surface-variant/70 tracking-widest truncate">
+                              {examTitle}
+                            </span>
+                          </div>
+
+                          <div className="text-sm font-bold text-primary truncate">
+                            {m.exam_questions?.prompt_text ? (
+                              <div className="line-clamp-2" dangerouslySetInnerHTML={{ __html: m.exam_questions.prompt_text }} />
+                            ) : (
+                              `Question #${m.exam_questions?.question_number ?? "?"}`
+                            )}
+                          </div>
+                          <div className="text-xs font-medium text-on-surface-variant mt-3 flex items-center gap-4">
+                            <span className="flex items-center gap-1.5 text-rose-600 font-bold bg-rose-50 px-2 py-1 rounded-md">
+                              <span className="material-symbols-outlined text-[14px]">error</span>
+                              {m.error_count} mistake{m.error_count !== 1 ? 's' : ''}
+                            </span>
+                            <span className="flex items-center gap-1.5 bg-white border border-outline/40 px-2 py-1 rounded-md">
+                              <span className="material-symbols-outlined text-[14px] text-amber-500">signal_cellular_alt</span>
+                              Difficulty: {m.difficulty_score}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {mistakes.length > visibleMistakes && (
+                    <div className="pt-6 flex justify-center">
+                      <button
+                        onClick={() => setVisibleMistakes(prev => prev + 10)}
+                        className="px-10 py-3 rounded-xl border-2 border-outline/40 font-extrabold text-sm text-on-surface-variant hover:bg-slate-50 transition-all active:scale-95"
+                      >
+                        Show More Mistake Questions
+                      </button>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="border border-outline/60 bg-surface-variant px-6 py-12 text-on-surface-variant font-medium rounded-xl text-center">
                   <span className="material-symbols-outlined text-5xl text-on-surface-variant/30 mb-4 block">
@@ -1016,7 +1013,7 @@ export default function ProfileClient() {
                   <p className="max-w-md mx-auto text-on-surface-variant font-medium leading-relaxed">
                     Brain Gym is a premium feature for subscribed students. Unlock a subject to start building custom practice sets.
                   </p>
-                  <button 
+                  <button
                     onClick={() => router.push('/')}
                     className="mt-8 bg-primary text-white px-8 py-3.5 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-lg active:scale-95"
                   >
@@ -1028,10 +1025,21 @@ export default function ProfileClient() {
                   {/* Setup Wizard */}
                   <div className="bg-white border-2 border-outline/30 shadow-none overflow-hidden rounded-3xl">
                     <div className="p-8 border-b border-outline/20 flex flex-col md:flex-row md:items-center justify-between gap-6 bg-slate-50/50">
-                      <div>
-                        <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4 flex items-center gap-2">
-                          <span className="material-symbols-outlined text-[18px]">bolt</span>
-                          Step {gymStep} of 2
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] flex items-center gap-2">
+                            <span className="material-symbols-outlined text-[18px]">bolt</span>
+                            Step {gymStep} of 2
+                          </div>
+                          {gymStep === 2 && (
+                            <button 
+                              onClick={() => setGymStep(1)}
+                              className="w-8 h-8 rounded-full border border-outline/40 flex items-center justify-center text-primary hover:bg-slate-100 hover:border-primary transition-all active:scale-95"
+                              title="رجوع"
+                            >
+                              <span className="material-symbols-outlined text-[20px]">chevron_right</span>
+                            </button>
+                          )}
                         </div>
                         <h2 className="font-headline text-2xl md:text-3xl font-extrabold text-primary tracking-tighter">
                           {gymStep === 1 ? 'Select Your Topics' : 'Configure Session'}
@@ -1057,15 +1065,14 @@ export default function ProfileClient() {
                                       <button
                                         key={t.id}
                                         onClick={() => {
-                                          setGymTopics(prev => 
+                                          setGymTopics(prev =>
                                             prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id]
                                           );
                                         }}
-                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border-2 ${
-                                          gymTopics.includes(t.id)
-                                            ? "bg-primary border-primary text-white shadow-sm"
-                                            : "bg-white border-outline/60 text-on-surface-variant hover:border-secondary"
-                                        }`}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border-2 ${gymTopics.includes(t.id)
+                                          ? "bg-primary border-primary text-white shadow-sm"
+                                          : "bg-white border-outline/60 text-on-surface-variant hover:border-secondary"
+                                          }`}
                                       >
                                         {t.title}
                                       </button>
@@ -1089,7 +1096,7 @@ export default function ProfileClient() {
                                 <span className="text-lg font-black text-primary">{gymLimit}</span>
                                 <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">items</span>
                               </div>
-                              <input 
+                              <input
                                 type="range" min="1" max="50" step="1"
                                 value={gymLimit}
                                 onChange={(e) => setGymLimit(Number(e.target.value))}
@@ -1107,7 +1114,7 @@ export default function ProfileClient() {
                                 <span className="text-lg font-black text-primary">{gymTime}</span>
                                 <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">minutes</span>
                               </div>
-                              <input 
+                              <input
                                 type="range" min="1" max="60" step="1"
                                 value={gymTime}
                                 onChange={(e) => setGymTime(Number(e.target.value))}
@@ -1125,7 +1132,7 @@ export default function ProfileClient() {
                                 <span className="text-lg font-black text-primary">{gymTarget}%</span>
                                 <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">accuracy</span>
                               </div>
-                              <input 
+                              <input
                                 type="range" min="1" max="100" step="1"
                                 value={gymTarget}
                                 onChange={(e) => setGymTarget(Number(e.target.value))}
@@ -1137,38 +1144,27 @@ export default function ProfileClient() {
                       )}
 
                       {/* Bottom Action Footer */}
-                      <div className="mt-12 pt-8 border-t border-outline/20 flex items-center justify-between">
-                         <div className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">
-                            {gymStep === 1 ? `Selected ${gymTopics.length} topics` : 'Ready to start workout'}
-                         </div>
-                         <div className="flex items-center gap-3">
-                            {gymStep === 2 && (
-                              <button 
-                                onClick={() => setGymStep(1)}
-                                className="px-8 py-3.5 rounded-2xl font-black text-sm text-primary border-2 border-outline/40 hover:bg-slate-50 transition-all active:scale-95"
-                              >
-                                Back
-                              </button>
-                            )}
-                            {gymStep === 1 ? (
-                              <button 
-                                disabled={gymTopics.length === 0}
-                                onClick={() => setGymStep(2)}
-                                className="bg-primary text-white px-10 py-3.5 rounded-2xl font-black text-sm hover:bg-slate-800 transition-all shadow-xl active:scale-95 flex items-center gap-3 disabled:opacity-50"
-                              >
-                                Next Step
-                                <span className="material-symbols-outlined text-[20px]">chevron_right</span>
-                              </button>
-                            ) : (
-                              <button 
-                                onClick={startGymSession}
-                                className="bg-secondary text-primary px-14 py-4.5 rounded-2xl font-black text-sm uppercase tracking-[0.15em] hover:brightness-110 transition-all shadow-2xl shadow-amber-200 active:scale-95 flex items-center gap-3 border-2 border-white/20"
-                              >
-                                <span className="material-symbols-outlined text-[24px]">bolt</span>
-                                Start Workout
-                              </button>
-                            )}
-                         </div>
+                      <div className="mt-12 pt-8 border-t border-outline/20">
+                        <div className="w-full">
+                          {gymStep === 1 ? (
+                            <button
+                              disabled={gymTopics.length === 0}
+                              onClick={() => setGymStep(2)}
+                              className="w-full bg-primary text-white py-4 rounded-xl font-black text-xs uppercase tracking-[0.2em] hover:bg-slate-800 transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+                            >
+                              Next Step
+                              <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={startGymSession}
+                              className="w-full bg-primary text-white py-4 rounded-xl font-black text-xs uppercase tracking-[0.2em] hover:bg-slate-800 transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
+                            >
+                              <span className="material-symbols-outlined text-[20px]">bolt</span>
+                              Start Workout
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1226,8 +1222,8 @@ export default function ProfileClient() {
                       </div>
                     ) : (
                       <div className="border border-outline/40 bg-slate-50/50 p-12 text-center rounded-2xl">
-                         <span className="material-symbols-outlined text-4xl text-slate-300 mb-3 block">history</span>
-                         <p className="text-sm font-bold text-slate-400">No sessions recorded yet. Start your first workout!</p>
+                        <span className="material-symbols-outlined text-4xl text-slate-300 mb-3 block">history</span>
+                        <p className="text-sm font-bold text-slate-400">No sessions recorded yet. Start your first workout!</p>
                       </div>
                     )}
                   </div>

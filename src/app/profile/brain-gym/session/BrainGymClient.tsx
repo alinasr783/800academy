@@ -244,6 +244,7 @@ export default function BrainGymClient() {
       });
 
       setResult({ sessionId: 'gym', correct, total: questions.length, percent, passed: percent >= targetAcc, target: targetAcc, durationSeconds: duration, topicResults });
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
       console.error(e);
     } finally {
@@ -410,15 +411,15 @@ export default function BrainGymClient() {
                   </div>
                </div>
                <div className="lg:col-span-12 flex flex-wrap gap-4 mt-8">
-                  <div className="bg-blue-50 border-2 border-blue-200 rounded-3xl p-6 shadow-sm flex-1 min-w-[150px]">
+                  <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-6 shadow-sm flex-1 min-w-[150px]">
                     <div className="text-[10px] uppercase tracking-[0.3em] text-blue-600 font-black mb-1">Accuracy</div>
                     <div className="text-4xl font-black text-blue-700">{result.percent}%</div>
                   </div>
-                  <div className="bg-indigo-50 border-2 border-indigo-200 rounded-3xl p-6 shadow-sm flex-1 min-w-[150px]">
+                  <div className="bg-indigo-50 border-2 border-indigo-200 rounded-2xl p-6 shadow-sm flex-1 min-w-[150px]">
                     <div className="text-[10px] uppercase tracking-[0.3em] text-indigo-600 font-black mb-1">Duration</div>
                     <div className="text-4xl font-black text-indigo-700">{secondsToClock(result.durationSeconds)}</div>
                   </div>
-                  <div className="bg-emerald-50 border-2 border-emerald-200 rounded-3xl p-6 shadow-sm flex-1 min-w-[150px]">
+                  <div className="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-6 shadow-sm flex-1 min-w-[150px]">
                     <div className="text-[10px] uppercase tracking-[0.3em] text-emerald-600 font-black mb-1">Goal Status</div>
                     <div className="text-2xl font-black text-emerald-700">{result.passed ? 'TARGET MET' : 'NOT MET'}</div>
                   </div>
@@ -426,7 +427,7 @@ export default function BrainGymClient() {
              </div>
 
              {/* Topic analysis - kept simple */}
-             <div className="mt-12 bg-slate-50 border-2 border-outline/10 rounded-[40px] p-8 sm:p-10 shadow-sm">
+             <div className="mt-12 bg-slate-50 border-2 border-outline/10 rounded-2xl p-8 sm:p-10 shadow-sm">
                 <div className="text-sm font-black text-primary uppercase tracking-[0.2em] mb-8">Topic Performance</div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                    {result.topicResults?.map(tr => (
@@ -441,7 +442,7 @@ export default function BrainGymClient() {
              </div>
 
              {/* Review Matrix - EXACT PARITY */}
-             <div className="mt-8 sm:mt-12 w-full bg-slate-50 border-2 border-outline/10 rounded-[40px] p-6 sm:p-10 mb-12 shadow-sm">
+             <div className="mt-8 sm:mt-12 w-full bg-slate-50 border-2 border-outline/10 rounded-2xl p-6 sm:p-10 mb-12 shadow-sm">
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-6 mb-8 text-center sm:text-left">
                   <div className="text-sm font-black text-primary uppercase tracking-[0.2em]">Review Matrix</div>
                   <div className="flex flex-wrap items-center justify-center gap-4 text-[10px] font-black text-on-surface-variant uppercase tracking-widest">
@@ -488,7 +489,7 @@ export default function BrainGymClient() {
                     } else isC = normalizeText(fill) === normalizeText(q.correct_text || "");
                   }
                   const card = (
-                    <div className="bg-white border-2 border-outline/30 shadow-soft-md rounded-[40px] overflow-hidden scroll-mt-32">
+                    <div className="bg-white border-2 border-outline/30 shadow-soft-md rounded-2xl overflow-hidden scroll-mt-32">
                       <div className="p-6 border-b border-outline/30 flex items-center justify-between bg-slate-50/50">
                         <div className="flex items-center gap-4">
                           <div className="w-10 h-10 bg-primary/10 text-primary font-black rounded-xl flex items-center justify-center">{idx + 1}</div>
@@ -521,7 +522,7 @@ export default function BrainGymClient() {
                            </div>
                          )}
                          {q.explanation_text && (
-                           <div className="mt-8 p-6 sm:p-10 bg-blue-50/30 border-2 border-blue-100 rounded-[32px]">
+                           <div className="mt-8 p-6 sm:p-10 bg-blue-50/30 border-2 border-blue-100 rounded-2xl">
                               <div className="text-[10px] font-black text-blue-800 uppercase tracking-[0.4em] mb-4 flex items-center gap-2 font-headline"><span className="material-symbols-outlined text-xl">lightbulb</span>Explanation</div>
                               <div className="text-base leading-relaxed text-blue-900 font-medium prose max-w-none"><MathText text={q.explanation_text} /></div>
                               {q.explanation_assets?.map(a => <img key={a.id} src={assetUrl(a)!} className="mt-6 rounded-2xl max-h-80" />)}
@@ -537,7 +538,7 @@ export default function BrainGymClient() {
                   const p = q.passage;
                   if (!p) return <div key={q.id}>{card}</div>;
                   const panel = (
-                    <div className={`border-2 ${p.kind === 'reference' ? 'border-sky-200 bg-gradient-to-br from-sky-50 to-white' : 'border-violet-200 bg-gradient-to-br from-violet-50 to-white'} rounded-[32px] overflow-hidden flex flex-col shadow-sm`}>
+                    <div className={`border-2 ${p.kind === 'reference' ? 'border-sky-200 bg-gradient-to-br from-sky-50 to-white' : 'border-violet-200 bg-gradient-to-br from-violet-50 to-white'} rounded-2xl overflow-hidden flex flex-col shadow-sm`}>
                        <div className={`px-4 py-3 ${p.kind === 'reference' ? 'bg-sky-100/60 border-b border-sky-200' : 'bg-violet-100/60 border-b border-violet-200'} flex items-center gap-2`}><span className={`material-symbols-outlined ${p.kind === 'reference' ? 'text-sky-600' : 'text-violet-600'} text-lg`}>{p.kind === 'reference' ? 'view_cozy' : 'menu_book'}</span><div className={`text-xs font-black uppercase tracking-[0.15em] ${p.kind === 'reference' ? 'text-sky-700' : 'text-violet-700'}`}>{p.kind === 'reference' ? 'Reference' : 'Passage'}</div></div>
                        <div className={`p-6 prose prose-sm max-w-none text-on-surface leading-loose break-words lg:max-h-[50vh] overflow-y-auto`} dangerouslySetInnerHTML={{ __html: p.body_html }} />
                     </div>
