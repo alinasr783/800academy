@@ -14,14 +14,29 @@ const MathText = memo(function MathText({ text, className = "" }: MathTextProps)
   const containerRef = useRef<HTMLDivElement>(null);
   const lastProcessedText = useRef<string>("");
 
-  // Pre-process text to wrap common math patterns (like x^2) in $ if they aren't already wrapped.
+  // Pre-process text to wrap common math patterns in $ labels and convert shorthand like a/b to \frac{a}{b}
   const processedText = React.useMemo(() => {
     if (!text) return "";
-    // Regex to find exponents like x^2, (x+1)^2, a^b that aren't already preceded by $
-    // We target common patterns: [word or brackets]^[word or brackets]
-    return text.replace(/(?<![\$])(\b[a-zA-Z0-9]+\^\{?[a-zA-Z0-9]+\}?|\([^\$]+\)\^\{?[a-zA-Z0-9]+\}?)(?![\$])/g, (match) => {
+    let res = text;
+
+    // 1. Convert simple shorthand fractions like (a+b)/(c+d) or 5/8 to \frac{a}{b}
+    // We target patterns that aren't already inside $ symbols
+    // The pattern looks for (content)/ (content) or token/token
+    res = res.replace(/(?<![\$])(\([^\$\(\)]+\)|[\w\d\.]+)\s*\/\s*(\([^\$\(\)]+\)|[\w\d\.]+)(?![\$])/g, (match, p1, p2) => {
+      let num = p1.trim();
+      let den = p2.trim();
+      // Strip outer parenthesis if present
+      if (num.startsWith('(') && num.endsWith(')')) num = num.slice(1, -1);
+      if (den.startsWith('(') && den.endsWith(')')) den = den.slice(1, -1);
+      return `$ \\frac{${num}}{${den}} $`;
+    });
+
+    // 2. Exponents like x^2, (x+1)^2, a^b that aren't already preceded by $
+    res = res.replace(/(?<![\$])(\b[a-zA-Z0-9]+\^\{?[a-zA-Z0-9]+\}?|\([^\$]+\)\^\{?[a-zA-Z0-9]+\}?)(?![\$])/g, (match) => {
       return `$${match}$`;
     });
+
+    return res;
   }, [text]);
 
   useEffect(() => {

@@ -76,6 +76,12 @@ const OptionInput = memo(({ opt, index, type, allowMultiple, onUpdate, onRemove,
       placeholder={`Enter option ${String.fromCharCode(65 + index)} text...`}
       rows={3}
     />
+    {opt.text && (
+       <div className="p-3 bg-indigo-50/30 border border-dashed border-indigo-200 rounded-xl">
+          <div className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1">Preview</div>
+          <MathText text={opt.text} />
+       </div>
+    )}
     <div className="flex items-center gap-4">
        <div className="relative group flex-1">
           <input type="file" accept="image/*" onChange={(e) => onUpdate(opt.key, { file: e.target.files?.[0] || null })} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
@@ -399,27 +405,44 @@ function NewQuestionContent() {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-outline/20">
-                    <div>
-                        <div className="text-xs font-black text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
-                           <span className="material-symbols-outlined text-[18px]">imagesmode</span>Question Images
-                        </div>
-                        <input type="file" multiple accept="image/*" onChange={(e) => setQuestionFiles(Array.from(e.target.files ?? []))} className="mb-2 text-xs" />
-                        <div className="text-[9px] font-bold text-slate-400">{questionFiles.length} files selected</div>
+                  <div className="pt-6 border-t border-outline/20">
+                    <div className="text-xs font-black text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[18px]">imagesmode</span>Question Images
                     </div>
-                    <div>
-                        <div className="text-xs font-black text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
-                           <span className="material-symbols-outlined text-[18px]">auto_stories</span>Explanation & Assets
-                        </div>
-                        <textarea
-                          value={explanationText}
-                          onChange={(e) => setExplanationText(e.target.value)}
-                          rows={3}
-                          className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:bg-white outline-none transition-all text-sm mb-4"
-                          placeholder="Why is it correct?"
-                        />
-                        <input type="file" multiple accept="image/*" onChange={(e) => setExplanationFiles(Array.from(e.target.files ?? []))} className="text-xs" />
+                    <input type="file" multiple accept="image/*" onChange={(e) => setQuestionFiles(Array.from(e.target.files ?? []))} className="mb-2 text-xs" />
+                    <div className="text-[9px] font-bold text-slate-400">{questionFiles.length} files selected</div>
+                  </div>
+               </div>
+            </div>
+
+            {/* Detailed Explanation Section */}
+            <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden">
+               <div className="p-6 border-b border-outline/40 bg-amber-50/50 flex items-center gap-3">
+                  <span className="material-symbols-outlined text-amber-600">psychology</span>
+                  <h2 className="text-sm font-black uppercase tracking-widest text-amber-700">Detailed Explanation</h2>
+               </div>
+               <div className="p-8 space-y-6">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3 ml-1">Step-by-step Solution</label>
+                    <textarea
+                      value={explanationText}
+                      onChange={(e) => setExplanationText(e.target.value)}
+                      rows={6}
+                      className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl focus:border-amber-400 focus:bg-white outline-none transition-all font-medium text-base leading-relaxed"
+                      placeholder="Why is it correct? Enter the step-by-step solution..."
+                    />
+                    {explanationText && (
+                      <div className="mt-4 p-4 bg-amber-50/20 border border-dashed border-amber-200 rounded-xl">
+                        <div className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-2">Live Preview</div>
+                        <MathText text={explanationText} />
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-xs font-black text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[18px]">attachment</span>Explanation Images
                     </div>
+                    <input type="file" multiple accept="image/*" onChange={(e) => setExplanationFiles(Array.from(e.target.files ?? []))} className="text-xs" />
                   </div>
                </div>
             </div>
