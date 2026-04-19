@@ -193,6 +193,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             sort_order?: number;
           }
         | { action: "delete_asset"; asset_id: string }
+        | { action: "batch_assets"; assets: any[] }
+        | { action: "batch_options"; options: any[] }
       )
     | null;
 

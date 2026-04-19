@@ -139,7 +139,6 @@ export default function PlansSection() {
 
       try {
         addLog("Starting fetch...");
-        addLog(`URL: ${supabase.supabaseUrl}`); // Verify what URL the client is using
         
         const { data: subjectsRows, error: subjectsError } = await supabase
           .from("subjects")
