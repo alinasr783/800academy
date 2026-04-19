@@ -19,15 +19,14 @@ const MathText = memo(function MathText({ text, className = "" }: MathTextProps)
     if (!text) return "";
     let res = text;
 
-    // 1. Convert simple shorthand fractions like (a+b)/(c+d) or 5/8 to \frac{a}{b}
-    // We target patterns that aren't already inside $ symbols
-    // The pattern looks for (content)/ (content) or token/token
-    res = res.replace(/(?<![\$])(\([^\$\(\)]+\)|[\w\d\.]+)\s*\/\s*(\([^\$\(\)]+\)|[\w\d\.]+)(?![\$])/g, (match, p1, p2) => {
+    // 1. Convert shorthand fractions like [complex-expression]/[complex-expression] or 5/8 to \frac{a}{b}
+    // We use square brackets [ ] for complex numerators/denominators to allow ( ) inside them.
+    res = res.replace(/(?<![\$])(\[[^\$\[\]]+\]|[\w\d\.]+)\s*\/\s*(\[[^\$\[\]]+\]|[\w\d\.]+)(?![\$])/g, (match, p1, p2) => {
       let num = p1.trim();
       let den = p2.trim();
-      // Strip outer parenthesis if present
-      if (num.startsWith('(') && num.endsWith(')')) num = num.slice(1, -1);
-      if (den.startsWith('(') && den.endsWith(')')) den = den.slice(1, -1);
+      // Strip outer square brackets if present
+      if (num.startsWith('[') && num.endsWith(']')) num = num.slice(1, -1);
+      if (den.startsWith('[') && den.endsWith(']')) den = den.slice(1, -1);
       return `$ \\frac{${num}}{${den}} $`;
     });
 
