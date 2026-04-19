@@ -767,7 +767,7 @@ export default function ProfileClient() {
                                 onClick={() => {
                                   const slug = a.exams?.subjects?.slug;
                                   if (!slug) return;
-                                  router.push(`/subjects/${slug}/exams/${a.exams.exam_number}?attempt_id=${a.id}`);
+                                  router.push(`/subjects/${slug}/exams/${a.exams?.exam_number}?attempt_id=${a.id}`);
                                 }}
                                 className="border-b border-outline/20 hover:bg-primary/5 transition-all cursor-pointer group"
                               >
