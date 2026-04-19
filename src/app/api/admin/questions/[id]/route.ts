@@ -201,6 +201,46 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { admin, error: adminErr } = getAdminOrFail();
   if (!admin) return NextResponse.json({ error: adminErr }, { status: 500 });
 
+  if (body.action === "batch_assets") {
+    const assets = (body as any).assets;
+    if (!Array.isArray(assets)) return NextResponse.json({ error: "Assets must be an array" }, { status: 400 });
+    const inserted = assets.map((a: any, i: number) => ({
+      question_id: questionId,
+      bucket: a.bucket || "assets",
+      storage_path: a.storage_path || null,
+      url: a.url || null,
+      alt: a.alt || null,
+      kind: a.kind || "prompt",
+      sort_order: a.sort_order ?? i
+    }));
+    const { data, error } = await admin.from("exam_question_assets").insert(inserted).select();
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ assets: data });
+  }
+
+  if (body.action === "batch_options") {
+    const options = (body as any).options;
+    if (!Array.isArray(options)) return NextResponse.json({ error: "Options must be an array" }, { status: 400 });
+    
+    // Get current max option number if needed
+    const { data: qRows } = await admin.from("exam_question_options").select("option_number").eq("question_id", questionId).order("option_number", { ascending: false }).limit(1);
+    let startNum = (qRows?.[0]?.option_number ?? 0) + 1;
+
+    const inserted = options.map((o: any, i: number) => ({
+      question_id: questionId,
+      option_number: startNum + i,
+      text: o.text || null,
+      bucket: o.bucket || "assets",
+      storage_path: o.storage_path || null,
+      url: o.url || null,
+      is_correct: !!o.is_correct
+    }));
+
+    const { data, error } = await admin.from("exam_question_options").insert(inserted).select();
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ options: data });
+  }
+
   if (body.action === "create_option") {
     let nextNum = body.option_number ? Math.max(1, Math.trunc(body.option_number)) : 0;
     if (!nextNum) {

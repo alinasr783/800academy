@@ -632,41 +632,66 @@ export default function BrainGymClient() {
              </div>
 
              {/* Topic analysis - hierarchical expandable view */}
-             <div className="mt-12 bg-white border-2 border-outline/10 rounded-3xl p-8 sm:p-10 shadow-sm space-y-8">
-                <div className="text-sm font-black text-primary uppercase tracking-[0.2em]">Topic Performance Breakdown</div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                   {result.topicResults?.map(tr => (
-                     <div key={tr.topicId} className="group bg-slate-50/50 border border-outline/10 rounded-2xl overflow-hidden transition-all hover:bg-white hover:border-primary/20">
-                        <div className="p-4 flex items-center justify-between cursor-pointer select-none" onClick={(e) => {
-                          const content = e.currentTarget.nextElementSibling;
-                          if (content) content.classList.toggle('hidden');
-                          const icon = e.currentTarget.querySelector('.expand-icon');
-                          if (icon) icon.classList.toggle('rotate-180');
-                        }}>
-                          <div className="flex items-center gap-4">
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs ${tr.percent >= targetAcc ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                              {tr.percent}%
+             <div className="mt-12 bg-white border border-outline/30 shadow-sm rounded-xl overflow-hidden space-y-0">
+                <div className="p-6 sm:p-8 border-b border-outline/20 bg-slate-50/50 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="material-symbols-outlined text-primary text-[20px]">analytics</span>
+                    <h3 className="text-xs font-black uppercase tracking-widest text-primary">Topic Analysis</h3>
+                  </div>
+                  <div className="text-[10px] uppercase font-bold text-on-surface-variant tracking-widest opacity-60">Workout Breakdown</div>
+                </div>
+                <div className="p-4 sm:p-8">
+                  <div className="flex flex-col gap-4">
+                    {result.topicResults?.map(tr => (
+                      <div key={tr.topicId} className="group bg-white border border-outline/20 rounded-lg overflow-hidden transition-all hover:border-primary/20 hover:shadow-sm">
+                          <div className="p-4 flex items-center justify-between cursor-pointer select-none" onClick={(e) => {
+                            const content = e.currentTarget.nextElementSibling;
+                            if (content) content.classList.toggle('hidden');
+                            const icon = e.currentTarget.querySelector('.expand-icon');
+                            if (icon) icon.classList.toggle('rotate-180');
+                          }}>
+                            <div className="flex items-center gap-5">
+                              <div className={`w-14 h-14 rounded flex flex-col items-center justify-center font-black ${tr.percent >= targetAcc ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                                <span className="text-lg leading-none">{tr.percent}%</span>
+                                <span className="text-[8px] uppercase mt-1 opacity-70">Accuracy</span>
+                              </div>
+                              <div>
+                                <div className="text-[13px] font-black text-primary uppercase tracking-wide">{tr.title}</div>
+                                <div className="flex items-center gap-2 mt-1.5">
+                                  <div className="w-24 h-1 bg-slate-100 rounded-full overflow-hidden">
+                                     <div className={`h-full ${tr.percent >= targetAcc ? 'bg-emerald-500' : 'bg-rose-500'}`} style={{ width: `${tr.percent}%` }} />
+                                  </div>
+                                  <span className="text-[9px] font-bold text-on-surface-variant/40 uppercase tracking-tighter">{tr.correct}/{tr.total} Correct</span>
+                                </div>
+                              </div>
                             </div>
-                            <div className="text-sm font-black text-primary">{tr.title}</div>
+                            <span className="expand-icon material-symbols-outlined text-[20px] text-slate-300 transition-transform">expand_more</span>
                           </div>
-                          <span className="expand-icon material-symbols-outlined text-[20px] text-slate-400 transition-transform">expand_more</span>
-                        </div>
-                        
-                        <div className="hidden p-4 border-t border-outline/5 space-y-4 animate-slide-up">
-                          {tr.subtopicResults.map(st => (
-                            <div key={st.subtopicId} className="space-y-1.5">
-                              <div className="flex justify-between text-[11px] font-bold">
-                                <span className="text-slate-500">{st.title}</span>
-                                <span className={st.percent >= targetAcc ? 'text-emerald-600' : 'text-rose-600'}>{st.percent}%</span>
-                              </div>
-                              <div className="h-1.5 bg-white rounded-full overflow-hidden border border-outline/5">
-                                <div className={`h-full ${st.percent >= targetAcc ? 'bg-emerald-400' : 'bg-rose-400'}`} style={{ width: `${st.percent}%` }} />
-                              </div>
+                          
+                          <div className="hidden px-5 pb-5 pt-1 border-t border-outline/5 bg-slate-50/20 space-y-5 animate-slide-up">
+                            <div className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em] mt-3 flex items-center gap-2">
+                               <div className="w-4 h-[1px] bg-slate-200"></div> Subtopics
                             </div>
-                          ))}
-                        </div>
-                     </div>
-                   ))}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-5">
+                              {tr.subtopicResults.map(st => (
+                                <div key={st.subtopicId} className="space-y-2">
+                                  <div className="flex justify-between text-[11px] font-bold uppercase tracking-tight">
+                                    <span className="text-primary/70">{st.title}</span>
+                                    <span className={`flex items-center gap-1.5 ${st.percent >= targetAcc ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                      {st.percent}%
+                                      <span className="text-[9px] opacity-40">({st.correct}/{st.total})</span>
+                                    </span>
+                                  </div>
+                                  <div className="h-1 bg-slate-200/50 rounded-full overflow-hidden">
+                                    <div className={`h-full transition-all duration-700 ${st.percent >= targetAcc ? 'bg-emerald-400' : 'bg-rose-400'}`} style={{ width: `${st.percent}%` }} />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
              </div>
 

@@ -124,6 +124,11 @@ export default function PlansSection() {
   const [selectedOfferIdBySubjectId, setSelectedOfferIdBySubjectId] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+
+  const addLog = (msg: string) => {
+    setDebugLogs((prev) => [...prev, `${new Date().toLocaleTimeString()}: ${msg}`]);
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -132,81 +137,94 @@ export default function PlansSection() {
       setLoading(true);
       setError(null);
 
-      const { data: subjectsRows, error: subjectsError } = await supabase
-        .from("subjects")
-        .select("id, slug, title, description, track")
-        .order("title", { ascending: true })
-        .returns<Subject[]>();
+      try {
+        addLog("Starting fetch...");
+        addLog(`URL: ${supabase.supabaseUrl}`); // Verify what URL the client is using
+        
+        const { data: subjectsRows, error: subjectsError } = await supabase
+          .from("subjects")
+          .select("id, slug, title, description, track")
+          .order("title", { ascending: true })
+          .returns<Subject[]>();
 
-      if (!mounted) return;
+        if (!mounted) return;
 
-      if (subjectsError) {
-        setError(subjectsError.message);
-        setSubjects([]);
-        setOffersBySubjectId({});
-        setPrimaryAssetBySubjectId({});
-        setSelectedOfferIdBySubjectId({});
-        setLoading(false);
-        return;
-      }
-
-      const rows = subjectsRows ?? [];
-      setSubjects(rows);
-
-      const ids = rows.map((s) => s.id);
-      if (ids.length === 0) {
-        setOffersBySubjectId({});
-        setPrimaryAssetBySubjectId({});
-        setSelectedOfferIdBySubjectId({});
-        setLoading(false);
-        return;
-      }
-
-      const [{ data: offersRows }, { data: assetsRows }] = await Promise.all([
-        supabase
-          .from("subject_offers")
-          .select("id, subject_id, label, expires_at, price_cents, currency")
-          .in("subject_id", ids)
-          .order("expires_at", { ascending: true })
-          .returns<Offer[]>(),
-        supabase
-          .from("subject_assets")
-          .select("id, subject_id, url, bucket, storage_path, alt, sort_order")
-          .in("subject_id", ids)
-          .order("sort_order", { ascending: true })
-          .returns<Asset[]>(),
-      ]);
-
-      if (!mounted) return;
-
-      const nextOffersBySubjectId: Record<string, Offer[]> = {};
-      for (const offer of offersRows ?? []) {
-        const key = offer.subject_id;
-        if (!nextOffersBySubjectId[key]) nextOffersBySubjectId[key] = [];
-        nextOffersBySubjectId[key].push(offer);
-      }
-      setOffersBySubjectId(nextOffersBySubjectId);
-
-      const nextPrimaryAssetBySubjectId: Record<string, Asset | null> = {};
-      for (const asset of assetsRows ?? []) {
-        if (nextPrimaryAssetBySubjectId[asset.subject_id]) continue;
-        nextPrimaryAssetBySubjectId[asset.subject_id] = asset;
-      }
-      for (const id of ids) {
-        if (!(id in nextPrimaryAssetBySubjectId)) nextPrimaryAssetBySubjectId[id] = null;
-      }
-      setPrimaryAssetBySubjectId(nextPrimaryAssetBySubjectId);
-
-      setSelectedOfferIdBySubjectId((prev) => {
-        const next = { ...prev };
-        for (const subject of rows) {
-          const offers = nextOffersBySubjectId[subject.id] ?? [];
-          if (!next[subject.id] && offers[0]?.id) next[subject.id] = offers[0].id;
+        if (subjectsError) {
+          addLog(`Subjects Error: ${subjectsError.message}`);
+          setError(subjectsError.message);
+          setLoading(false);
+          return;
         }
-        return next;
-      });
 
-      setLoading(false);
+        const rows = subjectsRows ?? [];
+        addLog(`Subjects count: ${rows.length}`);
+        setSubjects(rows);
+
+        const ids = rows.map((s) => s.id);
+        if (ids.length === 0) {
+          setLoading(false);
+          return;
+        }
+
+        console.log("[PlansSection] Fetching offers and assets...");
+        const [{ data: offersRows, error: offersError }, { data: assetsRows, error: assetsError }] = await Promise.all([
+          supabase
+            .from("subject_offers")
+            .select("id, subject_id, label, expires_at, price_cents, currency")
+            .in("subject_id", ids)
+            .order("expires_at", { ascending: true })
+            .returns<Offer[]>(),
+          supabase
+            .from("subject_assets")
+            .select("id, subject_id, url, bucket, storage_path, alt, sort_order")
+            .in("subject_id", ids)
+            .order("sort_order", { ascending: true })
+            .returns<Asset[]>(),
+        ]);
+
+        if (!mounted) return;
+
+        if (offersError || assetsError) {
+          console.error("[PlansSection] Offers/Assets error:", offersError || assetsError);
+        }
+
+        const nextOffersBySubjectId: Record<string, Offer[]> = {};
+        for (const offer of offersRows ?? []) {
+          const key = offer.subject_id;
+          if (!nextOffersBySubjectId[key]) nextOffersBySubjectId[key] = [];
+          nextOffersBySubjectId[key].push(offer);
+        }
+        setOffersBySubjectId(nextOffersBySubjectId);
+
+        const nextPrimaryAssetBySubjectId: Record<string, Asset | null> = {};
+        for (const asset of assetsRows ?? []) {
+          if (nextPrimaryAssetBySubjectId[asset.subject_id]) continue;
+          nextPrimaryAssetBySubjectId[asset.subject_id] = asset;
+        }
+        for (const id of ids) {
+          if (!(id in nextPrimaryAssetBySubjectId)) nextPrimaryAssetBySubjectId[id] = null;
+        }
+        setPrimaryAssetBySubjectId(nextPrimaryAssetBySubjectId);
+
+        setSelectedOfferIdBySubjectId((prev) => {
+          const next = { ...prev };
+          for (const subject of rows) {
+            const offers = nextOffersBySubjectId[subject.id] ?? [];
+            if (!next[subject.id] && offers[0]?.id) next[subject.id] = offers[0].id;
+          }
+          return next;
+        });
+
+        setLoading(false);
+        addLog("Fetch complete.");
+      } catch (err: any) {
+        addLog(`Critical Catch: ${err.message || String(err)}`);
+        console.error("[PlansSection] Unexpected error during fetch:", err);
+        if (mounted) {
+          setError(err.message || "An unexpected error occurred");
+          setLoading(false);
+        }
+      }
     }
 
     run();
@@ -382,6 +400,18 @@ export default function PlansSection() {
             );
           })
         )}
+      </div>
+
+      {/* Temporary Debug Console for Mobile */}
+      <div className="mt-20 p-4 bg-black text-green-400 font-mono text-xs rounded-lg overflow-auto max-h-60 border-2 border-green-900/50 shadow-2xl">
+        <div className="flex justify-between items-center mb-2 border-b border-green-900 pb-2">
+          <span className="font-bold uppercase tracking-widest text-[10px]">On-Screen Debug Console</span>
+          <button onClick={() => setDebugLogs([])} className="bg-green-900/30 px-2 py-1 rounded hover:bg-green-900/50">Clear</button>
+        </div>
+        {debugLogs.length === 0 && <div className="opacity-50 italic">Waiting for logs...</div>}
+        {debugLogs.map((log, i) => (
+          <div key={i} className="mb-1">{log}</div>
+        ))}
       </div>
     </section>
   );

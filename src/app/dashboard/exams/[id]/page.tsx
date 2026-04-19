@@ -90,6 +90,7 @@ export default function DashboardExamDetails() {
 
   const [assetUrl, setAssetUrl] = useState("");
   const [assetSort, setAssetSort] = useState("0");
+  const [refFile, setRefFile] = useState<File | null>(null);
 
   const [passageTitle, setPassageTitle] = useState("");
   const [passageKind, setPassageKind] = useState<"reading"|"reference">("reading");
@@ -247,8 +248,8 @@ export default function DashboardExamDetails() {
   }
 
   async function addAsset() {
-    if (!assetUrl.trim()) {
-      setError("Asset URL is required.");
+    if (!refFile && !assetUrl.trim()) {
+      setError("Please select a file or enter a URL.");
       return;
     }
     const sortOrder = Math.trunc(Number(assetSort || 0));
@@ -260,15 +261,35 @@ export default function DashboardExamDetails() {
     setError(null);
     setMessage(null);
     try {
+      let finalUrl = assetUrl.trim();
+      let storagePath = null;
+      const bucket = "assets";
+
+      if (refFile) {
+        const safeName = refFile.name.replaceAll(" ", "-");
+        storagePath = `exams/${examId}/references/${Date.now()}-${safeName}`;
+        const { error: upErr } = await supabase.storage.from(bucket).upload(storagePath, refFile, { upsert: false });
+        if (upErr) throw new Error(upErr.message);
+        finalUrl = supabase.storage.from(bucket).getPublicUrl(storagePath).data.publicUrl;
+      }
+
       const json = (await adminFetch(`/api/admin/exams/${examId}`, {
         method: "POST",
-        body: JSON.stringify({ action: "create_asset", url: assetUrl.trim(), sort_order: sortOrder }),
+        body: JSON.stringify({ 
+          action: "create_asset", 
+          url: finalUrl, 
+          storage_path: storagePath,
+          bucket: bucket,
+          sort_order: sortOrder 
+        }),
       })) as { asset: ExamAssetRow };
+
       setAssets((prev) =>
         [...prev, json.asset].sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at)),
       );
       setAssetUrl("");
       setAssetSort("0");
+      setRefFile(null);
       setMessage("Reference added.");
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Something went wrong.";
@@ -868,28 +889,59 @@ export default function DashboardExamDetails() {
                   <h2 className="text-[10px] font-black uppercase tracking-widest text-primary">Reference Sheets</h2>
                 </div>
                 <div className="p-6 space-y-6">
-                  <div className="flex flex-col gap-3">
-                    <input
-                      value={assetUrl}
-                      onChange={(e) => setAssetUrl(e.target.value)}
-                      placeholder="Image URL (Manual entry)"
-                      className="h-10 w-full px-4 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:border-primary outline-none transition-all"
-                    />
+                  <div className="flex flex-col gap-4">
+                    <div className="relative group overflow-hidden">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setRefFile(e.target.files?.[0] || null)}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                      />
+                      <div className="h-24 w-full border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center gap-2 group-hover:bg-slate-50 group-hover:border-primary transition-all">
+                        {refFile ? (
+                          <div className="flex flex-col items-center gap-1">
+                             <span className="material-symbols-outlined text-emerald-500">check_circle</span>
+                             <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">{refFile.name}</span>
+                          </div>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined text-slate-400 group-hover:text-primary">upload_file</span>
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-primary">Select Image File</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {!refFile && (
+                      <div className="space-y-2">
+                        <div className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">OR</div>
+                        <input
+                          value={assetUrl}
+                          onChange={(e) => setAssetUrl(e.target.value)}
+                          placeholder="Paste image URL directly"
+                          className="h-10 w-full px-4 text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl focus:border-primary outline-none transition-all"
+                        />
+                      </div>
+                    )}
+
                     <div className="flex gap-2">
-                       <input
-                         type="number"
-                         value={assetSort}
-                         onChange={(e) => setAssetSort(e.target.value)}
-                         placeholder="Sort"
-                         className="h-10 w-20 px-3 text-xs font-bold bg-slate-50 border border-slate-100 rounded-xl text-center focus:border-primary outline-none"
-                       />
+                       <div className="relative w-20">
+                          <input
+                            type="number"
+                            value={assetSort}
+                            onChange={(e) => setAssetSort(e.target.value)}
+                            placeholder="Order"
+                            className="h-10 w-full px-3 text-xs font-bold bg-slate-50 border border-slate-100 rounded-xl text-center focus:border-primary outline-none pl-6"
+                          />
+                          <span className="material-symbols-outlined absolute left-2 top-2.5 text-[14px] text-slate-400">sort</span>
+                       </div>
                        <button
                          type="button"
                          onClick={addAsset}
-                         disabled={saving || !assetUrl.trim()}
-                         className="flex-1 h-10 bg-primary text-white font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-800 transition-all active:scale-[0.98] disabled:opacity-50"
+                         disabled={saving || (!refFile && !assetUrl.trim())}
+                         className="flex-1 h-10 bg-primary text-white font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-slate-800 transition-all active:scale-[0.98] disabled:opacity-50 shadow-md shadow-primary/10"
                        >
-                         Add Reference
+                         {saving ? "Saving..." : "Add Reference Sheet"}
                        </button>
                     </div>
                   </div>

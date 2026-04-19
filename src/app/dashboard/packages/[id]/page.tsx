@@ -244,18 +244,15 @@ export default function DashboardPackageDetails() {
     setError(null);
     setMessage(null);
     try {
-      const baseSort =
-        assets.length === 0 ? 0 : Math.max(...assets.map((a) => a.sort_order ?? 0)) + 1;
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i]!;
+      const baseSort = assets.length === 0 ? 0 : Math.max(...assets.map((a) => a.sort_order ?? 0)) + 1;
+      
+      const uploadPromises = files.map(async (file, i) => {
         const safeName = file.name.replaceAll(" ", "-");
         const path = `subjects/${subjectId}/${Date.now()}-${i}-${safeName}`;
-        const { error: upErr } = await supabase.storage.from(storageBucket).upload(path, file, {
-          upsert: false,
-        });
+        const { error: upErr } = await supabase.storage.from(storageBucket).upload(path, file, { upsert: false });
         if (upErr) throw new Error(upErr.message);
-
         const publicUrl = supabase.storage.from(storageBucket).getPublicUrl(path).data.publicUrl;
+        
         const json = (await adminFetch(`/api/admin/packages/${subjectId}`, {
           method: "POST",
           body: JSON.stringify({
@@ -267,8 +264,11 @@ export default function DashboardPackageDetails() {
             sort_order: baseSort + i,
           }),
         })) as { asset: SubjectAssetRow };
-        setAssets((prev) => [...prev, json.asset]);
-      }
+        return json.asset;
+      });
+
+      const newAssets = await Promise.all(uploadPromises);
+      setAssets((prev) => [...prev, ...newAssets]);
       setAssetFiles([]);
       setMessage("Gallery updated.");
     } catch (e) {

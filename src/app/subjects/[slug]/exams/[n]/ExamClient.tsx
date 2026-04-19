@@ -1488,66 +1488,70 @@ export default function ExamClient({
 
           {/* Topic Performance Analysis */}
           {result.topicResults && result.topicResults.length > 0 && (
-            <div className="mt-12 bg-white border-2 border-outline/30 shadow-soft-xl rounded-3xl overflow-hidden animate-slide-up">
-              <div className="p-6 sm:p-8 border-b border-outline/30 bg-slate-50 flex items-center justify-between">
+            <div className="mt-12 bg-white border border-outline/30 shadow-sm rounded-xl overflow-hidden animate-slide-up">
+              <div className="p-6 sm:p-8 border-b border-outline/20 bg-slate-50/50 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-primary">analytics</span>
-                  <h3 className="text-sm font-black uppercase tracking-widest text-primary">Performance by Topic</h3>
+                  <span className="material-symbols-outlined text-primary text-[20px]">analytics</span>
+                  <h3 className="text-xs font-black uppercase tracking-widest text-primary">Performance Analysis</h3>
                 </div>
-                <div className="text-[10px] sm:text-xs font-bold text-on-surface-variant uppercase tracking-widest">
-                  {result.topicResults.length} topics analyzed
+                <div className="text-[10px] font-bold text-on-surface-variant uppercase tracking-[0.2em] opacity-60">
+                   Detailed Breakdown
                 </div>
               </div>
-              <div className="p-6 sm:p-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 sm:gap-10">
+              <div className="p-4 sm:p-8">
+                <div className="flex flex-col gap-4">
                   {result.topicResults.map((tr) => (
-                    <div key={tr.topicId} className="group bg-slate-50/50 border border-outline/30 rounded-2xl overflow-hidden transition-all hover:shadow-md">
-                      <div className="p-5 flex items-center justify-between cursor-pointer select-none no-tap-highlight" onClick={(e) => {
+                    <div key={tr.topicId} className="group bg-white border border-outline/20 rounded-lg overflow-hidden transition-all hover:border-primary/30 hover:shadow-sm">
+                      <div className="p-4 flex items-center justify-between cursor-pointer select-none no-tap-highlight" onClick={(e) => {
                         const content = e.currentTarget.nextElementSibling;
                         if (content) content.classList.toggle('hidden');
                         const icon = e.currentTarget.querySelector('.expand-icon');
                         if (icon) icon.classList.toggle('rotate-180');
                       }}>
-                        <div className="flex items-center gap-4">
-                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-sm transition-all group-hover:scale-110 ${tr.percent >= 75 ? 'bg-emerald-100 text-emerald-700' : tr.percent >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
-                            {tr.percent}%
+                        <div className="flex items-center gap-5">
+                          <div className={`w-14 h-14 rounded-md flex flex-col items-center justify-center transition-all ${tr.percent >= 75 ? 'bg-emerald-50 text-emerald-700' : tr.percent >= 50 ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'}`}>
+                            <span className="text-lg font-black leading-none">{tr.percent}%</span>
+                            <span className="text-[8px] font-bold uppercase tracking-tighter mt-1 opacity-70">Accuracy</span>
                           </div>
                           <div>
-                            <div className="text-sm font-black text-primary group-hover:text-secondary transition-colors leading-tight">{tr.title}</div>
-                            <div className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mt-1">
-                              {tr.correct} of {tr.total} correct
+                            <div className="text-[13px] font-black text-primary uppercase tracking-wide group-hover:text-secondary transition-colors">{tr.title}</div>
+                            <div className="flex items-center gap-2 mt-1.5">
+                               <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                  <div className={`h-full ${tr.percent >= 75 ? 'bg-emerald-500' : tr.percent >= 50 ? 'bg-amber-500' : 'bg-rose-500'}`} style={{ width: `${tr.percent}%` }} />
+                               </div>
+                               <span className="text-[10px] font-bold text-on-surface-variant/60 uppercase">{tr.correct}/{tr.total} Items</span>
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                           <span className="expand-icon material-symbols-outlined text-[20px] text-slate-400 transition-transform duration-300">expand_more</span>
+                        <div className="flex items-center gap-4">
+                           <span className="expand-icon material-symbols-outlined text-[20px] text-slate-300 transition-transform duration-300">expand_more</span>
                         </div>
                       </div>
                       
-                      <div className="hidden border-t border-outline/20 bg-white p-5 animate-slide-up">
-                        <div className="relative h-2 bg-slate-100 rounded-full overflow-hidden mb-6">
-                          <div 
-                            className={`absolute top-0 left-0 h-full transition-all duration-1000 ease-out rounded-full ${tr.percent >= 75 ? 'bg-emerald-500' : tr.percent >= 50 ? 'bg-amber-500' : 'bg-rose-500'}`}
-                            style={{ width: `${tr.percent}%` }}
-                          />
-                        </div>
-
-                        <div className="space-y-4">
-                          <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 px-1">Subtopic Breakdown</div>
-                          {tr.subtopicResults.map(st => (
-                            <div key={st.subtopicId} className="flex flex-col gap-1.5">
-                              <div className="flex items-center justify-between text-[11px] font-bold">
-                                <span className="text-primary/80">{st.title}</span>
-                                <span className={st.percent >= 75 ? 'text-emerald-600' : st.percent >= 50 ? 'text-amber-600' : 'text-rose-600'}>{st.percent}% ({st.correct}/{st.total})</span>
+                      <div className="hidden border-t border-outline/10 bg-slate-50/30 p-5 animate-slide-up">
+                        <div className="space-y-5">
+                          <div className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em] mb-3 flex items-center gap-2">
+                             <div className="w-4 h-[1px] bg-slate-200"></div> Subtopics
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-5">
+                            {tr.subtopicResults.map(st => (
+                              <div key={st.subtopicId} className="flex flex-col gap-2">
+                                <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-tight">
+                                  <span className="text-primary/70">{st.title}</span>
+                                  <span className={`flex items-center gap-1.5 ${st.percent >= 75 ? 'text-emerald-600' : st.percent >= 50 ? 'text-amber-600' : 'text-rose-600'}`}>
+                                    {st.percent}%
+                                    <span className="text-[9px] opacity-40">({st.correct}/{st.total})</span>
+                                  </span>
+                                </div>
+                                <div className="h-1 bg-slate-200/50 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-full transition-all duration-700 rounded-full ${st.percent >= 75 ? 'bg-emerald-400' : st.percent >= 50 ? 'bg-amber-400' : 'bg-rose-400'}`}
+                                    style={{ width: `${st.percent}%` }}
+                                  />
+                                </div>
                               </div>
-                              <div className="h-1.5 bg-slate-50 rounded-full overflow-hidden border border-slate-100">
-                                <div 
-                                  className={`h-full transition-all duration-700 rounded-full ${st.percent >= 75 ? 'bg-emerald-400' : st.percent >= 50 ? 'bg-amber-400' : 'bg-rose-400'}`}
-                                  style={{ width: `${st.percent}%` }}
-                                />
-                              </div>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
                       </div>
                     </div>

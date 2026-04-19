@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, Suspense } from "react";
+import { useEffect, useMemo, useState, Suspense, memo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import MathText from "@/components/MathText";
@@ -22,6 +22,76 @@ type NewOption = {
 function uid() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
+
+// Sub-components for better performance (avoiding full re-renders on every keystroke)
+const PageHeader = memo(({ exam, examId, saving, submit, onCancel }: { exam: any, examId: string | null, saving: boolean, submit: () => void, onCancel: () => void }) => (
+  <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border border-outline/60 shadow-soft-xl rounded-2xl mb-8 p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
+    <div className="flex items-center gap-4">
+      <button onClick={onCancel} className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 text-on-surface hover:bg-slate-200 transition-all active:scale-95">
+        <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+      </button>
+      <div>
+        <h1 className="font-headline text-2xl font-black text-primary tracking-tighter">New Question</h1>
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-secondary mt-1 truncate max-w-[200px] sm:max-w-md">
+          {exam ? `#${exam.exam_number} • ${exam.title}` : `Exam ID: ${examId}`}
+        </p>
+      </div>
+    </div>
+    <div className="flex items-center gap-3 w-full sm:w-auto">
+      <button onClick={onCancel} disabled={saving} className="flex-1 sm:flex-none px-6 py-3 font-black text-xs uppercase tracking-widest rounded-xl text-primary border border-outline hover:bg-slate-50 transition-all active:scale-95 disabled:opacity-50">Cancel</button>
+      <button onClick={submit} disabled={saving} className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-primary text-white px-8 py-3 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-slate-800 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 active:scale-95">
+        <span className="material-symbols-outlined text-[18px]">add_task</span>
+        {saving ? "Creating..." : "Create Question"}
+      </button>
+    </div>
+  </div>
+));
+
+const OptionInput = memo(({ opt, index, type, allowMultiple, onUpdate, onRemove, onSetCorrect }: { opt: NewOption, index: number, type: string, allowMultiple: boolean, onUpdate: (key: string, patch: Partial<NewOption>) => void, onRemove: (key: string) => void, onSetCorrect: (key: string, val: boolean) => void }) => (
+  <div className="bg-white border border-outline/40 rounded-2xl p-5 space-y-4 hover:border-primary/30 transition-all">
+    <div className="flex items-center justify-between">
+       <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center font-black text-xs">
+            {String.fromCharCode(65 + index)}
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer group">
+            <input 
+              type={allowMultiple ? "checkbox" : "radio"}
+              name={`correct_option_${opt.key}`}
+              checked={opt.is_correct}
+              onChange={(e) => onSetCorrect(opt.key, e.target.checked)}
+              className="w-5 h-5 accent-emerald-500 cursor-pointer"
+            />
+            <span className={`text-[10px] font-black uppercase tracking-widest ${opt.is_correct ? 'text-emerald-600' : 'text-slate-400 group-hover:text-primary transition-colors'}`}>Correct</span>
+          </label>
+       </div>
+       <button onClick={() => onRemove(opt.key)} className="text-slate-300 hover:text-rose-500 transition-colors">
+         <span className="material-symbols-outlined text-[20px]">delete</span>
+       </button>
+    </div>
+    <textarea
+      value={opt.text}
+      onChange={(e) => onUpdate(opt.key, { text: e.target.value })}
+      className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:bg-white focus:border-primary outline-none transition-all text-sm font-medium resize-none"
+      placeholder={`Enter option ${String.fromCharCode(65 + index)} text...`}
+      rows={2}
+    />
+    <div className="flex items-center gap-4">
+       <div className="relative group flex-1">
+          <input type="file" accept="image/*" onChange={(e) => onUpdate(opt.key, { file: e.target.files?.[0] || null })} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+          <div className={`h-10 px-4 border border-dashed rounded-xl flex items-center gap-2 transition-all ${opt.file ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-400 group-hover:border-primary group-hover:text-primary'}`}>
+             <span className="material-symbols-outlined text-[18px]">{opt.file ? 'check_circle' : 'add_photo_alternate'}</span>
+             <span className="text-[10px] font-black uppercase truncate">{opt.file ? opt.file.name : 'Attach Image'}</span>
+          </div>
+       </div>
+       {opt.file && (
+         <button onClick={() => onUpdate(opt.key, { file: null })} className="text-rose-500 hover:text-rose-700 transition-colors">
+            <span className="material-symbols-outlined text-[20px]">close</span>
+         </button>
+       )}
+    </div>
+  </div>
+));
 
 function NewQuestionContent() {
   const searchParams = useSearchParams();
@@ -91,7 +161,6 @@ function NewQuestionContent() {
         setExam(json.exam);
         setPassages(json.passages ?? []);
 
-        // Fetch topics and subtopics filtered by exam's subject
         const topicsJson = await adminFetch(`/api/admin/topics?subject_id=${json.exam.subject_id}`);
         const subtopicsJson = await adminFetch(`/api/admin/subtopics?subject_id=${json.exam.subject_id}`);
         if (!mounted) return;
@@ -106,28 +175,44 @@ function NewQuestionContent() {
       }
     }
     run();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [examId]);
-
-  const correctCount = useMemo(
-    () => options.filter((o) => o.is_correct).length,
-    [options],
-  );
 
   const filteredSubtopics = useMemo(() => {
     if (!topicId) return [];
     return allSubtopics.filter(st => st.topic_id === topicId);
   }, [topicId, allSubtopics]);
 
-  function setOptionCorrect(key: string, next: boolean) {
+  const updateOption = useCallback((key: string, patch: Partial<NewOption>) => {
+    setOptions(prev => prev.map(o => o.key === key ? { ...o, ...patch } : o));
+  }, []);
+
+  const removeOption = useCallback((key: string) => {
+    setOptions(prev => prev.filter(o => o.key !== key));
+  }, []);
+
+  const setOptionCorrect = useCallback((key: string, next: boolean) => {
     setOptions((prev) => {
       if (type !== "mcq") return prev;
       if (allowMultiple) return prev.map((o) => (o.key === key ? { ...o, is_correct: next } : o));
       if (!next) return prev.map((o) => (o.key === key ? { ...o, is_correct: false } : o));
       return prev.map((o) => ({ ...o, is_correct: o.key === key }));
     });
+  }, [type, allowMultiple]);
+
+  function resetForm() {
+    setPrompt("");
+    setCorrectText("");
+    setExplanationText("");
+    setQuestionFiles([]);
+    setExplanationFiles([]);
+    setOptions([
+      { key: uid(), text: "", file: null, is_correct: false },
+      { key: uid(), text: "", file: null, is_correct: false },
+      { key: uid(), text: "", file: null, is_correct: false },
+      { key: uid(), text: "", file: null, is_correct: false },
+    ]);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function submit() {
@@ -191,82 +276,61 @@ function NewQuestionContent() {
 
       const questionId = created.question.id;
 
-      for (let i = 0; i < questionFiles.length; i++) {
-        const file = questionFiles[i]!;
-        const safeName = file.name.replaceAll(" ", "-");
-        const path = `questions/${questionId}/${Date.now()}-${i}-${safeName}`;
-        const { error: upErr } = await supabase.storage.from(storageBucket).upload(path, file, {
-          upsert: false,
-        });
-        if (upErr) throw new Error(upErr.message);
+      const uploadAndGetAsset = async (file: File, kind: "prompt" | "explanation", i: number) => {
+          const safeName = file.name.replaceAll(" ", "-");
+          const path = `questions/${questionId}/${kind === 'explanation' ? 'explanations/' : ''}${Date.now()}-${i}-${safeName}`;
+          const { error: upErr } = await supabase.storage.from(storageBucket).upload(path, file, { upsert: false });
+          if (upErr) throw new Error(upErr.message);
+          const publicUrl = supabase.storage.from(storageBucket).getPublicUrl(path).data.publicUrl;
+          return { bucket: storageBucket, storage_path: path, url: publicUrl, alt: file.name, kind, sort_order: i };
+      };
 
-        const publicUrl = supabase.storage.from(storageBucket).getPublicUrl(path).data.publicUrl;
-        await adminFetch(`/api/admin/questions/${questionId}`, {
-          method: "POST",
-          body: JSON.stringify({
-            action: "create_asset",
-            bucket: storageBucket,
-            storage_path: path,
-            url: publicUrl,
-            alt: file.name,
-            kind: "prompt",
-            sort_order: i,
-          }),
-        });
-      }
-
-      for (let i = 0; i < explanationFiles.length; i++) {
-        const file = explanationFiles[i]!;
-        const safeName = file.name.replaceAll(" ", "-");
-        const path = `questions/${questionId}/explanations/${Date.now()}-${i}-${safeName}`;
-        const { error: upErr } = await supabase.storage.from(storageBucket).upload(path, file, {
-          upsert: false,
-        });
-        if (upErr) throw new Error(upErr.message);
-
-        const publicUrl = supabase.storage.from(storageBucket).getPublicUrl(path).data.publicUrl;
-        await adminFetch(`/api/admin/questions/${questionId}`, {
-          method: "POST",
-          body: JSON.stringify({
-            action: "create_asset",
-            bucket: storageBucket,
-            storage_path: path,
-            url: publicUrl,
-            alt: file.name,
-            kind: "explanation",
-            sort_order: i,
-          }),
-        });
-      }
-
-      if (type === "mcq") {
-        const usable = options.filter((o) => o.text.trim() || o.file);
-        for (const opt of usable) {
+      const uploadAndGetOption = async (opt: NewOption, i: number) => {
           let url: string | null = null;
+          let storagePath: string | null = null;
           if (opt.file) {
             const safeName = opt.file.name.replaceAll(" ", "-");
             const path = `questions/${questionId}/options/${Date.now()}-${uid()}-${safeName}`;
-            const { error: upErr } = await supabase.storage.from(storageBucket).upload(path, opt.file, {
-              upsert: false,
-            });
+            const { error: upErr } = await supabase.storage.from(storageBucket).upload(path, opt.file, { upsert: false });
             if (upErr) throw new Error(upErr.message);
             url = supabase.storage.from(storageBucket).getPublicUrl(path).data.publicUrl;
+            storagePath = path;
           }
+          return { text: opt.text.trim() || null, bucket: storageBucket, storage_path: storagePath, url, is_correct: opt.is_correct };
+      };
 
-          await adminFetch(`/api/admin/questions/${questionId}`, {
-            method: "POST",
-            body: JSON.stringify({
-              action: "create_option",
-              text: opt.text.trim() || null,
-              url,
-              is_correct: opt.is_correct,
-            }),
-          });
-        }
+      const assetPromises = [
+        ...questionFiles.map((f, i) => uploadAndGetAsset(f, "prompt", i)),
+        ...explanationFiles.map((f, i) => uploadAndGetAsset(f, "explanation", i))
+      ];
+
+      const optionPromises = type === "mcq" 
+        ? options.filter(o => o.text.trim() || o.file).map((o, i) => uploadAndGetOption(o, i))
+        : [];
+
+      const [pAssets, pOptions] = await Promise.all([
+          Promise.all(assetPromises),
+          Promise.all(optionPromises)
+      ]);
+
+      const batchPromises = [];
+      if (pAssets.length > 0) {
+          batchPromises.push(adminFetch(`/api/admin/questions/${questionId}`, {
+              method: "POST",
+              body: JSON.stringify({ action: "batch_assets", assets: pAssets })
+          }));
+      }
+      if (pOptions.length > 0) {
+          batchPromises.push(adminFetch(`/api/admin/questions/${questionId}`, {
+              method: "POST",
+              body: JSON.stringify({ action: "batch_options", options: pOptions })
+          }));
       }
 
-      setMessage("Question created.");
-      router.push(`/dashboard/exams/${examId}`);
+      await Promise.all(batchPromises);
+
+      setMessage("Question added successfully! You can add another one below.");
+      resetForm();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Something went wrong.";
       setError(msg);
@@ -277,44 +341,7 @@ function NewQuestionContent() {
 
   return (
     <div className="max-w-full">
-      {/* Sticky Top Header */}
-      <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border border-outline/60 shadow-soft-xl rounded-2xl mb-8 p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
-        <div className="flex items-center gap-4">
-          <Link
-            href={`/dashboard/exams/${examId}`}
-            className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 text-on-surface hover:bg-slate-200 transition-all active:scale-95"
-          >
-            <span className="material-symbols-outlined text-[20px]">arrow_back</span>
-          </Link>
-          <div>
-            <h1 className="font-headline text-2xl font-black text-primary tracking-tighter">
-              New Question
-            </h1>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-secondary mt-1 truncate max-w-[200px] sm:max-w-md">
-              {exam ? `#${exam.exam_number} • ${exam.title}` : `Exam ID: ${examId}`}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <button
-            type="button"
-            onClick={() => router.push(`/dashboard/exams/${examId}`)}
-            disabled={saving}
-            className="flex-1 sm:flex-none px-6 py-3 font-black text-xs uppercase tracking-widest rounded-xl text-primary border border-outline hover:bg-slate-50 transition-all active:scale-95 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={saving}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-primary text-white px-8 py-3 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-slate-800 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 active:scale-95"
-          >
-             <span className="material-symbols-outlined text-[18px]">add_task</span>
-            {saving ? "Creating..." : "Create Question"}
-          </button>
-        </div>
-      </div>
+      <PageHeader exam={exam} examId={examId} saving={saving} submit={submit} onCancel={() => router.push(`/dashboard/exams/${examId}`)} />
 
       {error ? (
         <div className="mb-8 p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl flex items-center gap-3 animate-slide-up">
@@ -324,9 +351,14 @@ function NewQuestionContent() {
       ) : null}
 
       {message ? (
-        <div className="mb-8 p-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl flex items-center gap-3 animate-slide-up">
-          <span className="material-symbols-outlined text-emerald-500">check_circle</span>
-          <span className="text-sm font-bold">{message}</span>
+        <div className="mb-8 p-5 bg-emerald-50 border-2 border-emerald-200 text-emerald-800 rounded-2xl flex items-center justify-between gap-3 animate-bounce shadow-lg shadow-emerald-100">
+          <div className="flex items-center gap-3">
+             <span className="material-symbols-outlined text-emerald-500 text-3xl">check_circle</span>
+             <span className="text-sm font-black uppercase tracking-tight">{message}</span>
+          </div>
+          <button onClick={() => setMessage(null)} className="text-emerald-400 hover:text-emerald-700">
+             <span className="material-symbols-outlined">close</span>
+          </button>
         </div>
       ) : null}
 
@@ -334,9 +366,7 @@ function NewQuestionContent() {
         <LoadingAnimation />
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-10 items-start pb-24">
-          {/* Main Question Content */}
           <div className="xl:col-span-8 space-y-10">
-            {/* Split View for Prompt and Assets */}
             <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden">
                <div className="p-6 border-b border-outline/40 bg-slate-50/50 flex items-center gap-3">
                   <span className="material-symbols-outlined text-primary">edit_note</span>
@@ -344,9 +374,7 @@ function NewQuestionContent() {
                </div>
                <div className="p-8 space-y-8">
                   <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">
-                      Question Prompt
-                    </label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">Question Prompt</label>
                     <textarea
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
@@ -355,316 +383,118 @@ function NewQuestionContent() {
                       placeholder="Enter the question text here..."
                     />
                     {prompt && (
-                      <div className="mt-4 p-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl">
-                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Live Preview</div>
-                        <MathText text={prompt} />
-                      </div>
+                      <div className="mt-4 p-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl"><MathText text={prompt} /></div>
                     )}
                   </div>
 
                   {type === "fill" && (
                     <div className="animate-fade-in">
-                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">
-                        Correct Answer (Fill Only)
-                      </label>
-                      <input
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">Correct Answer (Fill Only)</label>
+                       <input
                         value={correctText}
                         onChange={(e) => setCorrectText(e.target.value)}
                         className="h-14 w-full px-6 bg-emerald-50 border border-emerald-100 rounded-2xl focus:border-emerald-500 focus:bg-white outline-none transition-all font-bold text-lg text-emerald-900"
                         placeholder="Exact text for correct answer..."
                       />
-                      {correctText && (
-                        <div className="mt-2 p-3 bg-emerald-50/50 border border-dashed border-emerald-200 rounded-xl">
-                          <MathText text={correctText} />
-                        </div>
-                      )}
                     </div>
                   )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-outline/20">
                     <div>
                         <div className="text-xs font-black text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
-                           <span className="material-symbols-outlined text-[18px]">imagesmode</span>
-                           Question Images
+                           <span className="material-symbols-outlined text-[18px]">imagesmode</span>Question Images
                         </div>
-                        <div className="relative group">
-                          <input
-                            type="file"
-                            multiple
-                            accept="image/*"
-                            onChange={(e) => setQuestionFiles(Array.from(e.target.files ?? []))}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                          />
-                          <div className="h-24 w-full border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center gap-2 group-hover:bg-slate-50 group-hover:border-primary transition-all">
-                             <span className="material-symbols-outlined text-slate-400">upload_file</span>
-                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                               {questionFiles.length > 0 ? `${questionFiles.length} files selected` : "Select images"}
-                             </span>
-                          </div>
-                        </div>
+                        <input type="file" multiple accept="image/*" onChange={(e) => setQuestionFiles(Array.from(e.target.files ?? []))} className="mb-2 text-xs" />
+                        <div className="text-[9px] font-bold text-slate-400">{questionFiles.length} files selected</div>
                     </div>
                     <div>
                         <div className="text-xs font-black text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
-                           <span className="material-symbols-outlined text-[18px]">lightbulb</span>
-                           Explanation Images
+                           <span className="material-symbols-outlined text-[18px]">auto_stories</span>Explanation & Assets
                         </div>
-                        <div className="relative group">
-                          <input
-                            type="file"
-                            multiple
-                            accept="image/*"
-                            onChange={(e) => setExplanationFiles(Array.from(e.target.files ?? []))}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                          />
-                          <div className="h-24 w-full border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center gap-2 group-hover:bg-slate-50 group-hover:border-primary transition-all">
-                             <span className="material-symbols-outlined text-slate-400">upload_file</span>
-                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                               {explanationFiles.length > 0 ? `${explanationFiles.length} files selected` : "Select images"}
-                             </span>
-                          </div>
-                        </div>
+                        <textarea
+                          value={explanationText}
+                          onChange={(e) => setExplanationText(e.target.value)}
+                          rows={3}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:bg-white outline-none transition-all text-sm mb-4"
+                          placeholder="Why is it correct?"
+                        />
+                        <input type="file" multiple accept="image/*" onChange={(e) => setExplanationFiles(Array.from(e.target.files ?? []))} className="text-xs" />
                     </div>
                   </div>
                </div>
             </div>
 
-            {/* Explanation Content */}
-            <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden">
-               <div className="p-6 border-b border-outline/40 bg-amber-50/50 flex items-center gap-3">
-                  <span className="material-symbols-outlined text-amber-600">psychology</span>
-                  <h2 className="text-sm font-black uppercase tracking-widest text-amber-700">Detailed Explanation</h2>
-               </div>
-               <div className="p-8">
-                  <textarea
-                    value={explanationText}
-                    onChange={(e) => setExplanationText(e.target.value)}
-                    rows={6}
-                    className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl focus:border-amber-400 focus:bg-white outline-none transition-all font-medium text-base leading-relaxed resize-none"
-                    placeholder="Provide a step-by-step explanation for the students..."
-                  />
-                  {explanationText && (
-                    <div className="mt-4 p-4 bg-amber-50/30 border border-dashed border-amber-200 rounded-xl">
-                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Live Preview</div>
-                      <MathText text={explanationText} />
-                    </div>
-                  )}
-               </div>
-            </div>
-
-            {/* MCQ Options */}
             {type === "mcq" && (
-              <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden animate-fade-in">
-                 <div className="p-6 border-b border-outline/40 bg-indigo-50/50 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="material-symbols-outlined text-indigo-600">checklist</span>
-                      <h2 className="text-sm font-black uppercase tracking-widest text-indigo-700">Answer Options</h2>
-                    </div>
-                    <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">
-                       Correct: {correctCount}
-                    </div>
-                 </div>
-                 <div className="p-8 space-y-6">
-                    {options.map((o, idx) => (
-                      <div key={o.key} className="group relative border border-slate-100 bg-slate-50/50 rounded-2xl p-6 hover:border-indigo-200 hover:bg-white transition-all">
-                         <div className="flex items-center justify-between gap-4 mb-4">
-                            <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center font-black text-xs">
-                               {idx + 1}
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setOptions((prev) => prev.filter((x) => x.key !== o.key))}
-                              className="text-slate-400 hover:text-rose-600 transition-colors"
-                            >
-                              <span className="material-symbols-outlined text-[20px]">delete</span>
-                            </button>
-                         </div>
-                         <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                            <div className="md:col-span-10">
-                              <input
-                                value={o.text}
-                                onChange={(e) =>
-                                  setOptions((prev) =>
-                                    prev.map((x) => (x.key === o.key ? { ...x, text: e.target.value } : x)),
-                                  )
-                                }
-                                placeholder="Option text (optional if using image)"
-                                className="h-12 w-full px-5 bg-white border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition-all font-bold"
-                              />
-                              {o.text && (
-                                <div className="mt-2 p-2 bg-indigo-50/30 border border-dashed border-indigo-200 rounded-lg">
-                                  <MathText text={o.text} />
-                                </div>
-                              )}
-                            </div>
-                            <div className="md:col-span-2">
-                               <label className={`h-12 w-full flex items-center justify-center gap-2 border-2 rounded-xl cursor-pointer transition-all active:scale-95 ${o.is_correct ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-100 bg-white text-slate-400"}`}>
-                                  <input
-                                    type="checkbox"
-                                    checked={o.is_correct}
-                                    onChange={(e) => setOptionCorrect(o.key, e.target.checked)}
-                                    className="hidden"
-                                  />
-                                  <span className="material-symbols-outlined text-[20px]">{o.is_correct ? "check_circle" : "radio_button_unchecked"}</span>
-                                  <span className="text-[10px] font-black uppercase tracking-widest">Correct</span>
-                               </label>
-                            </div>
-                         </div>
-                         <div className="mt-4 flex items-center gap-4">
-                             <div className="relative">
-                               <input
-                                 type="file"
-                                 accept="image/*"
-                                 onChange={(e) => {
-                                   const file = e.target.files?.[0] ?? null;
-                                   setOptions((prev) => prev.map((x) => (x.key === o.key ? { ...x, file } : x)));
-                                 }}
-                                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                               />
-                               <div className="px-4 py-2 border border-slate-200 rounded-lg bg-white flex items-center gap-2 hover:border-indigo-300 transition-colors">
-                                  <span className="material-symbols-outlined text-[18px] text-slate-400">image</span>
-                                  <span className="text-[10px] font-black uppercase text-slate-500 tracking-widest italic">
-                                     {o.file ? o.file.name : "Attach Image"}
-                                  </span>
-                               </div>
-                             </div>
-                         </div>
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                   <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-primary/5 text-primary flex items-center justify-center">
+                        <span className="material-symbols-outlined">checklist</span>
                       </div>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => setOptions((prev) => [...prev, { key: uid(), text: "", file: null, is_correct: false }])}
-                      className="w-full h-12 border-2 border-dashed border-slate-200 text-slate-400 rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-slate-50 hover:border-indigo-300 hover:text-indigo-600 transition-all"
-                    >
-                      + Add Another Option
-                    </button>
-                 </div>
+                      <h2 className="text-sm font-black uppercase tracking-widest text-primary">Answer Options</h2>
+                   </div>
+                   <button type="button" onClick={() => setOptions([...options, { key: uid(), text: "", file: null, is_correct: false }])} className="text-xs font-black uppercase text-secondary hover:text-primary transition-all flex items-center gap-1">+ Add Option</button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                   {options.map((opt, idx) => (
+                     <OptionInput key={opt.key} opt={opt} index={idx} type={type} allowMultiple={allowMultiple} onUpdate={updateOption} onRemove={removeOption} onSetCorrect={setOptionCorrect} />
+                   ))}
+                </div>
               </div>
             )}
           </div>
 
-          {/* Configuration Sidebar */}
-          <div className="xl:col-span-4 space-y-8 sticky top-32">
-             <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden">
-                <div className="p-6 border-b border-outline/40 bg-slate-50 flex items-center gap-3">
-                   <span className="material-symbols-outlined text-primary">tune</span>
-                   <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Core Settings</h2>
-                </div>
-                <div className="p-8 space-y-6">
-                   <div className="grid grid-cols-2 gap-4">
-                      <button
-                         type="button"
-                         onClick={() => setType("mcq")}
-                         className={`h-14 flex flex-col items-center justify-center gap-1 border-2 rounded-2xl transition-all active:scale-[0.98] ${type === "mcq" ? "border-primary bg-primary/5 text-primary" : "border-slate-100 bg-slate-50 text-slate-400"}`}
-                      >
-                         <span className="material-symbols-outlined">quiz</span>
-                         <span className="text-[10px] font-black uppercase tracking-widest">MCQ</span>
-                      </button>
-                      <button
-                         type="button"
-                         onClick={() => setType("fill")}
-                         className={`h-14 flex flex-col items-center justify-center gap-1 border-2 rounded-2xl transition-all active:scale-[0.98] ${type === "fill" ? "border-primary bg-primary/5 text-primary" : "border-slate-100 bg-slate-50 text-slate-400"}`}
-                      >
-                         <span className="material-symbols-outlined">stylus</span>
-                         <span className="text-[10px] font-black uppercase tracking-widest">Fill</span>
-                      </button>
-                   </div>
+          <div className="xl:col-span-4 space-y-8">
+            <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden p-8 space-y-8">
+               <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">Question Type</label>
+                  <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-outline/40">
+                     <button type="button" onClick={() => setType("mcq")} className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${type === 'mcq' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-primary'}`}>MCQ</button>
+                     <button type="button" onClick={() => setType("fill")} className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${type === 'fill' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-primary'}`}>Fill</button>
+                  </div>
+               </div>
 
-                   <div>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">Points</label>
-                      <input
-                        value={points}
-                        onChange={(e) => setPoints(e.target.value)}
-                        className="h-12 w-full px-5 bg-slate-50 border border-slate-100 rounded-xl focus:border-primary outline-none transition-all font-black text-center"
-                      />
-                   </div>
+               {type === "mcq" && (
+                 <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-4">Multiple Selection</label>
+                    <button type="button" onClick={() => setAllowMultiple(!allowMultiple)} className={`w-full py-3 px-4 border-2 rounded-2xl flex items-center justify-between transition-all ${allowMultiple ? 'border-primary bg-primary/5 text-primary' : 'border-slate-100 text-slate-400'}`}>
+                       <span className="text-xs font-black uppercase">Enable Multiple</span>
+                       <span className="material-symbols-outlined">{allowMultiple ? 'toggle_on' : 'toggle_off'}</span>
+                    </button>
+                 </div>
+               )}
 
-                   <div>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">Mode</label>
-                      <label className={`h-14 w-full flex items-center justify-center gap-3 border-2 rounded-2xl cursor-pointer transition-all ${allowMultiple ? "border-primary bg-primary/5 text-primary" : "border-slate-100 bg-slate-50 text-slate-400"}`}>
-                        <input
-                          type="checkbox"
-                          checked={allowMultiple}
-                          onChange={(e) => setAllowMultiple(e.target.checked)}
-                          disabled={type !== "mcq"}
-                          className="hidden"
-                        />
-                        <span className="material-symbols-outlined">{allowMultiple ? "check_box" : "check_box_outline_blank"}</span>
-                        <span className="text-[10px] font-black uppercase tracking-widest">Multiple Answers</span>
-                      </label>
-                   </div>
-                </div>
-             </div>
+               <div className="grid grid-cols-2 gap-6">
+                 <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Points</label>
+                    <input type="number" value={points} onChange={(e) => setPoints(e.target.value)} className="h-12 w-full px-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-primary outline-none font-bold text-center" />
+                 </div>
+                 <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Reading Passage</label>
+                    <select value={passageId} onChange={(e) => setPassageId(e.target.value)} className="h-12 w-full px-4 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-xs appearance-none">
+                      <option value="">None</option>
+                      {passages.map(p => <option key={p.id} value={p.id}>{p.title || p.kind}</option>)}
+                    </select>
+                 </div>
+               </div>
 
-             <div className="bg-indigo-600 rounded-3xl p-8 shadow-soft-xl text-white relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-1000" />
-                <div className="relative z-10 space-y-6 text-center sm:text-left">
-                   <div className="flex items-center gap-3 justify-center sm:justify-start">
-                      <span className="material-symbols-outlined text-white/80">view_cozy</span>
-                      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/90">Linked Content</h3>
-                   </div>
-                   <select
-                      value={passageId}
-                      onChange={(e) => setPassageId(e.target.value)}
-                      className="h-12 w-full px-4 bg-white/20 border border-white/20 text-white rounded-xl focus:bg-white focus:text-indigo-900 outline-none transition-all font-bold text-sm backdrop-blur-sm cursor-pointer"
-                   >
-                      <option value="" className="text-gray-900">None (Independent)</option>
-                      {passages.map((p) => (
-                        <option key={p.id} value={p.id} className="text-gray-900">
-                           {p.kind === 'reference' ? '[Reference]' : '[Reading]'} {p.title || `#${p.id.slice(0, 4)}`}
-                        </option>
-                      ))}
-                   </select>
-                   <p className="text-[9px] font-bold text-white/50 bg-black/10 p-3 rounded-lg leading-relaxed">
-                      Link this question to a shared reading passage or a reference block (like a math chart).
-                   </p>
-                </div>
-             </div>
-
-             {/* Topic & Subtopic Selection */}
-             <div className="bg-emerald-600 rounded-3xl p-8 shadow-soft-xl text-white relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-1000" />
-                <div className="relative z-10 space-y-6 text-center sm:text-left">
-                   <div className="flex items-center gap-3 justify-center sm:justify-start">
-                      <span className="material-symbols-outlined text-white/80">category</span>
-                      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/90">Curriculum Hierarchy</h3>
-                   </div>
-                   
-                   <div className="space-y-4">
-                        <div>
-                            <label className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-2 block">Main Topic</label>
-                            <select
-                                value={topicId}
-                                onChange={(e) => { setTopicId(e.target.value); setSubtopicId(""); }}
-                                className="h-12 w-full px-4 bg-white/20 border border-white/20 text-white rounded-xl focus:bg-white focus:text-emerald-900 outline-none transition-all font-bold text-sm backdrop-blur-sm cursor-pointer"
-                            >
-                                <option value="" className="text-gray-900">Select Topic...</option>
-                                {topics.map((t) => (
-                                    <option key={t.id} value={t.id} className="text-gray-900">{t.title}</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div>
-                            <label className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-2 block">Subtopic</label>
-                            <select
-                                value={subtopicId}
-                                onChange={(e) => setSubtopicId(e.target.value)}
-                                disabled={!topicId}
-                                className="h-12 w-full px-4 bg-white/20 border border-white/20 text-white rounded-xl focus:bg-white focus:text-emerald-900 outline-none transition-all font-bold text-sm backdrop-blur-sm cursor-pointer disabled:opacity-50"
-                            >
-                                <option value="" className="text-gray-900">Select Subtopic...</option>
-                                {filteredSubtopics.map((st) => (
-                                    <option key={st.id} value={st.id} className="text-gray-900">{st.title}</option>
-                                ))}
-                            </select>
-                        </div>
-                   </div>
-                   
-                   <p className="text-[9px] font-bold text-white/50 bg-black/10 p-3 rounded-lg leading-relaxed">
-                      Questions are linked to subtopics for granular analytics. Select a topic first to see its subtopics.
-                   </p>
-                </div>
-             </div>
+               <div className="space-y-6 pt-6 border-t border-outline/20">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Topic</label>
+                    <select value={topicId} onChange={(e) => { setTopicId(e.target.value); setSubtopicId(""); }} className="h-12 w-full px-4 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-xs">
+                      <option value="">Select Topic</option>
+                      {topics.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Subtopic</label>
+                    <select value={subtopicId} onChange={(e) => setSubtopicId(e.target.value)} disabled={!topicId} className="h-12 w-full px-4 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-xs disabled:opacity-50">
+                      <option value="">{topicId ? "Select Subtopic" : "Select Topic First"}</option>
+                      {filteredSubtopics.map(st => <option key={st.id} value={st.id}>{st.title}</option>)}
+                    </select>
+                  </div>
+               </div>
+            </div>
           </div>
         </div>
       )}
@@ -672,7 +502,7 @@ function NewQuestionContent() {
   );
 }
 
-export default function DashboardNewQuestion() {
+export default function NewQuestionPage() {
   return (
     <Suspense fallback={<LoadingAnimation />}>
       <NewQuestionContent />
