@@ -159,7 +159,7 @@ export default function BrainGymClient() {
       if (qErr) throw qErr;
 
       // Filter assets by kind
-      const formattedQuestions = (qData || []).map((q: any) => ({
+      const formattedQuestions: Question[] = (qData || []).map((q: any) => ({
         ...q,
         prompt_assets: q.prompt_assets.filter((a: any) => a.kind === 'prompt'),
         explanation_assets: q.explanation_assets.filter((a: any) => a.kind === 'explanation'),
@@ -167,14 +167,14 @@ export default function BrainGymClient() {
       }));
 
       // Sort questions based on the original session.question_ids order
-      const sortedQuestions = session.question_ids.map((id: string) => formattedQuestions.find(q => q.id === id)).filter(Boolean);
+      const sortedQuestions = session.question_ids.map((id: string) => (formattedQuestions as Question[]).find((q: Question) => q.id === id)).filter((q: Question | undefined): q is Question => !!q);
 
       setQuestions(sortedQuestions);
 
       // Reconstruct qState from saved answers
       const savedAnswers = session.answers || {};
       const newQState = new Map<string, QuestionState>();
-      sortedQuestions.forEach(q => {
+      sortedQuestions.forEach((q: Question) => {
         const ans = savedAnswers[q.id] || { selectedOptionIds: [], fillText: "" };
         newQState.set(q.id, { seen: true, marked: false, ...ans });
       });
@@ -182,16 +182,16 @@ export default function BrainGymClient() {
 
       // Set results
       const topicStats = new Map<string, { correct: number; total: number }>();
-      sortedQuestions.forEach(q => {
+      sortedQuestions.forEach((q: Question) => {
         const tid = q.topic_id || "general";
         const stats = topicStats.get(tid) || { correct: 0, total: 0 };
         stats.total += 1;
         const ans = savedAnswers[q.id];
         let isC = false;
         if (q.type === 'mcq') {
-          const cIds = q.options.filter(o => o.is_correct).map(o => o.id);
+          const cIds = q.options.filter((o: Option) => o.is_correct).map((o: Option) => o.id);
           const sel = ans?.selectedOptionIds || [];
-          isC = cIds.length === sel.length && cIds.every(id => sel.includes(id));
+          isC = cIds.length === sel.length && cIds.every((id: string) => sel.includes(id));
         } else {
           isC = normalizeText(ans?.fillText || "") === normalizeText(q.correct_text || "");
         }

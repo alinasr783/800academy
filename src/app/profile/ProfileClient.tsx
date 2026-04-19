@@ -333,7 +333,7 @@ export default function ProfileClient() {
     const map = new Map<string, string>();
     for (const e of entitlements) {
       if (e.subjects?.title) {
-        map.set(e.subject_id, e.subjects.title);
+        map.set(e.subject_id, e.subjects!.title);
       }
     }
     return map;
@@ -758,7 +758,7 @@ export default function ProfileClient() {
                           {attempts.map((a, idx) => {
                             const subjectTitle =
                               (a.exams?.subject_id
-                                ? subjectTitleMap.get(a.exams.subject_id)
+                                ? subjectTitleMap.get(a.exams?.subject_id)
                                 : undefined) ?? "—";
                             const scoreStyles = getScoreStyles(a.score);
                             return (
@@ -813,7 +813,7 @@ export default function ProfileClient() {
                       {attempts.map((a, idx) => {
                         const subjectTitle =
                           (a.exams?.subject_id
-                            ? subjectTitleMap.get(a.exams.subject_id)
+                            ? subjectTitleMap.get(a.exams?.subject_id)
                             : undefined) ?? "—";
                         const scoreStyles = getScoreStyles(a.score);
                         return (
@@ -822,7 +822,7 @@ export default function ProfileClient() {
                             onClick={() => {
                               const slug = a.exams?.subjects?.slug;
                               if (!slug) return;
-                              router.push(`/subjects/${slug}/exams/${a.exams.exam_number}?attempt_id=${a.id}`);
+                              router.push(`/subjects/${slug}/exams/${a.exams?.exam_number}?attempt_id=${a.id}`);
                             }}
                             className="border border-outline/40 bg-surface-variant/20 rounded-xl p-4 space-y-3 cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-all active:scale-95"
                           >
@@ -964,7 +964,7 @@ export default function ProfileClient() {
 
                           <div className="text-sm font-bold text-primary truncate">
                             {m.exam_questions?.prompt_text ? (
-                              <div className="line-clamp-2" dangerouslySetInnerHTML={{ __html: m.exam_questions.prompt_text }} />
+                              <div className="line-clamp-2" dangerouslySetInnerHTML={{ __html: m.exam_questions?.prompt_text }} />
                             ) : (
                               `Question #${m.exam_questions?.question_number ?? "?"}`
                             )}
