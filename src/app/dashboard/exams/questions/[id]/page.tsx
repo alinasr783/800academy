@@ -450,7 +450,7 @@ export default function DashboardQuestionDetails() {
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
                       rows={8}
-                      className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl focus:border-primary focus:bg-white outline-none transition-all font-medium text-lg leading-relaxed resize-none"
+                      className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl focus:border-primary focus:bg-white outline-none transition-all font-medium text-lg leading-relaxed"
                     />
                     {prompt && (
                       <div className="mt-4 p-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl">
@@ -546,7 +546,7 @@ export default function DashboardQuestionDetails() {
                     value={explanationText}
                     onChange={(e) => setExplanationText(e.target.value)}
                     rows={6}
-                    className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl focus:border-amber-400 focus:bg-white outline-none transition-all font-medium text-base leading-relaxed resize-none"
+                    className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl focus:border-amber-400 focus:bg-white outline-none transition-all font-medium text-base leading-relaxed"
                     placeholder="Provide a step-by-step explanation for the students..."
                   />
                   {explanationText && (
@@ -650,12 +650,13 @@ export default function DashboardQuestionDetails() {
                         <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Quick Add Option</div>
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
                             <div className="md:col-span-10">
-                                <input
-                                    value={optText}
-                                    onChange={(e) => setOptText(e.target.value)}
-                                    placeholder="Option text..."
-                                    className="h-12 w-full px-5 bg-white border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition-all font-bold"
-                                />
+                                 <textarea
+                                     value={optText}
+                                     onChange={(e) => setOptText(e.target.value)}
+                                     placeholder="Option text..."
+                                     className="w-full px-5 py-3 bg-white border border-slate-200 rounded-xl focus:border-indigo-500 outline-none transition-all font-bold"
+                                     rows={2}
+                                 />
                             </div>
                              <div className="md:col-span-2">
                                 <label className={`h-12 w-full flex items-center justify-center gap-2 border-2 rounded-xl cursor-pointer transition-all active:scale-95 ${optCorrect ? "border-indigo-500 bg-indigo-50 text-indigo-700" : "border-slate-100 bg-white text-slate-400"}`}>

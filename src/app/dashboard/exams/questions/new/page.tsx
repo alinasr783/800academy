@@ -72,9 +72,9 @@ const OptionInput = memo(({ opt, index, type, allowMultiple, onUpdate, onRemove,
     <textarea
       value={opt.text}
       onChange={(e) => onUpdate(opt.key, { text: e.target.value })}
-      className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:bg-white focus:border-primary outline-none transition-all text-sm font-medium resize-none"
+      className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:bg-white focus:border-primary outline-none transition-all text-sm font-medium"
       placeholder={`Enter option ${String.fromCharCode(65 + index)} text...`}
-      rows={2}
+      rows={3}
     />
     <div className="flex items-center gap-4">
        <div className="relative group flex-1">
@@ -379,7 +379,7 @@ function NewQuestionContent() {
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
                       rows={8}
-                      className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl focus:border-primary focus:bg-white outline-none transition-all font-medium text-lg leading-relaxed resize-none"
+                      className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl focus:border-primary focus:bg-white outline-none transition-all font-medium text-lg leading-relaxed"
                       placeholder="Enter the question text here..."
                     />
                     {prompt && (

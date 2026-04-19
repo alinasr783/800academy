@@ -95,3 +95,8 @@ html {
 .rich-text-content th, .rich-text-content td { border: 1px solid #e2e8f0; padding: 0.5rem; text-align: left; }
 .rich-text-content th { background-color: #f8fafc; font-weight: 700; }
 
+.math-text-container {
+  white-space: pre-wrap !important;
+  word-wrap: break-word;
+}
+
