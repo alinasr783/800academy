@@ -39,6 +39,7 @@ type AttemptRow = {
     subject_id: string;
     exam_number: number;
     title: string;
+    subjects: { title: string; slug: string; track: string | null } | null;
   } | null;
 };
 
@@ -194,7 +195,7 @@ export default function ProfileClient() {
       const { data: attRows } = await supabase
         .from("exam_attempts")
         .select(
-          "id, exam_id, score, duration_seconds, submitted_at, exams(id, subject_id, exam_number, title)",
+          "id, exam_id, score, duration_seconds, submitted_at, exams(id, subject_id, exam_number, title, subjects(title, slug, track))",
         )
         .order("submitted_at", { ascending: false })
         .limit(500)
