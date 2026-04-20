@@ -929,6 +929,7 @@ export default function DashboardQuestionDetails() {
                   )}
                </div>
             </div>
+         )}
 
             {type === "mcq" && (
               <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden animate-fade-in">

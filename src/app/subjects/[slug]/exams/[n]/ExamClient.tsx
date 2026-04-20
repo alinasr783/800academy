@@ -356,8 +356,18 @@ export default function ExamClient({
           .order("question_number", { ascending: true })
           .returns<
             {
-               ...any;
-               parent_id: string | null;
+              id: string;
+              question_number: number;
+              type: "mcq" | "fill" | "reference_block";
+              prompt_text: string | null;
+              explanation_text: string | null;
+              points: number;
+              allow_multiple: boolean;
+              correct_text: string | null;
+              passage_id: string | null;
+              topic_id: string | null;
+              subtopic_id: string | null;
+              parent_id: string | null;
             }[]
           >();
 

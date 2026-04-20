@@ -369,6 +369,50 @@ function NewQuestionContent() {
       return prev.map((o) => ({ ...o, is_correct: o.key === key }));
     });
   }, [type, allowMultiple]);
+  
+  const addSubQuestion = () => {
+    setSubQuestions(prev => [
+      ...prev,
+      {
+        key: uid(),
+        type: "mcq",
+        prompt: "",
+        explanation: "",
+        points: "1",
+        options: [
+          { key: uid(), text: "", file: null, is_correct: false },
+          { key: uid(), text: "", file: null, is_correct: false },
+          { key: uid(), text: "", file: null, is_correct: false },
+          { key: uid(), text: "", file: null, is_correct: false },
+        ],
+        questionFiles: [],
+        explanationFiles: [],
+        correctText: "",
+        topicId: topicId,
+        subtopicId: subtopicId
+      }
+    ]);
+  };
+
+  const updateSubQuestion = (key: string, patch: Partial<SubQuestion>) => {
+    setSubQuestions(prev => prev.map(s => s.key === key ? { ...s, ...patch } : s));
+  };
+
+  const removeSubQuestion = (key: string) => {
+    setSubQuestions(prev => prev.filter(s => s.key !== key));
+  };
+
+  const reorderSubQuestion = (key: string, direction: 'up' | 'down') => {
+    setSubQuestions(prev => {
+      const idx = prev.findIndex(s => s.key === key);
+      if (idx === -1) return prev;
+      const nextIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (nextIdx < 0 || nextIdx >= prev.length) return prev;
+      const copy = [...prev];
+      [copy[idx], copy[nextIdx]] = [copy[nextIdx], copy[idx]];
+      return copy;
+    });
+  };
 
   function resetForm() {
     setPrompt("");
@@ -718,6 +762,7 @@ function NewQuestionContent() {
                   </div>
                </div>
             </div>
+         )}
 
             {type === "mcq" && (
               <div className="space-y-6">
