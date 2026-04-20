@@ -58,128 +58,293 @@ const SubQuestionInput = memo(({
   const filteredSubtopics = allSubtopics.filter(st => st.topic_id === sub.topicId);
 
   return (
-    <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden group/sub">
-      <div className="p-4 border-b border-outline/40 bg-slate-50 flex items-center justify-between">
+    <div className="bg-white border-2 border-outline/40 shadow-soft-xl rounded-3xl overflow-hidden group/sub">
+      {/* Header */}
+      <div className="p-4 border-b border-outline/30 bg-slate-50 flex items-center justify-between">
          <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-xl bg-primary text-white flex items-center justify-center font-black text-xs">
               {index + 1}
             </div>
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-primary">Sub-Question</h3>
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-primary">Sub-Question Item</h3>
          </div>
          <div className="flex items-center gap-2">
-            <button onClick={() => onReorder(sub.key, 'up')} disabled={index === 0} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-outline/40 text-slate-400 hover:text-primary disabled:opacity-30 transition-all">
+            <button type="button" onClick={() => onReorder(sub.key, 'up')} disabled={index === 0} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-outline/40 text-slate-400 hover:text-primary disabled:opacity-30 transition-all">
                <span className="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
             </button>
-            <button onClick={() => onReorder(sub.key, 'down')} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-outline/40 text-slate-400 hover:text-primary transition-all">
+            <button type="button" onClick={() => onReorder(sub.key, 'down')} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-outline/40 text-slate-400 hover:text-primary transition-all">
                <span className="material-symbols-outlined text-[18px]">keyboard_arrow_down</span>
             </button>
-            <button onClick={() => onRemove(sub.key)} className="ml-2 w-8 h-8 flex items-center justify-center rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 transition-all">
+            <button type="button" onClick={() => onRemove(sub.key)} className="ml-2 w-8 h-8 flex items-center justify-center rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 transition-all">
                <span className="material-symbols-outlined text-[18px]">delete</span>
             </button>
          </div>
       </div>
       
-      <div className="p-6 space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-           <div>
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Type</label>
-              <select 
-                value={sub.type} 
-                onChange={(e) => onUpdate(sub.key, { type: e.target.value as 'mcq' | 'fill' })}
-                className="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold outline-none focus:border-primary"
-              >
-                <option value="mcq">MCQ</option>
-                <option value="fill">Fill In The Blank</option>
-              </select>
-           </div>
-           <div>
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Points</label>
-              <input 
-                type="number" 
-                value={sub.points} 
-                onChange={(e) => onUpdate(sub.key, { points: e.target.value })}
-                className="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold outline-none focus:border-primary text-center"
-              />
-           </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2">
+        {/* Left Side: Editor */}
+        <div className="p-6 space-y-8 border-r border-outline/20">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <div>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Type</label>
+                <select 
+                  value={sub.type} 
+                  onChange={(e) => onUpdate(sub.key, { type: e.target.value as 'mcq' | 'fill' })}
+                  className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-primary transition-all"
+                >
+                  <option value="mcq">MCQ</option>
+                  <option value="fill">Fill In The Blank</option>
+                </select>
+             </div>
+             <div>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Points</label>
+                <input 
+                  type="number" 
+                  value={sub.points} 
+                  onChange={(e) => onUpdate(sub.key, { points: e.target.value })}
+                  className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-primary text-center transition-all"
+                />
+             </div>
+          </div>
+
+          {/* Prompt Section */}
+          <div className="space-y-4">
+             <div>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Sub-Question Prompt</label>
+                <textarea 
+                  value={sub.prompt} 
+                  onChange={(e) => onUpdate(sub.key, { prompt: e.target.value })}
+                  rows={4}
+                  placeholder="Write the sub-question prompt here... (Supports LaTeX and HTML)"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:bg-white focus:border-primary transition-all"
+                />
+             </div>
+             
+             <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Prompt Assets</label>
+                   <div className="relative">
+                      <input type="file" multiple accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => {
+                         const files = Array.from(e.target.files || []);
+                         onUpdate(sub.key, { questionFiles: [...sub.questionFiles, ...files] });
+                      }} />
+                      <button type="button" className="text-[9px] font-black text-primary uppercase tracking-widest hover:underline">+ Add Images</button>
+                   </div>
+                </div>
+                {sub.questionFiles.length > 0 && (
+                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {sub.questionFiles.map((f, i) => (
+                         <div key={i} className="relative group/img h-20 bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+                            <img src={URL.createObjectURL(f)} className="w-full h-full object-cover" alt="Sub prompt" />
+                            <button onClick={() => {
+                               const next = [...sub.questionFiles];
+                               next.splice(i, 1);
+                               onUpdate(sub.key, { questionFiles: next });
+                            }} className="absolute top-1 right-1 w-6 h-6 bg-rose-500 text-white rounded-lg opacity-0 group-hover/img:opacity-100 transition-all flex items-center justify-center">
+                               <span className="material-symbols-outlined text-[14px]">close</span>
+                            </button>
+                         </div>
+                      ))}
+                   </div>
+                )}
+             </div>
+          </div>
+
+          {/* Type Specific logic */}
+          {sub.type === "mcq" ? (
+             <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Answer Options</label>
+                   <button type="button" onClick={() => onUpdate(sub.key, { options: [...sub.options, { key: uid(), text: "", file: null, is_correct: false }] })} className="text-[9px] font-black text-primary uppercase tracking-widest hover:underline">+ Add Option</button>
+                </div>
+                <div className="space-y-4">
+                   {sub.options.map((opt, oIdx) => (
+                      <div key={opt.key} className="bg-slate-50/50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                         <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                               <div className="w-6 h-6 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-[10px] font-black text-slate-400">
+                                  {String.fromCharCode(65 + oIdx)}
+                               </div>
+                               <label className="flex items-center gap-2 cursor-pointer group">
+                                  <input 
+                                    type="checkbox" 
+                                    checked={opt.is_correct}
+                                    onChange={(e) => {
+                                       const next = sub.options.map(o => o.key === opt.key ? { ...o, is_correct: e.target.checked } : o);
+                                       onUpdate(sub.key, { options: next });
+                                    }}
+                                    className="w-4 h-4 accent-emerald-500 cursor-pointer"
+                                  />
+                                  <span className={`text-[9px] font-black uppercase tracking-widest ${opt.is_correct ? 'text-emerald-600' : 'text-slate-400'}`}>Correct</span>
+                               </label>
+                            </div>
+                            <button type="button" onClick={() => onUpdate(sub.key, { options: sub.options.filter(o => o.key !== opt.key) })} className="text-slate-300 hover:text-rose-500 transition-colors">
+                               <span className="material-symbols-outlined text-[18px]">delete</span>
+                            </button>
+                         </div>
+                         <textarea 
+                           value={opt.text}
+                           onChange={(e) => {
+                              const next = sub.options.map(o => o.key === opt.key ? { ...o, text: e.target.value } : o);
+                              onUpdate(sub.key, { options: next });
+                           }}
+                           rows={2}
+                           placeholder="Option text..."
+                           className="w-full px-3 py-2 bg-white border border-slate-100 rounded-xl text-xs font-bold outline-none focus:border-primary transition-all"
+                         />
+                         <div className="flex items-center gap-2">
+                           <div className="relative flex-1">
+                              <input type="file" accept="image/*" onChange={(e) => {
+                                 const f = e.target.files?.[0] || null;
+                                 const next = sub.options.map(o => o.key === opt.key ? { ...o, file: f } : o);
+                                 onUpdate(sub.key, { options: next });
+                              }} className="absolute inset-0 opacity-0 cursor-pointer" />
+                              <div className={`h-8 px-3 border border-dashed rounded-lg flex items-center gap-2 text-[10px] font-black transition-all ${opt.file ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-white border-slate-200 text-slate-400'}`}>
+                                 <span className="material-symbols-outlined text-[16px]">{opt.file ? 'check_circle' : 'add_photo_alternate'}</span>
+                                 <span className="truncate flex-1">{opt.file ? opt.file.name : 'Attach Image'}</span>
+                              </div>
+                           </div>
+                           {opt.file && (
+                              <button onClick={() => {
+                                 const next = sub.options.map(o => o.key === opt.key ? { ...o, file: null } : o);
+                                 onUpdate(sub.key, { options: next });
+                              }} className="text-rose-500 hover:text-rose-700">
+                                 <span className="material-symbols-outlined text-[18px]">close</span>
+                              </button>
+                           )}
+                         </div>
+                      </div>
+                   ))}
+                </div>
+             </div>
+          ) : (
+             <div>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Correct Answer</label>
+                <input 
+                  value={sub.correctText} 
+                  onChange={(e) => onUpdate(sub.key, { correctText: e.target.value })}
+                  placeholder="Enter the correct answer..."
+                  className="w-full h-11 px-4 bg-emerald-50 border border-emerald-100 rounded-xl text-xs font-black text-emerald-900 outline-none focus:border-emerald-500 transition-all"
+                />
+             </div>
+          )}
+
+          {/* Explanation Section */}
+          <div className="space-y-4">
+             <div>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Step-by-Step Explanation</label>
+                <textarea 
+                  value={sub.explanation} 
+                  onChange={(e) => onUpdate(sub.key, { explanation: e.target.value })}
+                  rows={4}
+                  placeholder="How to solve this sub-question... (Supports LaTeX and HTML)"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:bg-white focus:border-primary transition-all"
+                />
+             </div>
+             
+             <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Explanation Assets</label>
+                   <div className="relative">
+                      <input type="file" multiple accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => {
+                         const files = Array.from(e.target.files || []);
+                         onUpdate(sub.key, { explanationFiles: [...sub.explanationFiles, ...files] });
+                      }} />
+                      <button type="button" className="text-[9px] font-black text-primary uppercase tracking-widest hover:underline">+ Add Images</button>
+                   </div>
+                </div>
+                {sub.explanationFiles.length > 0 && (
+                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {sub.explanationFiles.map((f, i) => (
+                         <div key={i} className="relative group/img h-20 bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+                            <img src={URL.createObjectURL(f)} className="w-full h-full object-cover" alt="Sub explanation" />
+                            <button onClick={() => {
+                               const next = [...sub.explanationFiles];
+                               next.splice(i, 1);
+                               onUpdate(sub.key, { explanationFiles: next });
+                            }} className="absolute top-1 right-1 w-6 h-6 bg-rose-500 text-white rounded-lg opacity-0 group-hover/img:opacity-100 transition-all flex items-center justify-center">
+                               <span className="material-symbols-outlined text-[14px]">close</span>
+                            </button>
+                         </div>
+                      ))}
+                   </div>
+                )}
+             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+             <div>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Topic</label>
+                <select value={sub.topicId} onChange={(e) => onUpdate(sub.key, { topicId: e.target.value, subtopicId: "" })} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none focus:border-primary transition-all">
+                   <option value="">Select Topic</option>
+                   {topics.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+                </select>
+             </div>
+             <div>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Subtopic</label>
+                <select value={sub.subtopicId} onChange={(e) => onUpdate(sub.key, { subtopicId: e.target.value })} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none focus:border-primary transition-all">
+                   <option value="">Select Subtopic</option>
+                   {filteredSubtopics.map(st => <option key={st.id} value={st.id}>{st.title}</option>)}
+                </select>
+             </div>
+          </div>
         </div>
 
-        <div>
-           <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-1">Question Prompt</label>
-           <textarea 
-             value={sub.prompt} 
-             onChange={(e) => onUpdate(sub.key, { prompt: e.target.value })}
-             rows={3}
-             className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-medium outline-none focus:bg-white focus:border-primary transition-all"
-           />
-           {sub.prompt && (
-              <div className="mt-2 p-3 bg-slate-50 border border-dashed border-slate-200 rounded-xl">
-                 <MathText text={sub.prompt} />
+        {/* Right Side: Live Preview */}
+        <div className="p-8 bg-blue-50/30 flex flex-col items-center justify-center space-y-8">
+           <div className="text-[10px] font-black text-primary/40 uppercase tracking-[0.3em] mb-4">Student View Preview</div>
+           
+           <div className="w-full max-w-md bg-white border border-outline/30 shadow-soft-xl rounded-3xl p-6 sm:p-8 space-y-6">
+              <div className="text-[10px] font-black text-primary uppercase tracking-[0.2em] opacity-40">Item #{index + 1}</div>
+              
+              <div className="text-sm sm:text-base font-medium leading-relaxed">
+                 <MathText text={sub.prompt || "Question prompt preview..."} />
               </div>
-           )}
-        </div>
 
-        {sub.type === 'mcq' && (
-           <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Answer Options</label>
-                 <button onClick={() => onUpdate(sub.key, { options: [...sub.options, { key: uid(), text: "", file: null, is_correct: false }] })} className="text-[9px] font-black uppercase text-primary hover:underline">+ Add Option</button>
-              </div>
-              <div className="grid grid-cols-1 gap-4">
-                 {sub.options.map((opt, oIdx) => (
-                    <div key={opt.key} className="flex items-start gap-3 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
-                       <input 
-                         type="checkbox" 
-                         checked={opt.is_correct}
-                         onChange={(e) => {
-                            const newOpts = sub.options.map(o => o.key === opt.key ? { ...o, is_correct: e.target.checked } : o);
-                            onUpdate(sub.key, { options: newOpts });
-                         }}
-                         className="mt-1.5 accent-primary"
-                       />
-                       <input 
-                          value={opt.text}
-                          onChange={(e) => {
-                             const newOpts = sub.options.map(o => o.key === opt.key ? { ...o, text: e.target.value } : o);
-                             onUpdate(sub.key, { options: newOpts });
-                          }}
-                          placeholder={`Option ${String.fromCharCode(65 + oIdx)}...`}
-                          className="flex-1 bg-transparent text-xs font-bold outline-none"
-                       />
-                       <button onClick={() => onUpdate(sub.key, { options: sub.options.filter(o => o.key !== opt.key) })} className="text-slate-300 hover:text-rose-500">
-                          <span className="material-symbols-outlined text-[16px]">close</span>
-                       </button>
-                    </div>
+              {sub.questionFiles.length > 0 && (
+                 <div className="space-y-4">
+                    {sub.questionFiles.map((f, i) => (
+                       <img key={i} src={URL.createObjectURL(f)} className="max-w-full h-auto rounded-2xl border border-outline/20 mx-auto" alt="Sub prompt preview" />
+                    ))}
+                 </div>
+              )}
+
+              {sub.type === 'mcq' ? (
+                 <div className="space-y-3">
+                    {sub.options.map((opt, i) => (
+                       <div key={opt.key} className="flex items-center gap-4 p-4 border border-outline/30 rounded-2xl bg-white hover:border-primary/30 transition-all">
+                          <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-xs font-black text-slate-400 border border-outline/20">
+                             {String.fromCharCode(65 + i)}
+                          </div>
+                          <div className="flex-1">
+                             <div className="text-sm font-bold text-slate-700">
+                                <MathText text={opt.text} />
+                             </div>
+                             {opt.file && <img src={URL.createObjectURL(opt.file)} className="mt-2 max-w-full h-24 object-contain rounded-lg border border-outline/20" alt="Opt asset" />}
+                          </div>
+                       </div>
+                    ))}
+                 </div>
+              ) : (
+                 <div className="p-4 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 text-center text-xs font-black text-slate-400">
+                    Input Field Placeholder
+                 </div>
+              )}
+           </div>
+
+           {(sub.explanation || sub.explanationFiles.length > 0) && (
+              <div className="w-full max-w-md bg-blue-50 border border-blue-100 rounded-3xl p-6 sm:p-8 space-y-4">
+                 <div className="flex items-center gap-2 text-blue-600 mb-2">
+                    <span className="material-symbols-outlined text-sm">lightbulb</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest">Explanation View</span>
+                 </div>
+                 <div className="text-sm font-medium text-blue-900 leading-relaxed">
+                    <MathText text={sub.explanation} />
+                 </div>
+                 {sub.explanationFiles.map((f, i) => (
+                    <img key={i} src={URL.createObjectURL(f)} className="max-w-full h-auto rounded-2xl border border-blue-200/50 mx-auto" alt="Sub expl preview" />
                  ))}
               </div>
-           </div>
-        )}
-
-        {sub.type === 'fill' && (
-           <div>
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-1">Correct Answer</label>
-              <input 
-                value={sub.correctText} 
-                onChange={(e) => onUpdate(sub.key, { correctText: e.target.value })}
-                className="w-full h-10 px-4 bg-emerald-50 border border-emerald-100 rounded-xl text-xs font-black text-emerald-900 outline-none"
-              />
-           </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-4">
-           <div>
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Topic</label>
-              <select value={sub.topicId} onChange={(e) => onUpdate(sub.key, { topicId: e.target.value, subtopicId: "" })} className="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-bold outline-none">
-                 <option value="">Select Topic</option>
-                 {topics.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
-              </select>
-           </div>
-           <div>
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Subtopic</label>
-              <select value={sub.subtopicId} onChange={(e) => onUpdate(sub.key, { subtopicId: e.target.value })} className="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-bold outline-none">
-                 <option value="">Select Subtopic</option>
-                 {filteredSubtopics.map(st => <option key={st.id} value={st.id}>{st.title}</option>)}
-              </select>
-           </div>
+           )}
         </div>
       </div>
     </div>
@@ -534,7 +699,6 @@ function NewQuestionContent() {
         }
 
         // 3. Create Sub-questions
-        // Important: question_number is handled by the server (increments current max)
         for (let s of subQuestions) {
            const sCreated = await adminFetch(`/api/admin/exams/${examId}`, {
              method: "POST",
@@ -548,12 +712,25 @@ function NewQuestionContent() {
                correct_text: s.type === 'fill' ? s.correctText.trim() : null,
                topic_id: s.topicId || null,
                subtopic_id: s.subtopicId || null,
-               allow_multiple: false // Assuming single choice sub-questions for simplicity, can expand
+               allow_multiple: false 
              })
            }) as { question: { id: string } };
 
            const sId = sCreated.question.id;
            
+           // Upload sub-question prompt + explanation assets
+           const sAssetPromises = [
+             ...s.questionFiles.map((f, i) => uploadAndGetAsset(sId, f, "prompt", i)),
+             ...s.explanationFiles.map((f, i) => uploadAndGetAsset(sId, f, "explanation", i))
+           ];
+           const sAssets = await Promise.all(sAssetPromises);
+           if (sAssets.length > 0) {
+             await adminFetch(`/api/admin/questions/${sId}`, {
+               method: "POST",
+               body: JSON.stringify({ action: "batch_assets", assets: sAssets })
+             });
+           }
+
            // Upload sub-question options
            if (s.type === 'mcq') {
               const sOptions = await Promise.all(s.options.filter(o => o.text.trim() || o.file).map((o, i) => uploadAndGetOption(sId, o, i)));

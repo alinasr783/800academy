@@ -36,6 +36,9 @@ type SubQuestion = {
   correctText: string;
   topicId: string;
   subtopicId: string;
+  // Local file uploads
+  questionFiles: File[];
+  explanationFiles: File[];
   // Metadata for assets if already exists
   existingAssets?: QuestionAssetRow[];
 };
@@ -109,128 +112,338 @@ const SubQuestionInput = memo(({
   const filteredSubtopics = allSubtopics.filter(st => st.topic_id === sub.topicId);
 
   return (
-    <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden group/sub">
-      <div className="p-4 border-b border-outline/40 bg-slate-50 flex items-center justify-between">
+    <div className="bg-white border-2 border-outline/40 shadow-soft-xl rounded-3xl overflow-hidden group/sub">
+      {/* Header */}
+      <div className="p-4 border-b border-outline/30 bg-slate-50 flex items-center justify-between">
          <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-xl bg-primary text-white flex items-center justify-center font-black text-xs">
               {index + 1}
             </div>
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-primary">Sub-Question</h3>
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-primary">Edit Sub-Question Item</h3>
          </div>
          <div className="flex items-center gap-2">
-            <button onClick={() => onReorder(sub.key, 'up')} disabled={index === 0} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-outline/40 text-slate-400 hover:text-primary disabled:opacity-30 transition-all">
+            <button type="button" onClick={() => onReorder(sub.key, 'up')} disabled={index === 0} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-outline/40 text-slate-400 hover:text-primary disabled:opacity-30 transition-all">
                <span className="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
             </button>
-            <button onClick={() => onReorder(sub.key, 'down')} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-outline/40 text-slate-400 hover:text-primary transition-all">
+            <button type="button" onClick={() => onReorder(sub.key, 'down')} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-outline/40 text-slate-400 hover:text-primary transition-all">
                <span className="material-symbols-outlined text-[18px]">keyboard_arrow_down</span>
             </button>
-            <button onClick={() => onRemove(sub.key)} className="ml-2 w-8 h-8 flex items-center justify-center rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 transition-all">
+            <button type="button" onClick={() => onRemove(sub.key)} className="ml-2 w-8 h-8 flex items-center justify-center rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 transition-all">
                <span className="material-symbols-outlined text-[18px]">delete</span>
             </button>
          </div>
       </div>
       
-      <div className="p-6 space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-           <div>
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Type</label>
-              <select 
-                value={sub.type} 
-                onChange={(e) => onUpdate(sub.key, { type: e.target.value as 'mcq' | 'fill' })}
-                className="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold outline-none focus:border-primary"
-              >
-                <option value="mcq">MCQ</option>
-                <option value="fill">Fill In The Blank</option>
-              </select>
-           </div>
-           <div>
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Points</label>
-              <input 
-                type="number" 
-                value={sub.points} 
-                onChange={(e) => onUpdate(sub.key, { points: e.target.value })}
-                className="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold outline-none focus:border-primary text-center"
-              />
-           </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2">
+        {/* Left Side: Editor */}
+        <div className="p-6 space-y-8 border-r border-outline/20">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <div>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Type</label>
+                <select 
+                  value={sub.type} 
+                  onChange={(e) => onUpdate(sub.key, { type: e.target.value as 'mcq' | 'fill' })}
+                  className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-primary transition-all"
+                >
+                  <option value="mcq">MCQ</option>
+                  <option value="fill">Fill In The Blank</option>
+                </select>
+             </div>
+             <div>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Points</label>
+                <input 
+                  type="number" 
+                  value={sub.points} 
+                  onChange={(e) => onUpdate(sub.key, { points: e.target.value })}
+                  className="w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:border-primary text-center transition-all"
+                />
+             </div>
+          </div>
+
+          {/* Prompt Section */}
+          <div className="space-y-4">
+             <div>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Sub-Question Prompt</label>
+                <textarea 
+                  value={sub.prompt} 
+                  onChange={(e) => onUpdate(sub.key, { prompt: e.target.value })}
+                  rows={4}
+                  placeholder="Write the sub-question prompt here... (Supports LaTeX and HTML)"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:bg-white focus:border-primary transition-all"
+                />
+             </div>
+             
+             <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Prompt Assets</label>
+                   <div className="relative">
+                      <input type="file" multiple accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => {
+                         const files = Array.from(e.target.files || []);
+                         onUpdate(sub.key, { questionFiles: [...(sub.questionFiles || []), ...files] });
+                      }} />
+                      <button type="button" className="text-[9px] font-black text-primary uppercase tracking-widest hover:underline">+ Add New Images</button>
+                   </div>
+                </div>
+                
+                {/* Existing Assets */}
+                {sub.existingAssets?.filter(a => a.kind === 'prompt').length ? (
+                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {sub.existingAssets.filter(a => a.kind === 'prompt').map((a, i) => (
+                         <div key={a.id} className="relative h-20 bg-slate-50 border border-slate-200 rounded-xl overflow-hidden group/ex">
+                            <img src={a.url || ''} className="w-full h-full object-cover opacity-60 group-hover/ex:opacity-100 transition-all" alt="exist" />
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover/ex:opacity-100 transition-all">
+                               <span className="text-[8px] font-black text-white uppercase bg-primary/80 px-1.5 py-0.5 rounded">Uploaded</span>
+                            </div>
+                         </div>
+                      ))}
+                   </div>
+                ) : null}
+
+                {/* New Files */}
+                {sub.questionFiles?.length > 0 && (
+                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 bg-primary/5 rounded-xl border border-primary/10 border-dashed">
+                      <div className="col-span-full text-[8px] font-black text-primary/40 uppercase mb-1">New to upload</div>
+                      {sub.questionFiles.map((f, i) => (
+                         <div key={i} className="relative group/new h-20 border border-primary/20 rounded-xl overflow-hidden">
+                            <img src={URL.createObjectURL(f)} className="w-full h-full object-cover" alt="new" />
+                            <button onClick={() => {
+                               const next = [...(sub.questionFiles || [])];
+                               next.splice(i, 1);
+                               onUpdate(sub.key, { questionFiles: next });
+                            }} className="absolute top-1 right-1 w-6 h-6 bg-rose-500 text-white rounded-lg opacity-0 group-hover/new:opacity-100 transition-all flex items-center justify-center">
+                               <span className="material-symbols-outlined text-[14px]">close</span>
+                            </button>
+                         </div>
+                      ))}
+                   </div>
+                )}
+             </div>
+          </div>
+
+          {/* Type Specific logic */}
+          {sub.type === "mcq" ? (
+             <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Answer Options</label>
+                   <button type="button" onClick={() => onUpdate(sub.key, { options: [...sub.options, { key: uid(), text: "", file: null, is_correct: false }] })} className="text-[9px] font-black text-primary uppercase tracking-widest hover:underline">+ Add Option</button>
+                </div>
+                <div className="space-y-4">
+                   {sub.options.map((opt, oIdx) => (
+                      <div key={opt.key} className="bg-slate-50/50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                         <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                               <div className="w-6 h-6 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-[10px] font-black text-slate-400">
+                                  {String.fromCharCode(65 + oIdx)}
+                               </div>
+                               <label className="flex items-center gap-2 cursor-pointer group">
+                                  <input 
+                                    type="checkbox" 
+                                    checked={opt.is_correct}
+                                    onChange={(e) => {
+                                       const next = sub.options.map(o => o.key === opt.key ? { ...o, is_correct: e.target.checked } : o);
+                                       onUpdate(sub.key, { options: next });
+                                    }}
+                                    className="w-4 h-4 accent-emerald-500 cursor-pointer"
+                                  />
+                                  <span className={`text-[9px] font-black uppercase tracking-widest ${opt.is_correct ? 'text-emerald-600' : 'text-slate-400'}`}>Correct</span>
+                               </label>
+                            </div>
+                            <button type="button" onClick={() => onUpdate(sub.key, { options: sub.options.filter(o => o.key !== opt.key) })} className="text-slate-300 hover:text-rose-500 transition-colors">
+                               <span className="material-symbols-outlined text-[18px]">delete</span>
+                            </button>
+                         </div>
+                         <textarea 
+                           value={opt.text}
+                           onChange={(e) => {
+                              const next = sub.options.map(o => o.key === opt.key ? { ...o, text: e.target.value } : o);
+                              onUpdate(sub.key, { options: next });
+                           }}
+                           rows={2}
+                           placeholder="Option text..."
+                           className="w-full px-3 py-2 bg-white border border-slate-100 rounded-xl text-xs font-bold outline-none focus:border-primary transition-all"
+                         />
+                         
+                         {/* Option Image Management */}
+                         <div className="flex items-center gap-2">
+                           {/* Existing Option URL */}
+                           {(opt as any).url && (
+                             <div className="relative h-8 w-12 rounded border border-outline/20 overflow-hidden">
+                                <img src={(opt as any).url} className="w-full h-full object-cover" alt="opt" />
+                             </div>
+                           )}
+                           <div className="relative flex-1">
+                              <input type="file" accept="image/*" onChange={(e) => {
+                                 const f = e.target.files?.[0] || null;
+                                 const next = sub.options.map(o => o.key === opt.key ? { ...o, file: f } : o);
+                                 onUpdate(sub.key, { options: next });
+                              }} className="absolute inset-0 opacity-0 cursor-pointer" />
+                              <div className={`h-8 px-3 border border-dashed rounded-lg flex items-center gap-2 text-[10px] font-black transition-all ${opt.file ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-white border-slate-200 text-slate-400'}`}>
+                                 <span className="material-symbols-outlined text-[16px]">{opt.file ? 'check_circle' : 'add_photo_alternate'}</span>
+                                 <span className="truncate flex-1">{opt.file ? opt.file.name : 'Replace/New Image'}</span>
+                              </div>
+                           </div>
+                           {opt.file && (
+                              <button onClick={() => {
+                                 const next = sub.options.map(o => o.key === opt.key ? { ...o, file: null } : o);
+                                 onUpdate(sub.key, { options: next });
+                              }} className="text-rose-500 hover:text-rose-700">
+                                 <span className="material-symbols-outlined text-[18px]">close</span>
+                              </button>
+                           )}
+                         </div>
+                      </div>
+                   ))}
+                </div>
+             </div>
+          ) : (
+             <div>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Correct Answer</label>
+                <input 
+                  value={sub.correctText} 
+                  onChange={(e) => onUpdate(sub.key, { correctText: e.target.value })}
+                  placeholder="Enter the correct answer..."
+                  className="w-full h-11 px-4 bg-emerald-50 border border-emerald-100 rounded-xl text-xs font-black text-emerald-900 outline-none focus:border-emerald-500 transition-all"
+                />
+             </div>
+          )}
+
+          {/* Explanation Section */}
+          <div className="space-y-4">
+             <div>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1.5 ml-1">Step-by-Step Explanation</label>
+                <textarea 
+                  value={sub.explanation} 
+                  onChange={(e) => onUpdate(sub.key, { explanation: e.target.value })}
+                  rows={4}
+                  placeholder="How to solve this sub-question... (Supports LaTeX and HTML)"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium outline-none focus:bg-white focus:border-primary transition-all"
+                />
+             </div>
+             
+             <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Explanation Assets</label>
+                   <div className="relative">
+                      <input type="file" multiple accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => {
+                         const files = Array.from(e.target.files || []);
+                         onUpdate(sub.key, { explanationFiles: [...(sub.explanationFiles || []), ...files] });
+                      }} />
+                      <button type="button" className="text-[9px] font-black text-primary uppercase tracking-widest hover:underline">+ Add New Images</button>
+                   </div>
+                </div>
+
+                {/* Existing Explanation Assets */}
+                {sub.existingAssets?.filter(a => a.kind === 'explanation').length ? (
+                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {sub.existingAssets.filter(a => a.kind === 'explanation').map((a, i) => (
+                         <div key={a.id} className="relative h-20 bg-slate-50 border border-slate-200 rounded-xl overflow-hidden group/ex">
+                            <img src={a.url || ''} className="w-full h-full object-cover opacity-60 group-hover/ex:opacity-100 transition-all" alt="exist" />
+                         </div>
+                      ))}
+                   </div>
+                ) : null}
+
+                {/* New Files */}
+                {sub.explanationFiles?.length > 0 && (
+                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 bg-primary/5 rounded-xl border border-primary/10 border-dashed">
+                      {sub.explanationFiles.map((f, i) => (
+                         <div key={i} className="relative group/new h-20 border border-primary/20 rounded-xl overflow-hidden">
+                            <img src={URL.createObjectURL(f)} className="w-full h-full object-cover" alt="new" />
+                            <button onClick={() => {
+                               const next = [...(sub.explanationFiles || [])];
+                               next.splice(i, 1);
+                               onUpdate(sub.key, { explanationFiles: next });
+                            }} className="absolute top-1 right-1 w-6 h-6 bg-rose-500 text-white rounded-lg opacity-0 group-hover/new:opacity-100 transition-all flex items-center justify-center">
+                               <span className="material-symbols-outlined text-[14px]">close</span>
+                            </button>
+                         </div>
+                      ))}
+                   </div>
+                )}
+             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+             <div>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Topic</label>
+                <select value={sub.topicId} onChange={(e) => onUpdate(sub.key, { topicId: e.target.value, subtopicId: "" })} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none">
+                   <option value="">Select Topic</option>
+                   {topics.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+                </select>
+             </div>
+             <div>
+                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Subtopic</label>
+                <select value={sub.subtopicId} onChange={(e) => onUpdate(sub.key, { subtopicId: e.target.value })} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-[10px] font-bold outline-none">
+                   <option value="">Select Subtopic</option>
+                   {filteredSubtopics.map(st => <option key={st.id} value={st.id}>{st.title}</option>)}
+                </select>
+             </div>
+          </div>
         </div>
 
-        <div>
-           <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-1">Question Prompt</label>
-           <textarea 
-             value={sub.prompt} 
-             onChange={(e) => onUpdate(sub.key, { prompt: e.target.value })}
-             rows={3}
-             className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-medium outline-none focus:bg-white focus:border-primary transition-all"
-           />
-           {sub.prompt && (
-              <div className="mt-2 p-3 bg-slate-50 border border-dashed border-slate-200 rounded-xl">
-                 <MathText text={sub.prompt} />
+        {/* Right Side: Live Preview */}
+        <div className="p-8 bg-blue-50/30 flex flex-col items-center justify-center space-y-8">
+           <div className="text-[10px] font-black text-primary/40 uppercase tracking-[0.3em] mb-4">Live Preview (Student View)</div>
+           
+           <div className="w-full max-w-md bg-white border border-outline/30 shadow-soft-xl rounded-3xl p-6 sm:p-8 space-y-6">
+              <div className="text-[10px] font-black text-primary uppercase tracking-[0.2em] opacity-40">Position #{index + 1}</div>
+              
+              <div className="text-sm sm:text-base font-medium leading-relaxed">
+                 <MathText text={sub.prompt || "Question prompt..."} />
               </div>
-           )}
-        </div>
 
-        {sub.type === 'mcq' && (
-           <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Answer Options</label>
-                 <button onClick={() => onUpdate(sub.key, { options: [...sub.options, { key: uid(), text: "", file: null, is_correct: false }] })} className="text-[9px] font-black uppercase text-primary hover:underline">+ Add Option</button>
-              </div>
-              <div className="grid grid-cols-1 gap-4">
-                 {sub.options.map((opt, oIdx) => (
-                    <div key={opt.key} className="flex items-start gap-3 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
-                       <input 
-                         type="checkbox" 
-                         checked={opt.is_correct}
-                         onChange={(e) => {
-                            const newOpts = sub.options.map(o => o.key === opt.key ? { ...o, is_correct: e.target.checked } : o);
-                            onUpdate(sub.key, { options: newOpts });
-                         }}
-                         className="mt-1.5 accent-primary"
-                       />
-                       <input 
-                          value={opt.text}
-                          onChange={(e) => {
-                             const newOpts = sub.options.map(o => o.key === opt.key ? { ...o, text: e.target.value } : o);
-                             onUpdate(sub.key, { options: newOpts });
-                          }}
-                          placeholder={`Option ${String.fromCharCode(65 + oIdx)}...`}
-                          className="flex-1 bg-transparent text-xs font-bold outline-none"
-                       />
-                       <button onClick={() => onUpdate(sub.key, { options: sub.options.filter(o => o.key !== opt.key) })} className="text-slate-300 hover:text-rose-500">
-                          <span className="material-symbols-outlined text-[16px]">close</span>
-                       </button>
-                    </div>
+              {/* Combined Assets Preview */}
+              <div className="space-y-4">
+                 {sub.existingAssets?.filter(a => a.kind === 'prompt').map((a) => (
+                    <img key={a.id} src={a.url || ''} className="max-w-full h-auto rounded-2xl border border-outline/20 mx-auto" alt="Sub prompt" />
+                 ))}
+                 {sub.questionFiles?.map((f, i) => (
+                    <img key={i} src={URL.createObjectURL(f)} className="max-w-full h-auto rounded-2xl border border-primary/20 mx-auto opacity-70" alt="Sub prompt new" />
                  ))}
               </div>
-           </div>
-        )}
 
-        {sub.type === 'fill' && (
-           <div>
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-1">Correct Answer</label>
-              <input 
-                value={sub.correctText} 
-                onChange={(e) => onUpdate(sub.key, { correctText: e.target.value })}
-                className="w-full h-10 px-4 bg-emerald-50 border border-emerald-100 rounded-xl text-xs font-black text-emerald-900 outline-none"
-              />
+              {sub.type === 'mcq' ? (
+                 <div className="space-y-3">
+                    {sub.options.map((opt, i) => (
+                       <div key={opt.key} className="flex items-center gap-4 p-4 border border-outline/30 rounded-2xl bg-white">
+                          <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-xs font-black text-slate-400 border border-outline/20">
+                             {String.fromCharCode(65 + i)}
+                          </div>
+                          <div className="flex-1">
+                             <div className="text-sm font-bold text-slate-700">
+                                <MathText text={opt.text} />
+                             </div>
+                             {((opt as any).url || opt.file) && (
+                                <img src={opt.file ? URL.createObjectURL(opt.file) : (opt as any).url} className="mt-2 max-w-full h-24 object-contain rounded-lg border border-outline/20" alt="Opt asset" />
+                             )}
+                          </div>
+                       </div>
+                    ))}
+                 </div>
+              ) : (
+                 <div className="px-4 py-8 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 text-center text-[10px] font-black text-slate-300 uppercase tracking-widest leading-none">
+                    Student Input Area
+                 </div>
+              )}
            </div>
-        )}
 
-        <div className="grid grid-cols-2 gap-4">
-           <div>
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Topic</label>
-              <select value={sub.topicId} onChange={(e) => onUpdate(sub.key, { topicId: e.target.value, subtopicId: "" })} className="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-bold outline-none">
-                 <option value="">Select Topic</option>
-                 {topics.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
-              </select>
-           </div>
-           <div>
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Subtopic</label>
-              <select value={sub.subtopicId} onChange={(e) => onUpdate(sub.key, { subtopicId: e.target.value })} className="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-bold outline-none">
-                 <option value="">Select Subtopic</option>
-                 {filteredSubtopics.map(st => <option key={st.id} value={st.id}>{st.title}</option>)}
-              </select>
-           </div>
+           {(sub.explanation || sub.explanationFiles?.length > 0 || sub.existingAssets?.some(a => a.kind === 'explanation')) && (
+              <div className="w-full max-w-md bg-blue-50 border border-blue-100 rounded-3xl p-6 sm:p-8 space-y-4">
+                 <div className="flex items-center gap-2 text-blue-600 mb-2">
+                    <span className="material-symbols-outlined text-sm">lightbulb</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest">Explanation</span>
+                 </div>
+                 <div className="text-sm font-medium text-blue-900 leading-relaxed">
+                    <MathText text={sub.explanation} />
+                 </div>
+                 {sub.existingAssets?.filter(a => a.kind === 'explanation').map((a) => (
+                    <img key={a.id} src={a.url || ''} className="max-w-full h-auto rounded-2xl border border-blue-200/50 mx-auto" alt="Sub expl" />
+                 ))}
+                 {sub.explanationFiles?.map((f, i) => (
+                    <img key={i} src={URL.createObjectURL(f)} className="max-w-full h-auto rounded-2xl border border-blue-200/50 mx-auto opacity-70" alt="Sub expl new" />
+                 ))}
+              </div>
+           )}
         </div>
       </div>
     </div>
@@ -335,6 +548,8 @@ export default function DashboardQuestionDetails() {
          
          const mappedSubs: SubQuestion[] = await Promise.all((subs || []).map(async (s) => {
             const { data: sOpts } = await supabase.from('exam_question_options').select('*').eq('question_id', s.id).order('option_number', { ascending: true });
+            const { data: sAssets } = await supabase.from('exam_question_assets').select('*').eq('question_id', s.id).order('sort_order', { ascending: true });
+            
             return {
                id: s.id,
                key: uid(),
@@ -345,13 +560,17 @@ export default function DashboardQuestionDetails() {
                correctText: s.correct_text ?? "",
                topicId: s.topic_id ?? "",
                subtopicId: s.subtopic_id ?? "",
+               questionFiles: [],
+               explanationFiles: [],
+               existingAssets: sAssets || [],
                options: (sOpts || []).map(o => ({
                   id: o.id,
                   key: uid(),
                   text: o.text ?? "",
                   file: null,
-                  is_correct: o.is_correct
-               }))
+                  is_correct: o.is_correct,
+                  url: o.url // Include existing URL
+               })) as any
             };
          }));
          setSubQuestions(mappedSubs);
@@ -403,60 +622,88 @@ export default function DashboardQuestionDetails() {
       
       setQuestion(res.question);
 
-      // 2. If it's a reference block, save/create sub-questions
-      if (type === 'reference_block') {
-         // This is a complex part. For now, we update existing subs. 
-         // Creating new subs in Edit mode requires similar logic to 'New' page
-         for (let s of subQuestions) {
-            if (s.id) {
-               // Update existing sub
-               await adminFetch(`/api/admin/questions/${s.id}`, {
-                  method: "PATCH",
-                  body: JSON.stringify({
-                     type: s.type,
-                     prompt_text: s.prompt.trim(),
-                     explanation_text: s.explanation.trim() || null,
-                     points: Math.max(0, Math.trunc(Number(s.points))),
-                     correct_text: s.type === 'fill' ? s.correctText.trim() : null,
-                     topic_id: s.topicId || null,
-                     subtopic_id: s.subtopicId || null,
-                  })
-               });
-               // Note: This doesn't update sub-question options yet. 
-               // In a full implementation, we'd need a batch update for options too.
-            } else {
-               // Create new sub
-               const sCreated = await adminFetch(`/api/admin/exams/${res.question.exam_id}`, {
-                  method: "POST",
-                  body: JSON.stringify({
-                     action: "create_question",
-                     type: s.type,
-                     parent_id: questionId,
-                     prompt_text: s.prompt.trim(),
-                     explanation_text: s.explanation.trim() || null,
-                     points: Math.max(0, Math.trunc(Number(s.points))),
-                     correct_text: s.type === 'fill' ? s.correctText.trim() : null,
-                     topic_id: s.topicId || null,
-                     subtopic_id: s.subtopicId || null,
-                  })
-               }) as { question: { id: string } };
+          // 2. If it's a reference block, save/create sub-questions
+          if (type === 'reference_block') {
+             const uploadAndGetAsset = async (qId: string, file: File, kind: "prompt" | "explanation", i: number) => {
+                 const safeName = file.name.replaceAll(" ", "-");
+                 const path = `questions/${qId}/${kind === 'explanation' ? 'explanations/' : ''}${Date.now()}-${i}-${safeName}`;
+                 const { error: upErr } = await supabase.storage.from(storageBucket).upload(path, file, { upsert: false });
+                 if (upErr) throw new Error(upErr.message);
+                 const publicUrl = supabase.storage.from(storageBucket).getPublicUrl(path).data.publicUrl;
+                 return { bucket: storageBucket, storage_path: path, url: publicUrl, alt: file.name, kind, sort_order: i };
+             };
 
-               // If it's MCQ, create options
-               if (s.type === 'mcq') {
-                  const sOpts = s.options.filter(o => o.text.trim()).map((o, i) => ({
-                     text: o.text || null,
-                     is_correct: o.is_correct,
-                     option_number: i + 1
-                  }));
-                  if (sOpts.length > 0) {
-                     await adminFetch(`/api/admin/questions/${sCreated.question.id}`, {
-                        method: "POST",
-                        body: JSON.stringify({ action: "batch_options", options: sOpts })
-                     });
-                  }
-               }
-            }
-         }
+             const uploadAndGetOption = async (qId: string, opt: NewOption, i: number) => {
+                 let url: string | null = (opt as any).url || null;
+                 let storagePath: string | null = (opt as any).storage_path || null;
+                 if (opt.file) {
+                    const safeName = opt.file.name.replaceAll(" ", "-");
+                    const path = `questions/${qId}/options/${Date.now()}-${uid()}-${safeName}`;
+                    const { error: upErr } = await supabase.storage.from(storageBucket).upload(path, opt.file, { upsert: false });
+                    if (upErr) throw new Error(upErr.message);
+                    url = supabase.storage.from(storageBucket).getPublicUrl(path).data.publicUrl;
+                    storagePath = path;
+                 }
+                 return { text: opt.text.trim() || null, bucket: storageBucket, storage_path: storagePath, url, is_correct: opt.is_correct, option_number: i + 1 };
+             };
+
+             for (let s of subQuestions) {
+                let currentSubId = s.id;
+                if (currentSubId) {
+                   // Update existing sub
+                   await adminFetch(`/api/admin/questions/${currentSubId}`, {
+                      method: "PATCH",
+                      body: JSON.stringify({
+                         type: s.type,
+                         prompt_text: s.prompt.trim(),
+                         explanation_text: s.explanation.trim() || null,
+                         points: Math.max(0, Math.trunc(Number(s.points))),
+                         correct_text: s.type === 'fill' ? s.correctText.trim() : null,
+                         topic_id: s.topicId || null,
+                         subtopic_id: s.subtopicId || null,
+                      })
+                   });
+                } else {
+                   // Create new sub
+                   const sCreated = await adminFetch(`/api/admin/exams/${res.question.exam_id}`, {
+                      method: "POST",
+                      body: JSON.stringify({
+                         action: "create_question",
+                         type: s.type,
+                         parent_id: questionId,
+                         prompt_text: s.prompt.trim(),
+                         explanation_text: s.explanation.trim() || null,
+                         points: Math.max(0, Math.trunc(Number(s.points))),
+                         correct_text: s.type === 'fill' ? s.correctText.trim() : null,
+                         topic_id: s.topicId || null,
+                         subtopic_id: s.subtopicId || null,
+                      })
+                   }) as { question: { id: string } };
+                   currentSubId = sCreated.question.id;
+                }
+
+                // Handle Sub-question Assets (New ones)
+                const newAssets = [
+                   ...(s.questionFiles || []).map((f, i) => uploadAndGetAsset(currentSubId!, f, "prompt", i + (s.existingAssets?.length || 0))),
+                   ...(s.explanationFiles || []).map((f, i) => uploadAndGetAsset(currentSubId!, f, "explanation", i + (s.existingAssets?.length || 0)))
+                ];
+                const uploadedAssets = await Promise.all(newAssets);
+                if (uploadedAssets.length > 0) {
+                   await adminFetch(`/api/admin/questions/${currentSubId}`, {
+                      method: "POST",
+                      body: JSON.stringify({ action: "batch_assets", assets: uploadedAssets })
+                   });
+                }
+
+                // Handle Sub-question Options (Always batch update to be safe)
+                const sOptions = await Promise.all(s.options.filter(o => o.text.trim() || o.file || (o as any).url).map((o, i) => uploadAndGetOption(currentSubId!, o, i)));
+                if (sOptions.length > 0) {
+                   await adminFetch(`/api/admin/questions/${currentSubId}`, {
+                      method: "POST",
+                      body: JSON.stringify({ action: "batch_options", options: sOptions })
+                   });
+                }
+             }
          
          // 3. Reorder sub-questions to match UI order
          const reorderItems = subQuestions.map(s => ({ id: s.id, parent_id: questionId })).filter(x => !!x.id);
@@ -650,6 +897,8 @@ export default function DashboardQuestionDetails() {
           { key: uid(), text: "", file: null, is_correct: false },
           { key: uid(), text: "", file: null, is_correct: false },
         ],
+        questionFiles: [],
+        explanationFiles: [],
         correctText: "",
         topicId: topicId,
         subtopicId: subtopicId
@@ -1088,103 +1337,109 @@ export default function DashboardQuestionDetails() {
                          <span className="material-symbols-outlined text-[18px]">auto_awesome_motion</span>
                          <span className="text-[9px] font-black uppercase tracking-widest">Ref</span>
                       </button>
-                   </div>
-
-                   <div>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">Points</label>
-                      <input
-                        value={points}
-                        onChange={(e) => setPoints(e.target.value)}
-                        className="h-12 w-full px-5 bg-slate-50 border border-slate-100 rounded-xl focus:border-primary outline-none transition-all font-black text-center"
-                      />
-                   </div>
-
-                   <div>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">Mode</label>
-                      <label className={`h-14 w-full flex items-center justify-center gap-3 border-2 rounded-2xl cursor-pointer transition-all ${allowMultiple ? "border-primary bg-primary/5 text-primary" : "border-slate-100 bg-slate-50 text-slate-400"}`}>
-                        <input
-                          type="checkbox"
-                          checked={allowMultiple}
-                          onChange={(e) => setAllowMultiple(e.target.checked)}
-                          disabled={type !== "mcq"}
-                          className="hidden"
-                        />
-                        <span className="material-symbols-outlined">{allowMultiple ? "check_box" : "check_box_outline_blank"}</span>
-                        <span className="text-[10px] font-black uppercase tracking-widest">Multiple Answers</span>
-                      </label>
-                   </div>
-                </div>
-             </div>
-
-             <div className="bg-indigo-600 rounded-3xl p-8 shadow-soft-xl text-white relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-1000" />
-                <div className="relative z-10 space-y-6 text-center sm:text-left">
-                   <div className="flex items-center gap-3 justify-center sm:justify-start">
-                      <span className="material-symbols-outlined text-white/80">view_cozy</span>
-                      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/90">Linked Content</h3>
-                   </div>
-                   <select
-                      value={passageId}
-                      onChange={(e) => setPassageId(e.target.value)}
-                      className="h-12 w-full px-4 bg-white/20 border border-white/20 text-white rounded-xl focus:bg-white focus:text-indigo-900 outline-none transition-all font-bold text-sm backdrop-blur-sm cursor-pointer"
-                   >
-                      <option value="" className="text-gray-900">None (Independent)</option>
-                      {passages.map((p) => (
-                        <option key={p.id} value={p.id} className="text-gray-900">
-                           {p.kind === 'reference' ? '[Reference]' : '[Reading]'} {p.title || `Passage #${p.id.slice(0, 4)}`}
-                        </option>
-                      ))}
-                   </select>
-                   <p className="text-[9px] font-bold text-white/50 bg-black/10 p-3 rounded-lg leading-relaxed">
-                      Link this question to a shared reading passage or a reference block (like a math chart).
-                   </p>
-                </div>
-             </div>
-
-             <div className="bg-emerald-600 rounded-3xl p-8 shadow-soft-xl text-white relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-1000" />
-                <div className="relative z-10 space-y-6 text-center sm:text-left">
-                   <div className="flex items-center gap-3 justify-center sm:justify-start">
-                      <span className="material-symbols-outlined text-white/80">category</span>
-                      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/90">Curriculum Hierarchy</h3>
-                   </div>
-                   
-                   <div className="space-y-4">
+                   </div>                   {type !== "reference_block" && (
+                     <>
                         <div>
-                            <label className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-2 block">Main Topic</label>
-                            <select
-                                value={topicId}
-                                onChange={(e) => { setTopicId(e.target.value); setSubtopicId(""); }}
-                                className="h-12 w-full px-4 bg-white/20 border border-white/20 text-white rounded-xl focus:bg-white focus:text-emerald-900 outline-none transition-all font-bold text-sm backdrop-blur-sm cursor-pointer"
-                            >
-                                <option value="" className="text-gray-900">Select Topic...</option>
-                                {topics.map((t) => (
-                                    <option key={t.id} value={t.id} className="text-gray-900">{t.title}</option>
-                                ))}
-                            </select>
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">Points</label>
+                           <input
+                             value={points}
+                             onChange={(e) => setPoints(e.target.value)}
+                             className="h-12 w-full px-5 bg-slate-50 border border-slate-100 rounded-xl focus:border-primary outline-none transition-all font-black text-center"
+                           />
                         </div>
 
                         <div>
-                            <label className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-2 block">Subtopic</label>
-                            <select
-                                value={subtopicId}
-                                onChange={(e) => setSubtopicId(e.target.value)}
-                                disabled={!topicId}
-                                className="h-12 w-full px-4 bg-white/20 border border-white/20 text-white rounded-xl focus:bg-white focus:text-emerald-900 outline-none transition-all font-bold text-sm backdrop-blur-sm cursor-pointer disabled:opacity-50"
-                            >
-                                <option value="" className="text-gray-900">Select Subtopic...</option>
-                                {filteredSubtopics.map((st) => (
-                                    <option key={st.id} value={st.id} className="text-gray-900">{st.title}</option>
-                                ))}
-                            </select>
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">Mode</label>
+                           <label className={`h-14 w-full flex items-center justify-center gap-3 border-2 rounded-2xl cursor-pointer transition-all ${allowMultiple ? "border-primary bg-primary/5 text-primary" : "border-slate-100 bg-slate-50 text-slate-400"}`}>
+                             <input
+                               type="checkbox"
+                               checked={allowMultiple}
+                               onChange={(e) => setAllowMultiple(e.target.checked)}
+                               disabled={type !== "mcq"}
+                               className="hidden"
+                             />
+                             <span className="material-symbols-outlined">{allowMultiple ? "check_box" : "check_box_outline_blank"}</span>
+                             <span className="text-[10px] font-black uppercase tracking-widest">Multiple Answers</span>
+                           </label>
                         </div>
-                   </div>
-                   
-                   <p className="text-[9px] font-bold text-white/50 bg-black/10 p-3 rounded-lg leading-relaxed">
-                      Questions are linked to subtopics for granular analytics. Select a topic first to see its subtopics.
-                   </p>
+                     </>
+                   )}
                 </div>
              </div>
+
+             {type !== "reference_block" && (
+                <>
+                  <div className="bg-indigo-600 rounded-3xl p-8 shadow-soft-xl text-white relative overflow-hidden group">
+                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-1000" />
+                     <div className="relative z-10 space-y-6 text-center sm:text-left">
+                        <div className="flex items-center gap-3 justify-center sm:justify-start">
+                           <span className="material-symbols-outlined text-white/80">view_cozy</span>
+                           <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/90">Linked Content</h3>
+                        </div>
+                        <select
+                           value={passageId}
+                           onChange={(e) => setPassageId(e.target.value)}
+                           className="h-12 w-full px-4 bg-white/20 border border-white/20 text-white rounded-xl focus:bg-white focus:text-indigo-900 outline-none transition-all font-bold text-sm backdrop-blur-sm cursor-pointer"
+                        >
+                           <option value="" className="text-gray-900">None (Independent)</option>
+                           {passages.map((p) => (
+                             <option key={p.id} value={p.id} className="text-gray-900">
+                                {p.kind === 'reference' ? '[Reference]' : '[Reading]'} {p.title || `Passage #${p.id.slice(0, 4)}`}
+                             </option>
+                           ))}
+                        </select>
+                        <p className="text-[9px] font-bold text-white/50 bg-black/10 p-3 rounded-lg leading-relaxed">
+                           Link this question to a shared reading passage or a reference block (like a math chart).
+                        </p>
+                     </div>
+                  </div>
+
+                  <div className="bg-emerald-600 rounded-3xl p-8 shadow-soft-xl text-white relative overflow-hidden group">
+                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-1000" />
+                     <div className="relative z-10 space-y-6 text-center sm:text-left">
+                        <div className="flex items-center gap-3 justify-center sm:justify-start">
+                           <span className="material-symbols-outlined text-white/80">category</span>
+                           <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/90">Curriculum Hierarchy</h3>
+                        </div>
+                        
+                        <div className="space-y-4">
+                              <div>
+                                 <label className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-2 block">Main Topic</label>
+                                 <select
+                                    value={topicId}
+                                    onChange={(e) => { setTopicId(e.target.value); setSubtopicId(""); }}
+                                    className="h-12 w-full px-4 bg-white/20 border border-white/20 text-white rounded-xl focus:bg-white focus:text-emerald-900 outline-none transition-all font-bold text-sm backdrop-blur-sm cursor-pointer"
+                                 >
+                                    <option value="" className="text-gray-900">Select Topic...</option>
+                                    {topics.map((t) => (
+                                       <option key={t.id} value={t.id} className="text-gray-900">{t.title}</option>
+                                    ))}
+                                 </select>
+                              </div>
+
+                              <div>
+                                 <label className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-2 block">Subtopic</label>
+                                 <select
+                                    value={subtopicId}
+                                    onChange={(e) => setSubtopicId(e.target.value)}
+                                    disabled={!topicId}
+                                    className="h-12 w-full px-4 bg-white/20 border border-white/20 text-white rounded-xl focus:bg-white focus:text-emerald-900 outline-none transition-all font-bold text-sm backdrop-blur-sm cursor-pointer disabled:opacity-50"
+                                 >
+                                    <option value="" className="text-gray-900">Select Subtopic...</option>
+                                    {filteredSubtopics.map((st) => (
+                                       <option key={st.id} value={st.id} className="text-gray-900">{st.title}</option>
+                                    ))}
+                                 </select>
+                              </div>
+                        </div>
+                        
+                        <p className="text-[9px] font-bold text-white/50 bg-black/10 p-3 rounded-lg leading-relaxed">
+                           Questions are linked to subtopics for granular analytics. Select a topic first to see its subtopics.
+                        </p>
+                     </div>
+                  </div>
+               </>
+             )}
           </div>
         </div>
       )}
