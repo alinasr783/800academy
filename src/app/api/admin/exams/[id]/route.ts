@@ -31,7 +31,7 @@ type QuestionRow = {
   id: string;
   exam_id: string;
   question_number: number;
-  type: "mcq" | "fill";
+  type: "mcq" | "fill" | "reference_block";
   prompt_text: string | null;
   explanation_text: string | null;
   points: number;
@@ -40,6 +40,7 @@ type QuestionRow = {
   passage_id: string | null;
   topic_id: string | null;
   subtopic_id: string | null;
+  parent_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -92,7 +93,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { data: questions } = await admin
     .from("exam_questions")
     .select(
-      "id,exam_id,question_number,type,prompt_text,explanation_text,points,allow_multiple,correct_text,passage_id,topic_id,subtopic_id,created_at,updated_at",
+      "id,exam_id,question_number,type,prompt_text,explanation_text,points,allow_multiple,correct_text,passage_id,topic_id,subtopic_id,parent_id,created_at,updated_at",
     )
     .eq("exam_id", id)
     .order("question_number", { ascending: true });
@@ -215,9 +216,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         | { action: "delete_asset"; asset_id: string }
         | {
             action: "create_question";
-            type: "mcq" | "fill";
+            type: "mcq" | "fill" | "reference_block";
             question_number?: number;
             passage_id?: string | null;
+            parent_id?: string | null;
             prompt_text?: string | null;
             explanation_text?: string | null;
             points?: number;
@@ -227,7 +229,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             subtopic_id?: string | null;
           }
         | { action: "delete_question"; question_id: string }
-        | { action: "reorder_questions"; question_ids_in_order: string[] }
+        | { action: "reorder_questions"; question_ids_in_order: { id: string; parent_id?: string | null }[] }
         | {
             action: "create_passage";
             title?: string | null;
@@ -317,6 +319,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         question_number: nextNum,
         type: body.type,
         passage_id: body.passage_id ?? null,
+        parent_id: body.parent_id ?? null,
         prompt_text: body.prompt_text ?? null,
         explanation_text: body.explanation_text ?? null,
         points: Math.max(0, Math.trunc(body.points ?? 0)),
@@ -326,7 +329,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         subtopic_id: body.subtopic_id ?? null,
       })
       .select(
-        "id,exam_id,question_number,type,prompt_text,explanation_text,points,allow_multiple,correct_text,passage_id,topic_id,subtopic_id,created_at,updated_at",
+        "id,exam_id,question_number,type,prompt_text,explanation_text,points,allow_multiple,correct_text,passage_id,topic_id,subtopic_id,parent_id,created_at,updated_at",
       )
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
@@ -342,14 +345,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   if (body.action === "reorder_questions") {
-    const ids = body.question_ids_in_order;
-    if (!Array.isArray(ids) || ids.length === 0) {
+    const items = body.question_ids_in_order;
+    if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "Missing question_ids_in_order." }, { status: 400 });
     }
-    const updates = ids.map((qid, idx) => ({
-      id: qid,
+    const updates = items.map((item: any, idx) => ({
+      id: item.id,
       exam_id: examId,
       question_number: idx + 1,
+      parent_id: item.parent_id ?? null,
     }));
 
     const { error } = await admin.from("exam_questions").upsert(updates, { onConflict: "id" });

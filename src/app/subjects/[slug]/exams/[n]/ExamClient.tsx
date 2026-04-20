@@ -67,7 +67,7 @@ type Passage = {
 type Question = {
   id: string;
   question_number: number;
-  type: "mcq" | "fill";
+  type: "mcq" | "fill" | "reference_block";
   prompt_text: string | null;
   explanation_text: string | null;
   points: number;
@@ -79,6 +79,8 @@ type Question = {
   passage_id: string | null;
   subtopic_id: string | null;
   topic_id: string | null;
+  parent_id: string | null;
+  sub_questions?: Question[];
 };
 
 type Props = {
@@ -209,9 +211,13 @@ type SubmitResult = {
 
 function buildInitialQState(questions: Question[]) {
   const map = new Map<string, QuestionState>();
-  for (const q of questions) {
-    map.set(q.id, { seen: false, marked: false, selectedOptionIds: [], fillText: "" });
+  function init(qs: Question[]) {
+     for (const q of qs) {
+        map.set(q.id, { seen: false, marked: false, selectedOptionIds: [], fillText: "" });
+        if (q.sub_questions && q.sub_questions.length > 0) init(q.sub_questions);
+     }
   }
+  init(questions);
   return map;
 }
 
@@ -344,23 +350,14 @@ export default function ExamClient({
         const { data: qRows } = await supabase
           .from("exam_questions")
           .select(
-            "id, question_number, type, prompt_text, explanation_text, points, allow_multiple, correct_text, passage_id, topic_id, subtopic_id",
+            "id, question_number, type, prompt_text, explanation_text, points, allow_multiple, correct_text, passage_id, topic_id, subtopic_id, parent_id",
           )
           .eq("exam_id", exam.id)
           .order("question_number", { ascending: true })
           .returns<
             {
-              id: string;
-              question_number: number;
-              type: "mcq" | "fill";
-              prompt_text: string | null;
-              explanation_text: string | null;
-              points: number;
-              allow_multiple: boolean;
-              correct_text: string | null;
-              passage_id: string | null;
-              topic_id: string | null;
-              subtopic_id: string | null;
+               ...any;
+               parent_id: string | null;
             }[]
           >();
 
@@ -437,13 +434,29 @@ export default function ExamClient({
           optionsByQ.set(o.question_id, list);
         }
 
-        const qs: Question[] = (qRows ?? []).map((q) => ({
+        const allQs: Question[] = (qRows || []).map((q) => ({
           ...q,
           prompt_assets: promptAssetsByQ.get(q.id) ?? [],
           explanation_assets: explanationAssetsByQ.get(q.id) ?? [],
           options: optionsByQ.get(q.id) ?? [],
           passage_id: q.passage_id ?? null,
+          parent_id: q.parent_id ?? null,
         }));
+
+        // Group into hierarchy
+        const finalQs: Question[] = [];
+        const byId = new Map<string, Question>();
+        allQs.forEach(q => byId.set(q.id, { ...q, sub_questions: [] }));
+
+        allQs.forEach(q => {
+          if (q.parent_id && byId.has(q.parent_id)) {
+             byId.get(q.parent_id)!.sub_questions!.push(byId.get(q.id)!);
+          } else if (!q.parent_id) {
+             finalQs.push(byId.get(q.id)!);
+          }
+        });
+
+        const qs = finalQs;
 
         /* Build passages map */
         const pMap = new Map<string, Passage>();
@@ -737,15 +750,20 @@ export default function ExamClient({
 
   const answeredCount = useMemo(() => {
     let count = 0;
-    for (const q of questions) {
-      const st = qState.get(q.id);
-      if (!st) continue;
-      const answered =
-        q.type === "fill"
-          ? !!st.fillText.trim()
-          : st.selectedOptionIds.length > 0;
-      if (answered) count += 1;
+    function walk(qs: Question[]) {
+       for (const q of qs) {
+          if (q.type === 'reference_block') {
+             if (q.sub_questions) walk(q.sub_questions);
+             continue;
+          }
+          const st = qState.get(q.id);
+          if (st) {
+             const answered = q.type === "fill" ? !!st.fillText.trim() : st.selectedOptionIds.length > 0;
+             if (answered) count += 1;
+          }
+       }
     }
+    walk(questions);
     return count;
   }, [qState, questions]);
 
@@ -754,16 +772,22 @@ export default function ExamClient({
   }, [exam.duration_seconds, remaining]);
 
   const overview = useMemo(() => {
-    return questions.map((q) => {
-      const st = qState.get(q.id);
-      const seen = !!st?.seen;
-      const marked = !!st?.marked;
-      const answered =
-        q.type === "fill"
-          ? !!st?.fillText.trim()
-          : (st?.selectedOptionIds?.length ?? 0) > 0;
-      return { q, seen, marked, answered };
-    });
+    const list: { q: Question; seen: boolean; marked: boolean; answered: boolean }[] = [];
+    function walk(qs: Question[]) {
+       for (const q of qs) {
+          if (q.type === 'reference_block') {
+             if (q.sub_questions) walk(q.sub_questions);
+             continue;
+          }
+          const st = qState.get(q.id);
+          const seen = !!st?.seen;
+          const marked = !!st?.marked;
+          const answered = q.type === "fill" ? !!st?.fillText.trim() : (st?.selectedOptionIds?.length ?? 0) > 0;
+          list.push({ q, seen, marked, answered });
+       }
+    }
+    walk(questions);
+    return list;
   }, [qState, questions]);
 
   async function requireAuth() {
@@ -777,35 +801,43 @@ export default function ExamClient({
 
   function buildAnswersPayload() {
     const payload: Record<string, unknown> = {};
-    for (const q of questions) {
-      const st = qState.get(q.id);
-      if (!st) continue;
-      if (q.type === "fill") {
-        payload[q.id] = { type: "fill", value: st.fillText };
-      } else {
-        payload[q.id] = { type: "mcq", selectedOptionIds: st.selectedOptionIds };
-      }
+    function gather(qs: Question[]) {
+       for (const q of qs) {
+          const st = qState.get(q.id);
+          if (st) {
+             if (q.type === "fill") payload[q.id] = { type: "fill", value: st.fillText };
+             else if (q.type === "mcq") payload[q.id] = { type: "mcq", selectedOptionIds: st.selectedOptionIds };
+          }
+          if (q.sub_questions && q.sub_questions.length > 0) gather(q.sub_questions);
+       }
     }
+    gather(questions);
     return payload;
   }
 
   function computeScore() {
     let earned = 0;
-    let total = 0;
+    let rawTotal = 0;
 
-    for (const q of questions) {
-      total += q.points;
-      const st = qState.get(q.id);
-      if (!st) continue;
-      if (q.type === "fill") {
-        earned += scoreFill(q, st.fillText);
-      } else {
-        earned += scoreMcq(q, new Set(st.selectedOptionIds));
-      }
+    function processQ(q: Question) {
+       if (q.type === 'reference_block') {
+          if (q.sub_questions) q.sub_questions.forEach(processQ);
+          return;
+       }
+       rawTotal += q.points;
+       const st = qState.get(q.id);
+       if (!st) return;
+       if (q.type === "fill") {
+          earned += scoreFill(q, st.fillText);
+       } else {
+          earned += scoreMcq(q, new Set(st.selectedOptionIds));
+       }
     }
 
+    questions.forEach(processQ);
+
     const minScore = exam.min_score ?? 200;
-    const totalPoints = (exam.total_points ?? total) || 600;
+    const totalPoints = (exam.total_points ?? rawTotal) || 600;
     const earnedPoints = Math.max(0, Math.min(totalPoints, earned));
 
     const score = Math.max(minScore, Math.min(800, minScore + earnedPoints));
@@ -822,49 +854,33 @@ export default function ExamClient({
 
   function computeQuestionCorrectness() {
     let correct = 0;
+    let totalQs = 0;
     const incorrectQuestionIds: string[] = [];
 
-    for (const q of questions) {
-      const st = qState.get(q.id);
-      if (!st) {
-        incorrectQuestionIds.push(q.id);
-        continue;
-      }
-
-      let isCorrect = false;
-      if (q.type === "fill") {
-        const expected = (q.correct_text ?? "").trim();
-        const got = st.fillText.trim();
-        if (expected && normalizeText(got) === normalizeText(expected)) isCorrect = true;
-      } else {
-        const selected = new Set(st.selectedOptionIds);
-        const correctIds = new Set(q.options.filter((o) => o.is_correct).map((o) => o.id));
-        if (selected.size > 0) {
-          if (q.allow_multiple) {
-            if (selected.size === correctIds.size) {
-              let ok = true;
-              for (const id of selected) if (!correctIds.has(id)) ok = false;
-              if (ok) isCorrect = true;
-            }
-          } else {
-            if (selected.size === 1) {
-              for (const id of selected) {
-                if (correctIds.has(id)) isCorrect = true;
-              }
-            }
-          }
-        }
-      }
-
-      if (isCorrect) {
-        correct += 1;
-      } else {
-        incorrectQuestionIds.push(q.id);
-      }
+    function checkQ(q: Question) {
+       if (q.type === 'reference_block') {
+          if (q.sub_questions) q.sub_questions.forEach(checkQ);
+          return;
+       }
+       totalQs += 1;
+       const st = qState.get(q.id);
+       if (!st) {
+          incorrectQuestionIds.push(q.id);
+          return;
+       }
+       let isCorrect = false;
+       if (q.type === "fill") {
+          isCorrect = scoreFill(q, st.fillText) === q.points;
+       } else {
+          isCorrect = scoreMcq(q, new Set(st.selectedOptionIds)) === q.points;
+       }
+       if (isCorrect) correct += 1;
+       else incorrectQuestionIds.push(q.id);
     }
-    const total = questions.length;
-    const percent = total ? (correct / total) * 100 : 0;
-    return { correct, total, percent, incorrectQuestionIds };
+
+    questions.forEach(checkQ);
+    const percent = totalQs ? (correct / totalQs) * 100 : 0;
+    return { correct, total: totalQs, percent, incorrectQuestionIds };
   }
 
   async function onSubmit(auto: boolean) {
@@ -885,41 +901,32 @@ export default function ExamClient({
       const correctness = computeQuestionCorrectness();
       const answers = buildAnswersPayload();
 
-      // Subtopic Analysis
+      // Performance Analysis (Recursive)
       const subtopicsMap = new Map<string, { correct: number; total: number }>();
-      for (const q of questions) {
-        const sid = q.subtopic_id || "none";
-        const cur = subtopicsMap.get(sid) ?? { correct: 0, total: 0 };
-        cur.total += 1;
-        
-        const st = qState.get(q.id);
-        let isCorrect = false;
-        if (st) {
-          if (q.type === "fill") {
-            const expected = (q.correct_text ?? "").trim();
-            const got = st.fillText.trim();
-            if (expected && normalizeText(got) === normalizeText(expected)) isCorrect = true;
-          } else {
-            const selected = new Set(st.selectedOptionIds);
-            const correctIds = new Set(q.options.filter((o) => o.is_correct).map((o) => o.id));
-            if (selected.size > 0) {
-              if (q.allow_multiple) {
-                if (selected.size === correctIds.size) {
-                  let ok = true;
-                  for (const id of selected) if (!correctIds.has(id)) ok = false;
-                  if (ok) isCorrect = true;
-                }
-              } else {
-                if (selected.size === 1) {
-                  for (const id of selected) if (correctIds.has(id)) isCorrect = true;
-                }
-              }
+      function analyze(qs: Question[]) {
+         for (const q of qs) {
+            if (q.type === 'reference_block') {
+               if (q.sub_questions) analyze(q.sub_questions);
+               continue;
             }
-          }
-        }
-        if (isCorrect) cur.correct += 1;
-        subtopicsMap.set(sid, cur);
+            const sid = q.subtopic_id || "none";
+            const cur = subtopicsMap.get(sid) ?? { correct: 0, total: 0 };
+            cur.total += 1;
+            
+            const st = qState.get(q.id);
+            let isCorrect = false;
+            if (st) {
+               if (q.type === "fill") {
+                  isCorrect = scoreFill(q, st.fillText) === q.points;
+               } else {
+                  isCorrect = scoreMcq(q, new Set(st.selectedOptionIds)) === q.points;
+               }
+            }
+            if (isCorrect) cur.correct += 1;
+            subtopicsMap.set(sid, cur);
+         }
       }
+      analyze(questions);
 
       // Group subtopics into topics
       const topicsGroupMap = new Map<string, { correct: number; total: number; subtopics: any[] }>();
@@ -1587,46 +1594,45 @@ export default function ExamClient({
               </div>
             </div>
             <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-12 lg:grid-cols-16 xl:grid-cols-20 gap-1.5 sm:gap-2">
-              {questions.map((q) => {
-                const st = qState.get(q.id);
-                const selected = new Set(st?.selectedOptionIds ?? []);
-                const fill = (st?.fillText ?? "").trim();
-                const correctFill = (q.correct_text ?? "").trim();
-                const correctOptionIds = new Set(q.options.filter((o) => o.is_correct).map((o) => o.id));
-                const hasAnswer = q.type === "fill" ? !!fill : selected.size > 0;
-                const isCorrect =
-                  q.type === "fill"
-                    ? fill.toLowerCase() === correctFill.toLowerCase() && !!correctFill
-                    : (() => {
-                        if (selected.size === 0) return false;
-                        if (q.allow_multiple) {
-                          if (selected.size !== correctOptionIds.size) return false;
-                          for (const id of selected) if (!correctOptionIds.has(id)) return false;
-                          return true;
-                        }
-                        if (selected.size !== 1) return false;
-                        for (const id of selected) return correctOptionIds.has(id);
-                        return false;
-                      })();
-                const border = !hasAnswer
-                  ? "border-outline/40"
-                  : isCorrect
-                    ? "border-emerald-400"
-                    : "border-rose-400";
-                const bg = !hasAnswer
-                  ? "bg-slate-100"
-                  : isCorrect
-                    ? "bg-emerald-50"
-                    : "bg-rose-50";
-                return (
-                  <div
-                    key={q.id}
-                    className={`h-8 sm:h-10 border-2 ${border} ${bg} font-bold text-xs sm:text-sm text-primary flex items-center justify-center rounded-lg`}
-                  >
-                    {q.question_number}
-                  </div>
-                );
-              })}
+              {(() => {
+                const allReviewQs: { id: string; num: number; type: string; isCorrect: boolean; hasAnswer: boolean }[] = [];
+                function gatherReview(qs: Question[]) {
+                   for (const q of qs) {
+                      if (q.type === 'reference_block') {
+                         if (q.sub_questions) gatherReview(q.sub_questions);
+                         continue;
+                      }
+                      const st = qState.get(q.id);
+                      const selected = new Set(st?.selectedOptionIds ?? []);
+                      const fill = (st?.fillText ?? "").trim();
+                      const correctFill = (q.correct_text ?? "").trim();
+                      const correctOptionIds = new Set(q.options.filter((o) => o.is_correct).map((o) => o.id));
+                      const hasAnswer = q.type === "fill" ? !!fill : selected.size > 0;
+                      const isCorrect = q.type === "fill" 
+                         ? normalizeText(fill) === normalizeText(correctFill) && !!correctFill
+                         : (() => {
+                             if (selected.size === 0) return false;
+                             if (q.allow_multiple) {
+                                if (selected.size !== correctOptionIds.size) return false;
+                                for (const id of selected) if (!correctOptionIds.has(id)) return false;
+                                return true;
+                             }
+                             return selected.size === 1 && correctOptionIds.has(Array.from(selected)[0]);
+                         })();
+                      allReviewQs.push({ id: q.id, num: q.question_number, type: q.type, isCorrect, hasAnswer });
+                   }
+                }
+                gatherReview(questions);
+                return allReviewQs.map((item, idx) => {
+                  const border = !item.hasAnswer ? "border-outline/40" : item.isCorrect ? "border-emerald-400" : "border-rose-400";
+                  const bg = !item.hasAnswer ? "bg-slate-100" : item.isCorrect ? "bg-emerald-50" : "bg-rose-50";
+                  return (
+                    <div key={item.id} className={`h-8 sm:h-10 border-2 ${border} ${bg} font-bold text-xs sm:text-sm text-primary flex items-center justify-center rounded-lg`}>
+                      {idx + 1}
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
 
@@ -1637,243 +1643,177 @@ export default function ExamClient({
             </div>
             <div className="space-y-6 sm:space-y-8">
               {questions.map((q) => {
-                const st = qState.get(q.id);
-                const selected = new Set(st?.selectedOptionIds ?? []);
-                const fill = (st?.fillText ?? "").trim();
-                const correctFill = (q.correct_text ?? "").trim();
+                 const renderReviewSingle = (reviewQ: Question, isSub = false) => {
+                    const st = qState.get(reviewQ.id);
+                    const selected = new Set(st?.selectedOptionIds ?? []);
+                    const fill = (st?.fillText ?? "").trim();
+                    const correctFill = (reviewQ.correct_text ?? "").trim();
+                    const correctOptionIds = new Set(reviewQ.options.filter((o) => o.is_correct).map((o) => o.id));
+                    const hasAnswer = reviewQ.type === "fill" ? !!fill : selected.size > 0;
+                    const isCorrect = reviewQ.type === "fill" 
+                       ? normalizeText(fill) === normalizeText(correctFill) && !!correctFill
+                       : (() => {
+                           if (selected.size === 0) return false;
+                           if (reviewQ.allow_multiple) {
+                              if (selected.size !== correctOptionIds.size) return false;
+                              for (const id of selected) if (!correctOptionIds.has(id)) return false;
+                              return true;
+                           }
+                           return selected.size === 1 && correctOptionIds.has(Array.from(selected)[0]);
+                       })();
 
-                const correctOptionIds = new Set(q.options.filter((o) => o.is_correct).map((o) => o.id));
-                const hasAnswer = q.type === "fill" ? !!fill : selected.size > 0;
-
-                const isCorrect =
-                  q.type === "fill"
-                    ? fill.toLowerCase() === correctFill.toLowerCase() && !!correctFill
-                    : (() => {
-                        if (selected.size === 0) return false;
-                        if (q.allow_multiple) {
-                          if (selected.size !== correctOptionIds.size) return false;
-                          for (const id of selected) if (!correctOptionIds.has(id)) return false;
-                          return true;
-                        }
-                        if (selected.size !== 1) return false;
-                        for (const id of selected) return correctOptionIds.has(id);
-                        return false;
-                      })();
-
-                return (() => {
-                  const passage = q.passage_id ? passagesById.get(q.passage_id) : null;
-
-                  const reviewCard = (
-                  <div key={q.id} className="bg-white border-2 border-outline/30 shadow-sm rounded-2xl overflow-hidden">
-                    <div className="p-4 sm:p-6 border-b border-outline/30 flex items-start justify-between gap-4 sm:gap-6 bg-slate-50">
-                      <div>
-                        <div className="text-xs font-bold text-primary uppercase tracking-widest">
-                          Question {q.question_number}
-                        </div>
-                      </div>
-                      {!hasAnswer ? (
-                        <span className="px-3 py-1 bg-slate-200 text-slate-700 text-[10px] font-black tracking-[0.15em] uppercase rounded-lg">
-                          Unanswered
-                        </span>
-                      ) : isCorrect ? (
-                        <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-black tracking-[0.15em] uppercase rounded-lg">
-                          Correct
-                        </span>
-                      ) : (
-                        <span className="px-3 py-1 bg-rose-100 text-rose-700 text-[10px] font-black tracking-[0.15em] uppercase rounded-lg">
-                          Wrong
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
-                      {passage ? (
-                        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-violet-50 border border-violet-200 text-[10px] sm:text-xs font-extrabold text-violet-700 rounded-lg">
-                          <span className="material-symbols-outlined text-[14px] sm:text-[16px] text-violet-500">menu_book</span>
-                          Related to passage{passage.title ? `: ${passage.title}` : ""}
-                        </div>
-                      ) : null}
-
-                      {q.prompt_text ? (
-                        <div className="text-on-surface font-medium leading-relaxed text-sm sm:text-base">
-                          <MathText text={q.prompt_text} />
-                        </div>
-                      ) : null}
-
-                      {q.prompt_assets.length ? (
-                        <div className="flex flex-col items-center gap-4">
-                          {q.prompt_assets.map((a) => {
-                            const url = assetUrl(a);
-                            return (
-                              <div
-                                key={a.id}
-                                className="border-2 border-outline/30 bg-slate-50 overflow-hidden rounded-xl max-w-2xl w-full"
-                              >
-                                {url ? (
-                                  <img src={url} alt="Question asset" className="w-full h-auto" />
-                                ) : (
-                                  <div className="h-56" />
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : null}
-
-                      {q.type === "fill" ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="border-2 border-outline/30 bg-slate-50 p-4 sm:p-5 rounded-xl">
-                            <div className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">
-                              Your answer
-                            </div>
-                            <div className="text-base sm:text-lg font-extrabold text-primary mt-2">
-                              <MathText text={fill || "—"} />
-                            </div>
-                          </div>
-                          <div className="border-2 border-emerald-200 bg-emerald-50 p-4 sm:p-5 rounded-xl">
-                            <div className="text-xs font-bold text-emerald-600 uppercase tracking-widest">
-                              Correct answer
-                            </div>
-                            <div className="text-base sm:text-lg font-extrabold text-emerald-700 mt-2">
-                              <MathText text={correctFill || "—"} />
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {q.options.map((o) => {
-                            const isSelected = selected.has(o.id);
-                            const isCorrectOpt = o.is_correct;
-                            const border = isCorrectOpt
-                              ? "border-emerald-400"
-                              : isSelected
-                                ? "border-rose-400"
-                                : "border-outline/30";
-                            const bg = isCorrectOpt
-                              ? "bg-emerald-50"
-                              : isSelected
-                                ? "bg-rose-50"
-                                : "bg-slate-50";
-                            return (
-                              <div
-                                key={o.id}
-                                className={`border-2 ${border} ${bg} px-4 sm:px-5 py-3 sm:py-4 flex items-start justify-between gap-4 sm:gap-6 rounded-xl`}
-                              >
-                                <div className="min-w-0">
-                                  <div className="text-sm font-bold text-primary">
-                                    <MathText text={o.text ?? `Option ${o.option_number}`} />
-                                  </div>
-                                  {o.url ? (
-                                    <img
-                                      src={o.url}
-                                      alt="Option"
-                                      className="mt-3 mx-auto max-w-full max-h-48 object-contain border border-outline/40 rounded-lg"
-                                    />
-                                  ) : null}
-                                </div>
-                                <div className="flex items-center gap-2 flex-shrink-0">
-                                  {isSelected ? (
-                                    <span className="px-2 sm:px-3 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-black tracking-[0.15em] uppercase rounded-md">
-                                      Your choice
-                                    </span>
-                                  ) : null}
-                                  {isCorrectOpt ? (
-                                    <span className="px-2 sm:px-3 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-black tracking-[0.15em] uppercase rounded-md">
-                                      Correct
-                                    </span>
-                                  ) : null}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {q.explanation_text || q.explanation_assets.length ? (
-                        <div className="border-2 border-blue-200 bg-blue-50 p-4 sm:p-6 rounded-xl">
-                          <div className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-3 sm:mb-4 flex items-center gap-2">
-                            <span className="material-symbols-outlined text-blue-500 text-sm">lightbulb</span>
-                            Explanation
-                          </div>
-                          {q.explanation_text ? (
-                            <div className="text-on-surface font-medium leading-relaxed text-sm sm:text-base">
-                              <MathText text={q.explanation_text} />
-                            </div>
-                          ) : null}
-                          {q.explanation_assets.length ? (
-                            <div className="flex flex-col items-center gap-4 mt-4 sm:mt-5">
-                              {q.explanation_assets.map((a) => {
-                                const url = assetUrl(a);
-                                return (
-                                  <div
-                                    key={a.id}
-                                    className="border-2 border-outline/30 bg-slate-50 overflow-hidden rounded-xl max-w-full"
-                                  >
-                                    {url ? (
-                                      <img src={url} alt="Question asset" className="max-w-full h-auto mx-auto block" />
-                                    ) : (
-                                      <div className="h-56 w-64" />
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                  );
-
-                  if (!passage) return reviewCard;
-
-                  /* Passage + review card layout */
-                  const isReference = passage.kind === "reference";
-
-                  const reviewPassagePanel = (
-                    <div className={`border-2 ${isReference ? 'border-sky-200 bg-gradient-to-br from-sky-50 to-white' : 'border-violet-200 bg-gradient-to-br from-violet-50 to-white'} rounded-2xl overflow-hidden flex flex-col`}>
-                      <div className={`px-4 py-3 ${isReference ? 'bg-sky-100/60 border-b border-sky-200' : 'bg-violet-100/60 border-b border-violet-200'} flex items-center gap-2`}>
-                        <span className={`material-symbols-outlined ${isReference ? 'text-sky-600' : 'text-violet-600'} text-lg`}>
-                          {isReference ? 'view_cozy' : 'menu_book'}
-                        </span>
-                        <div className={`text-xs font-black uppercase tracking-[0.15em] ${isReference ? 'text-sky-700' : 'text-violet-700'}`}>
-                          {isReference ? 'Reference Block' : 'Passage'}
-                        </div>
-                        {passage.title ? (
-                          <div className={`ml-2 text-sm font-extrabold ${isReference ? 'text-sky-900' : 'text-violet-900'} truncate`}>{passage.title}</div>
-                        ) : null}
-                      </div>
-                      <div
-                        className={`p-4 sm:p-6 prose prose-sm max-w-none text-on-surface leading-relaxed break-words [&_img]:mx-auto [&_img]:max-w-full [&_img]:h-auto [&_table]:mx-auto [&_table]:max-w-full [&_table]:w-auto [&_pre]:whitespace-pre-wrap ${isReference ? 'overflow-visible' : 'overflow-y-auto lg:max-h-[65vh] max-h-[40vh]'}`}
-                        dangerouslySetInnerHTML={{ __html: passage.body_html }}
-                      />
-                    </div>
-                  );
-
-                  if (isReference) {
                     return (
-                      <div key={q.id} className="space-y-4 sm:space-y-6">
-                        {reviewPassagePanel}
-                        {reviewCard}
-                      </div>
-                    );
-                  }
+                       <div key={reviewQ.id} className={`${isSub ? 'border-l-4 border-primary/10 pl-6 py-6' : 'bg-white border-2 border-outline/30 shadow-sm rounded-2xl overflow-hidden'}`}>
+                          {!isSub && (
+                             <div className="p-4 sm:p-6 border-b border-outline/30 flex items-start justify-between gap-4 sm:gap-6 bg-slate-50">
+                                <div className="text-xs font-bold text-primary uppercase tracking-widest">Question {reviewQ.question_number}</div>
+                                <div className="flex gap-2">
+                                   {!hasAnswer ? (
+                                      <span className="px-3 py-1 bg-slate-200 text-slate-700 text-[10px] font-black tracking-[0.15em] uppercase rounded-lg">Unanswered</span>
+                                   ) : isCorrect ? (
+                                      <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-black tracking-[0.15em] uppercase rounded-lg">Correct</span>
+                                   ) : (
+                                      <span className="px-3 py-1 bg-rose-100 text-rose-700 text-[10px] font-black tracking-[0.15em] uppercase rounded-lg">Wrong</span>
+                                   )}
+                                </div>
+                             </div>
+                          )}
 
-                  return (
-                    <div key={q.id}>
-                      {/* Mobile: stacked */}
-                      <div className="lg:hidden space-y-4">
-                        {reviewPassagePanel}
-                        {reviewCard}
-                      </div>
-                      {/* Desktop: side by side */}
-                      <div className="hidden lg:grid lg:grid-cols-2 gap-6">
-                        {reviewPassagePanel}
-                        {reviewCard}
-                      </div>
+                          <div className={`p-4 sm:p-6 space-y-6 ${!isSub ? '' : 'pt-0'}`}>
+                             {isSub && (
+                                <div className="flex items-center justify-between mb-4">
+                                   <div className="text-[10px] font-black uppercase tracking-widest text-primary/40">Sub-Question Item</div>
+                                    <div className="flex gap-2">
+                                       {!hasAnswer ? (
+                                          <span className="px-2 py-1 bg-slate-100 text-slate-500 text-[9px] font-black tracking-[0.15em] uppercase rounded-md">Unanswered</span>
+                                       ) : isCorrect ? (
+                                          <span className="px-2 py-1 bg-emerald-50 text-emerald-600 text-[9px] font-black tracking-[0.15em] uppercase rounded-md">Correct</span>
+                                       ) : (
+                                          <span className="px-2 py-1 bg-rose-50 text-rose-600 text-[9px] font-black tracking-[0.15em] uppercase rounded-md">Wrong</span>
+                                       )}
+                                    </div>
+                                </div>
+                             )}
+
+                             {reviewQ.prompt_text && (
+                                <div className="text-on-surface font-medium leading-relaxed text-sm sm:text-base">
+                                   <MathText text={reviewQ.prompt_text} />
+                                </div>
+                             )}
+
+                             {reviewQ.prompt_assets.map(a => {
+                                const url = assetUrl(a);
+                                return url ? <img key={a.id} src={url} className="max-w-full h-auto rounded-xl border border-outline/20 mx-auto" alt="Prompt Asset" /> : null;
+                             })}
+
+                             {reviewQ.type === 'fill' ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                   <div className="bg-slate-50 p-4 rounded-xl border-2 border-outline/10">
+                                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Your Answer</div>
+                                      <div className="text-sm font-bold text-primary">{fill || '—'}</div>
+                                   </div>
+                                   <div className="bg-emerald-50 p-4 rounded-xl border-2 border-emerald-100">
+                                      <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Correct Answer</div>
+                                      <div className="text-sm font-bold text-emerald-700">{correctFill}</div>
+                                   </div>
+                                </div>
+                             ) : (
+                                <div className="space-y-2">
+                                   {reviewQ.options.map(opt => {
+                                      const isSelected = selected.has(opt.id);
+                                      const isCorrectOpt = opt.is_correct;
+                                      const border = isCorrectOpt ? 'border-emerald-400' : isSelected ? 'border-rose-400' : 'border-outline/30';
+                                      const bg = isCorrectOpt ? 'bg-emerald-50' : isSelected ? 'bg-rose-50' : 'bg-slate-50';
+                                      return (
+                                         <div key={opt.id} className={`border-2 ${border} ${bg} px-4 py-3 rounded-xl flex items-center justify-between`}>
+                                            <div className="text-sm font-bold text-primary flex-1">
+                                               <MathText text={opt.text ?? `Option ${opt.option_number}`} />
+                                            </div>
+                                            <div className="flex gap-2">
+                                               {isSelected && <span className="px-2 py-0.5 bg-primary/10 text-primary text-[9px] font-black uppercase rounded">Your Choice</span>}
+                                               {isCorrectOpt && <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[9px] font-black uppercase rounded">Correct</span>}
+                                            </div>
+                                         </div>
+                                      );
+                                   })}
+                                </div>
+                             )}
+
+                             {(reviewQ.explanation_text || reviewQ.explanation_assets.length > 0) && (
+                                <div className="mt-8 p-6 bg-blue-50 rounded-2xl border-2 border-blue-100/50">
+                                   <div className="flex items-center gap-2 mb-4 text-blue-700">
+                                      <span className="material-symbols-outlined text-sm">lightbulb</span>
+                                      <span className="text-[10px] font-black uppercase tracking-widest">Explanation</span>
+                                   </div>
+                                   {reviewQ.explanation_text && <div className="text-sm font-medium text-blue-900 mb-4"><MathText text={reviewQ.explanation_text} /></div>}
+                                   <div className="flex flex-col gap-4">
+                                      {reviewQ.explanation_assets.map(a => {
+                                         const url = assetUrl(a);
+                                         return url ? <img key={a.id} src={url} className="max-w-full h-auto rounded-xl" alt="Explanation Asset" /> : null;
+                                      })}
+                                   </div>
+                                </div>
+                             )}
+                          </div>
+                       </div>
+                    );
+                 }
+
+                 const passage = q.passage_id ? passagesById.get(q.passage_id) : null;
+                 const isReference = passage?.kind === "reference";
+
+                 const reviewBody = q.type === 'reference_block' ? (
+                    <div key={q.id} className="space-y-10">
+                       <div className="bg-white border-2 border-outline/30 shadow-sm rounded-3xl overflow-hidden p-6 sm:p-10">
+                          <div className="text-[10px] font-black text-primary/40 uppercase tracking-[0.3em] mb-4">Reference Block {q.question_number}</div>
+                          <div className="text-sm sm:text-lg text-on-surface leading-relaxed font-medium">
+                             <MathText text={q.prompt_text ?? ""} />
+                          </div>
+                          {q.prompt_assets.map(a => {
+                             const url = assetUrl(a);
+                             return url ? <img key={a.id} src={url} className="mt-6 max-w-full h-auto rounded-xl border border-outline/20" alt="Block Prompt" /> : null;
+                          })}
+                       </div>
+                       <div className="space-y-12">
+                          {q.sub_questions?.map(sub => renderReviewSingle(sub, true))}
+                       </div>
                     </div>
-                  );
-                })();
+                 ) : renderReviewSingle(q);
+
+                 if (!passage) return reviewBody;
+
+                 const revPassagePanel = (
+                   <div key={`p-${passage.id}`} className={`border-2 ${isReference ? 'border-sky-200 bg-gradient-to-br from-sky-50 to-white' : 'border-violet-200 bg-gradient-to-br from-violet-50 to-white'} rounded-2xl overflow-hidden flex flex-col`}>
+                     <div className={`px-4 py-3 ${isReference ? 'bg-sky-100/60 border-b border-sky-200' : 'bg-violet-100/60 border-b border-violet-200'} flex items-center gap-2`}>
+                       <span className={`material-symbols-outlined ${isReference ? 'text-sky-600' : 'text-violet-600'} text-lg`}>
+                         {isReference ? 'view_cozy' : 'menu_book'}
+                       </span>
+                       <div className={`text-xs font-black uppercase tracking-[0.15em] ${isReference ? 'text-sky-700' : 'text-violet-700'}`}>
+                         {isReference ? 'Reference Block' : 'Passage'}
+                       </div>
+                       {passage.title ? (
+                         <div className={`ml-2 text-sm font-extrabold ${isReference ? 'text-sky-900' : 'text-violet-900'} truncate`}>{passage.title}</div>
+                       ) : null}
+                     </div>
+                     <div
+                       className={`p-4 sm:p-6 prose prose-sm max-w-none text-on-surface leading-relaxed break-words [&_img]:mx-auto [&_img]:max-w-full [&_img]:h-auto [&_table]:mx-auto [&_table]:max-w-full [&_table]:w-auto [&_pre]:whitespace-pre-wrap ${isReference ? 'overflow-visible' : 'overflow-y-auto lg:max-h-[65vh] max-h-[40vh]'}`}
+                       dangerouslySetInnerHTML={{ __html: passage.body_html }}
+                     />
+                   </div>
+                 );
+
+                 return (
+                    <div key={`rev-container-${q.id}`}>
+                       <div className="lg:hidden space-y-6">
+                          {revPassagePanel}
+                          {reviewBody}
+                       </div>
+                       <div className="hidden lg:grid lg:grid-cols-12 gap-8">
+                          <div className="lg:col-span-5">{revPassagePanel}</div>
+                          <div className="lg:col-span-7">{reviewBody}</div>
+                       </div>
+                    </div>
+                 );
               })}
             </div>
           </div>
@@ -1999,30 +1939,32 @@ export default function ExamClient({
                   <div ref={questionTopRef} className="flex items-start justify-between gap-4 sm:gap-6">
                     <div>
                       <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-3 sm:mb-4">
-                        Question {currentQuestion.question_number} of {questions.length}
+                        Unit {currentQuestion.question_number} of {questions.length}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setQState((prev) => {
-                          const next = new Map(prev);
-                          const st = next.get(currentQuestion.id);
-                          if (!st) return prev;
-                          next.set(currentQuestion.id, { ...st, marked: !st.marked });
-                          return next;
-                        });
-                      }}
-                      className={[
-                        "px-3 sm:px-5 py-2 sm:py-2.5 font-bold text-xs transition-all rounded-xl flex items-center gap-1.5 flex-shrink-0 active:scale-[0.97]",
-                        qState.get(currentQuestion.id)?.marked
-                          ? "bg-amber-50 text-amber-700 border-2 border-amber-300"
-                          : "bg-white text-primary border-2 border-outline/40 hover:bg-primary/5",
-                      ].join(" ")}
-                    >
-                      <span className="material-symbols-outlined text-sm">flag</span>
-                      <span className="hidden sm:inline">Mark for review</span>
-                    </button>
+                    {currentQuestion.type !== 'reference_block' && (
+                       <button
+                         type="button"
+                         onClick={() => {
+                           setQState((prev) => {
+                             const next = new Map(prev);
+                             const st = next.get(currentQuestion.id);
+                             if (!st) return prev;
+                             next.set(currentQuestion.id, { ...st, marked: !st.marked });
+                             return next;
+                           });
+                         }}
+                         className={[
+                           "px-3 sm:px-5 py-2 sm:py-2.5 font-bold text-xs transition-all rounded-xl flex items-center gap-1.5 flex-shrink-0 active:scale-[0.97]",
+                           qState.get(currentQuestion.id)?.marked
+                             ? "bg-amber-50 text-amber-700 border-2 border-amber-300"
+                             : "bg-white text-primary border-2 border-outline/40 hover:bg-primary/5",
+                         ].join(" ")}
+                       >
+                         <span className="material-symbols-outlined text-sm">flag</span>
+                         <span className="hidden sm:inline">Mark for review</span>
+                       </button>
+                    )}
                   </div>
 
                   {/* Passage + Question layout */}
@@ -2030,142 +1972,143 @@ export default function ExamClient({
                     const passage = currentQuestion.passage_id ? passagesById.get(currentQuestion.passage_id) : null;
                     const isReference = passage?.kind === "reference";
 
-                    const questionBody = (
-                      <div className="space-y-4 sm:space-y-6 bg-gradient-to-br from-white to-slate-50 border-2 border-outline/30 shadow-sm rounded-2xl p-4 sm:p-6 md:p-8">
-                        {passage && !isReference ? (
-                          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-violet-50 border border-violet-200 text-[10px] sm:text-xs font-extrabold text-violet-700 rounded-lg">
-                            <span className="material-symbols-outlined text-[14px] sm:text-[16px] text-violet-500">menu_book</span>
-                            Related to passage{passage.title ? `: ${passage.title}` : ""}
-                          </div>
-                        ) : null}
+                    const renderSingleQuestion = (q: Question, isSub = false) => {
+                       const st = qState.get(q.id);
+                       const selected = new Set(st?.selectedOptionIds ?? []);
+                       const order = optionOrder.get(q.id);
+                       const byId = new Map(q.options.map((o) => [o.id, o]));
+                       const ordered = (order ?? []).map((id) => byId.get(id)).filter((o): o is Option => !!o);
+                       const seen = new Set(ordered.map((o) => o.id));
+                       const leftovers = q.options.filter((o) => !seen.has(o.id));
+                       const list = [...ordered, ...leftovers];
 
-                        {currentQuestion.prompt_text ? (
-                          <div className="text-base sm:text-lg text-on-surface leading-relaxed font-medium">
-                            <MathText text={currentQuestion.prompt_text} />
-                          </div>
-                        ) : null}
-
-                        {currentQuestion.prompt_assets.length ? (
-                          <div className="flex flex-col items-center gap-4">
-                            {currentQuestion.prompt_assets.map((a) => {
-                              const url = assetUrl(a);
-                              return (
-                                <div
-                                  key={a.id}
-                                  className="border-2 border-outline/30 bg-slate-50 overflow-hidden rounded-xl max-w-full"
-                                >
-                                  {url ? (
-                                    <img src={url} alt="Question asset" className="max-w-full h-auto mx-auto block" />
-                                  ) : (
-                                    <div className="h-56 w-64" />
-                                  )}
+                       return (
+                          <div key={q.id} className={`${isSub ? 'border-l-4 border-primary/20 pl-4 sm:pl-6 py-4' : 'bg-gradient-to-br from-white to-slate-50 border-2 border-outline/30 shadow-sm rounded-2xl p-4 sm:p-6 md:p-8'}`}>
+                             {isSub && (
+                                <div className="flex items-center justify-between mb-4">
+                                   <div className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/60">Question Item</div>
+                                   <button
+                                     type="button"
+                                     onClick={() => {
+                                       setQState((prev) => {
+                                         const next = new Map(prev);
+                                         const st = next.get(q.id);
+                                         if (!st) return prev;
+                                         next.set(q.id, { ...st, marked: !st.marked });
+                                         return next;
+                                       });
+                                     }}
+                                     className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${st?.marked ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-400 hover:text-primary"}`}
+                                   >
+                                      <span className="material-symbols-outlined text-[18px]">flag</span>
+                                   </button>
                                 </div>
-                              );
-                            })}
-                          </div>
-                        ) : null}
+                             )}
 
-                        {currentQuestion.type === "fill" ? (
-                          <div className="border-2 border-outline/30 bg-white p-4 sm:p-6 rounded-xl">
-                            <input
-                              value={qState.get(currentQuestion.id)?.fillText ?? ""}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                setQState((prev) => {
-                                  const next = new Map(prev);
-                                  const st = next.get(currentQuestion.id);
-                                  if (!st) return prev;
-                                  next.set(currentQuestion.id, { ...st, fillText: v });
-                                  return next;
-                                });
-                              }}
-                              className="h-11 sm:h-12 w-full px-4 bg-white border-2 border-outline/40 rounded-lg focus:border-primary outline-none transition-colors"
-                              placeholder="Type your answer"
-                            />
-                          </div>
-                        ) : (
-                          <div className="space-y-2 sm:space-y-3">
-                            {(() => {
-                              const st = qState.get(currentQuestion.id);
-                              const selected = new Set(st?.selectedOptionIds ?? []);
-                              const order = optionOrder.get(currentQuestion.id);
-                              const byId = new Map(currentQuestion.options.map((o) => [o.id, o]));
-                              const ordered = (order ?? []).map((id) => byId.get(id)).filter((o): o is Option => !!o);
-                              const seen = new Set(ordered.map((o) => o.id));
-                              const leftovers = currentQuestion.options.filter((o) => !seen.has(o.id));
-                              const list = [...ordered, ...leftovers];
+                             {q.prompt_text && (
+                                <div className="text-base sm:text-lg text-on-surface leading-relaxed font-medium mb-6">
+                                   <MathText text={q.prompt_text} />
+                                </div>
+                             )}
 
-                              return list.map((opt) => {
-                                const selectedNow = selected.has(opt.id);
-                                return (
-                                  <button
-                                    key={opt.id}
-                                    type="button"
-                                    onClick={() => {
-                                      setQState((prev) => {
-                                        const next = new Map(prev);
-                                        const cur = next.get(currentQuestion.id);
-                                        if (!cur) return prev;
-                                        const set = new Set(cur.selectedOptionIds);
-                                        if (currentQuestion.allow_multiple) {
-                                          if (set.has(opt.id)) set.delete(opt.id);
-                                          else set.add(opt.id);
-                                        } else {
-                                          set.clear();
-                                          set.add(opt.id);
-                                        }
-                                        next.set(currentQuestion.id, {
-                                          ...cur,
-                                          selectedOptionIds: Array.from(set),
-                                        });
-                                        return next;
-                                      });
-                                    }}
-                                    className={
-                                      selectedNow
-                                        ? "w-full text-left border-2 border-primary bg-primary/5 px-4 sm:px-6 py-3 sm:py-4 font-bold text-primary transition-all rounded-xl"
-                                        : "w-full text-left border-2 border-outline/30 bg-white px-4 sm:px-6 py-3 sm:py-4 font-bold text-on-surface hover:bg-primary/5 hover:border-primary/30 transition-all rounded-xl"
-                                    }
-                                  >
-                                    <div className="flex items-start justify-between gap-3 sm:gap-4">
-                                      <div className="text-sm font-extrabold min-w-0">
-                                        <MathText text={opt.text ?? `Option ${opt.option_number}`} />
-                                      </div>
-                                      <span
-                                        className={
-                                          selectedNow
-                                            ? "w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center flex-shrink-0"
-                                            : "w-5 h-5 rounded-full border-2 border-outline/40 flex items-center justify-center flex-shrink-0"
-                                        }
-                                      >
-                                        {selectedNow ? (
-                                          <span className="material-symbols-outlined text-[16px]">
-                                            check
-                                          </span>
-                                        ) : null}
-                                      </span>
-                                    </div>
-                                    {opt.url ? (
-                                      <img
-                                        src={opt.url}
-                                        alt="Option"
-                                        className="mt-4 mx-auto max-w-full max-h-56 object-contain border-2 border-outline/30 bg-white rounded-lg"
-                                      />
-                                    ) : null}
-                                  </button>
-                                );
-                              });
-                            })()}
+                             {q.prompt_assets.length > 0 && (
+                                <div className="flex flex-col items-center gap-4 mb-6">
+                                   {q.prompt_assets.map(a => {
+                                      const url = assetUrl(a);
+                                      return url ? <img key={a.id} src={url} className="max-w-full h-auto rounded-xl" alt="Asset" /> : null;
+                                   })}
+                                </div>
+                             )}
+
+                             {q.type === 'fill' ? (
+                                <div className="border-2 border-outline/30 bg-white p-4 rounded-xl">
+                                   <input
+                                      value={st?.fillText ?? ""}
+                                      onChange={(e) => {
+                                         const v = e.target.value;
+                                         setQState(prev => {
+                                            const next = new Map(prev);
+                                            const s = next.get(q.id);
+                                            if (!s) return prev;
+                                            next.set(q.id, { ...s, fillText: v });
+                                            return next;
+                                         });
+                                      }}
+                                      className="h-11 w-full px-4 outline-none font-bold"
+                                      placeholder="Type your answer..."
+                                   />
+                                </div>
+                             ) : (
+                                <div className="space-y-3">
+                                   {list.map(opt => {
+                                      const isSelected = selected.has(opt.id);
+                                      return (
+                                         <button
+                                            key={opt.id}
+                                            type="button"
+                                            onClick={() => {
+                                               setQState(prev => {
+                                                  const next = new Map(prev);
+                                                  const s = next.get(q.id);
+                                                  if (!s) return prev;
+                                                  const nset = new Set(s.selectedOptionIds);
+                                                  if (q.allow_multiple) {
+                                                     if (nset.has(opt.id)) nset.delete(opt.id);
+                                                     else nset.add(opt.id);
+                                                  } else {
+                                                     nset.clear();
+                                                     nset.add(opt.id);
+                                                  }
+                                                  next.set(q.id, { ...s, selectedOptionIds: Array.from(nset) });
+                                                  return next;
+                                               });
+                                            }}
+                                            className={`w-full text-left border-2 px-4 py-3 sm:px-6 sm:py-4 rounded-xl transition-all ${isSelected ? 'border-primary bg-primary/5 text-primary' : 'border-outline/30 bg-white text-on-surface hover:bg-slate-50'}`}
+                                         >
+                                            <div className="flex items-start justify-between gap-4">
+                                               <div className="text-sm font-extrabold flex-1">
+                                                  <MathText text={opt.text ?? `Option ${opt.option_number}`} />
+                                               </div>
+                                               <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${isSelected ? 'border-primary bg-primary' : 'border-outline/40'}`}>
+                                                  {isSelected && <span className="material-symbols-outlined text-white text-[14px]">check</span>}
+                                               </div>
+                                            </div>
+                                            {opt.url && <img src={opt.url} className="mt-4 mx-auto max-w-full rounded-lg h-48 object-contain" alt="Option" />}
+                                         </button>
+                                      );
+                                   })}
+                                </div>
+                             )}
                           </div>
-                        )}
-                      </div>
-                    );
+                       );
+                    };
+
+                    const blockBody = currentQuestion.type === 'reference_block' ? (
+                       <div className="space-y-10">
+                          <div className="bg-white border-2 border-outline/30 shadow-sm rounded-2xl overflow-hidden p-6 sm:p-10">
+                             <div className="text-base sm:text-xl text-on-surface leading-relaxed font-medium">
+                                <MathText text={currentQuestion.prompt_text ?? ""} />
+                             </div>
+                             {currentQuestion.prompt_assets.length > 0 && (
+                                <div className="mt-8 flex flex-col items-center gap-6">
+                                   {currentQuestion.prompt_assets.map(a => {
+                                      const url = assetUrl(a);
+                                      return url ? <img key={a.id} src={url} className="max-w-2xl w-full h-auto rounded-2xl shadow-lg" alt="Block Asset" /> : null;
+                                   })}
+                                </div>
+                             )}
+                          </div>
+                          
+                          <div className="space-y-16 mt-12 pb-12">
+                             {currentQuestion.sub_questions?.map((sub) => renderSingleQuestion(sub, true))}
+                          </div>
+                       </div>
+                    ) : renderSingleQuestion(currentQuestion);
 
                     if (!passage) {
-                      return <div className="mt-4 sm:mt-8">{questionBody}</div>;
+                       return <div className="mt-4 sm:mt-8">{blockBody}</div>;
                     }
 
-                    /* Passage panel */
                     const passagePanel = (
                       <div className={`border-2 ${isReference ? 'border-sky-200 bg-gradient-to-br from-sky-50 to-white' : 'border-violet-200 bg-gradient-to-br from-violet-50 to-white'} rounded-2xl overflow-hidden flex flex-col`}>
                         <div className={`px-4 py-3 ${isReference ? 'bg-sky-100/60 border-b border-sky-200' : 'bg-violet-100/60 border-b border-violet-200'} flex items-center gap-2`}>
@@ -2190,22 +2133,20 @@ export default function ExamClient({
                       return (
                         <div className="mt-4 sm:mt-8 space-y-4 sm:space-y-6">
                           {passagePanel}
-                          {questionBody}
+                          {blockBody}
                         </div>
                       );
                     }
 
                     return (
                       <div className="mt-4 sm:mt-8">
-                        {/* Mobile: stacked */}
                         <div className="lg:hidden space-y-4">
                           {passagePanel}
-                          {questionBody}
+                          {blockBody}
                         </div>
-                        {/* Desktop: side by side */}
                         <div className="hidden lg:grid lg:grid-cols-2 gap-6">
                           {passagePanel}
-                          {questionBody}
+                          {blockBody}
                         </div>
                       </div>
                     );

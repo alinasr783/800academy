@@ -19,11 +19,173 @@ type NewOption = {
   is_correct: boolean;
 };
 
+type SubQuestion = {
+  key: string;
+  type: "mcq" | "fill";
+  prompt: string;
+  explanation: string;
+  points: string;
+  options: NewOption[];
+  questionFiles: File[];
+  explanationFiles: File[];
+  correctText: string;
+  topicId: string;
+  subtopicId: string;
+};
+
 function uid() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 // Sub-components for better performance (avoiding full re-renders on every keystroke)
+const SubQuestionInput = memo(({ 
+  sub, 
+  index, 
+  topics, 
+  allSubtopics,
+  onUpdate, 
+  onRemove,
+  onReorder
+}: { 
+  sub: SubQuestion, 
+  index: number, 
+  topics: TopicRow[], 
+  allSubtopics: SubtopicRow[],
+  onUpdate: (key: string, patch: Partial<SubQuestion>) => void, 
+  onRemove: (key: string) => void,
+  onReorder: (key: string, direction: 'up' | 'down') => void
+}) => {
+  const filteredSubtopics = allSubtopics.filter(st => st.topic_id === sub.topicId);
+
+  return (
+    <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden group/sub">
+      <div className="p-4 border-b border-outline/40 bg-slate-50 flex items-center justify-between">
+         <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-primary text-white flex items-center justify-center font-black text-xs">
+              {index + 1}
+            </div>
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-primary">Sub-Question</h3>
+         </div>
+         <div className="flex items-center gap-2">
+            <button onClick={() => onReorder(sub.key, 'up')} disabled={index === 0} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-outline/40 text-slate-400 hover:text-primary disabled:opacity-30 transition-all">
+               <span className="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
+            </button>
+            <button onClick={() => onReorder(sub.key, 'down')} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white border border-outline/40 text-slate-400 hover:text-primary transition-all">
+               <span className="material-symbols-outlined text-[18px]">keyboard_arrow_down</span>
+            </button>
+            <button onClick={() => onRemove(sub.key)} className="ml-2 w-8 h-8 flex items-center justify-center rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 transition-all">
+               <span className="material-symbols-outlined text-[18px]">delete</span>
+            </button>
+         </div>
+      </div>
+      
+      <div className="p-6 space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+           <div>
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Type</label>
+              <select 
+                value={sub.type} 
+                onChange={(e) => onUpdate(sub.key, { type: e.target.value as 'mcq' | 'fill' })}
+                className="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold outline-none focus:border-primary"
+              >
+                <option value="mcq">MCQ</option>
+                <option value="fill">Fill In The Blank</option>
+              </select>
+           </div>
+           <div>
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Points</label>
+              <input 
+                type="number" 
+                value={sub.points} 
+                onChange={(e) => onUpdate(sub.key, { points: e.target.value })}
+                className="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold outline-none focus:border-primary text-center"
+              />
+           </div>
+        </div>
+
+        <div>
+           <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-1">Question Prompt</label>
+           <textarea 
+             value={sub.prompt} 
+             onChange={(e) => onUpdate(sub.key, { prompt: e.target.value })}
+             rows={3}
+             className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-medium outline-none focus:bg-white focus:border-primary transition-all"
+           />
+           {sub.prompt && (
+              <div className="mt-2 p-3 bg-slate-50 border border-dashed border-slate-200 rounded-xl">
+                 <MathText text={sub.prompt} />
+              </div>
+           )}
+        </div>
+
+        {sub.type === 'mcq' && (
+           <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                 <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Answer Options</label>
+                 <button onClick={() => onUpdate(sub.key, { options: [...sub.options, { key: uid(), text: "", file: null, is_correct: false }] })} className="text-[9px] font-black uppercase text-primary hover:underline">+ Add Option</button>
+              </div>
+              <div className="grid grid-cols-1 gap-4">
+                 {sub.options.map((opt, oIdx) => (
+                    <div key={opt.key} className="flex items-start gap-3 bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+                       <input 
+                         type="checkbox" 
+                         checked={opt.is_correct}
+                         onChange={(e) => {
+                            const newOpts = sub.options.map(o => o.key === opt.key ? { ...o, is_correct: e.target.checked } : o);
+                            onUpdate(sub.key, { options: newOpts });
+                         }}
+                         className="mt-1.5 accent-primary"
+                       />
+                       <input 
+                          value={opt.text}
+                          onChange={(e) => {
+                             const newOpts = sub.options.map(o => o.key === opt.key ? { ...o, text: e.target.value } : o);
+                             onUpdate(sub.key, { options: newOpts });
+                          }}
+                          placeholder={`Option ${String.fromCharCode(65 + oIdx)}...`}
+                          className="flex-1 bg-transparent text-xs font-bold outline-none"
+                       />
+                       <button onClick={() => onUpdate(sub.key, { options: sub.options.filter(o => o.key !== opt.key) })} className="text-slate-300 hover:text-rose-500">
+                          <span className="material-symbols-outlined text-[16px]">close</span>
+                       </button>
+                    </div>
+                 ))}
+              </div>
+           </div>
+        )}
+
+        {sub.type === 'fill' && (
+           <div>
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-1">Correct Answer</label>
+              <input 
+                value={sub.correctText} 
+                onChange={(e) => onUpdate(sub.key, { correctText: e.target.value })}
+                className="w-full h-10 px-4 bg-emerald-50 border border-emerald-100 rounded-xl text-xs font-black text-emerald-900 outline-none"
+              />
+           </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-4">
+           <div>
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Topic</label>
+              <select value={sub.topicId} onChange={(e) => onUpdate(sub.key, { topicId: e.target.value, subtopicId: "" })} className="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-bold outline-none">
+                 <option value="">Select Topic</option>
+                 {topics.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+              </select>
+           </div>
+           <div>
+              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1 ml-1">Subtopic</label>
+              <select value={sub.subtopicId} onChange={(e) => onUpdate(sub.key, { subtopicId: e.target.value })} className="w-full h-10 px-3 bg-slate-50 border border-slate-100 rounded-xl text-[10px] font-bold outline-none">
+                 <option value="">Select Subtopic</option>
+                 {filteredSubtopics.map(st => <option key={st.id} value={st.id}>{st.title}</option>)}
+              </select>
+           </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 const PageHeader = memo(({ exam, examId, saving, submit, onCancel }: { exam: any, examId: string | null, saving: boolean, submit: () => void, onCancel: () => void }) => (
   <div className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border border-outline/60 shadow-soft-xl rounded-2xl mb-8 p-6 flex flex-col sm:flex-row items-center justify-between gap-6">
     <div className="flex items-center gap-4">
@@ -114,7 +276,7 @@ function NewQuestionContent() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const [type, setType] = useState<"mcq" | "fill">("mcq");
+  const [type, setType] = useState<"mcq" | "fill" | "reference_block">("mcq");
   const [points, setPoints] = useState("1");
   const [allowMultiple, setAllowMultiple] = useState(false);
   const [prompt, setPrompt] = useState("");
@@ -132,6 +294,8 @@ function NewQuestionContent() {
     { key: uid(), text: "", file: null, is_correct: false },
     { key: uid(), text: "", file: null, is_correct: false },
   ]);
+
+  const [subQuestions, setSubQuestions] = useState<SubQuestion[]>([]);
 
   async function adminFetch(path: string, init?: RequestInit) {
     const { data: sessionData } = await supabase.auth.getSession();
@@ -218,6 +382,7 @@ function NewQuestionContent() {
       { key: uid(), text: "", file: null, is_correct: false },
       { key: uid(), text: "", file: null, is_correct: false },
     ]);
+    setSubQuestions([]);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -228,114 +393,184 @@ function NewQuestionContent() {
       setError("Invalid points.");
       return;
     }
-    if (!prompt.trim() && questionFiles.length === 0) {
-      setError("Add prompt text or at least one image.");
-      return;
-    }
 
-    if (type === "fill") {
-      if (!correctText.trim()) {
-        setError("Correct text is required for Fill.");
+    // Basic Validation
+    if (type === 'reference_block') {
+      if (!prompt.trim() && questionFiles.length === 0) {
+        setError("Reference block must have at least text or one image.");
         return;
+      }
+      if (subQuestions.length === 0) {
+        setError("Reference block must have at least one sub-question.");
+        return;
+      }
+      // Sub-questions validation
+      for (let s of subQuestions) {
+        if (!s.prompt.trim()) { setError("Sub-question is missing prompt."); return; }
+        if (!s.subtopicId) { setError("Sub-question is missing subtopic."); return; }
+        if (s.type === 'mcq') {
+          const usable = s.options.filter(o => o.text.trim() || o.file);
+          if (usable.length < 2) { setError("Each MCQ sub-question needs at least 2 options."); return; }
+          if (!usable.some(o => o.is_correct)) { setError("Each sub-question must have a correct option."); return; }
+        } else {
+          if (!s.correctText.trim()) { setError("Fill sub-questions need a correct answer."); return; }
+        }
       }
     } else {
-      const usable = options.filter((o) => o.text.trim() || o.file);
-      if (usable.length < 2) {
-        setError("MCQ needs at least 2 options.");
+      // Standard validation
+      if (!prompt.trim() && questionFiles.length === 0) {
+        setError("Add prompt text or at least one image.");
         return;
       }
-      const correct = usable.filter((o) => o.is_correct).length;
-      if (correct < 1) {
-        setError("Mark at least 1 correct option.");
-        return;
+      if (type === "fill") {
+        if (!correctText.trim()) { setError("Correct text is required for Fill."); return; }
+      } else {
+        const usable = options.filter((o) => o.text.trim() || o.file);
+        if (usable.length < 2) { setError("MCQ needs at least 2 options."); return; }
+        if (!usable.some(o => o.is_correct)) { setError("Mark at least 1 correct option."); return; }
+        if (!allowMultiple && usable.filter(o => o.is_correct).length !== 1) {
+          setError("Single-answer MCQ must have exactly 1 correct option.");
+          return;
+        }
       }
-      if (!allowMultiple && correct !== 1) {
-        setError("Single-answer MCQ must have exactly 1 correct option.");
-        return;
-      }
-    }
-
-    if (!subtopicId) {
-        setError("Please select a subtopic.");
-        return;
+      if (!subtopicId) { setError("Please select a subtopic."); return; }
     }
 
     setSaving(true);
     setError(null);
     setMessage(null);
-    try {
-      const created = (await adminFetch(`/api/admin/exams/${examId}`, {
-        method: "POST",
-        body: JSON.stringify({
-          action: "create_question",
-          type,
-          points: pts,
-          allow_multiple: type === "mcq" ? allowMultiple : false,
-          prompt_text: prompt.trim() || null,
-          explanation_text: explanationText.trim() || null,
-          correct_text: type === "fill" ? correctText.trim() : null,
-          passage_id: passageId || null,
-          topic_id: topicId || null,
-          subtopic_id: subtopicId || null,
-        }),
-      })) as { question: { id: string } };
 
-      const questionId = created.question.id;
+    const uploadAndGetAsset = async (questionId: string, file: File, kind: "prompt" | "explanation", i: number) => {
+        const safeName = file.name.replaceAll(" ", "-");
+        const path = `questions/${questionId}/${kind === 'explanation' ? 'explanations/' : ''}${Date.now()}-${i}-${safeName}`;
+        const { error: upErr } = await supabase.storage.from(storageBucket).upload(path, file, { upsert: false });
+        if (upErr) throw new Error(upErr.message);
+        const publicUrl = supabase.storage.from(storageBucket).getPublicUrl(path).data.publicUrl;
+        return { bucket: storageBucket, storage_path: path, url: publicUrl, alt: file.name, kind, sort_order: i };
+    };
 
-      const uploadAndGetAsset = async (file: File, kind: "prompt" | "explanation", i: number) => {
-          const safeName = file.name.replaceAll(" ", "-");
-          const path = `questions/${questionId}/${kind === 'explanation' ? 'explanations/' : ''}${Date.now()}-${i}-${safeName}`;
-          const { error: upErr } = await supabase.storage.from(storageBucket).upload(path, file, { upsert: false });
+    const uploadAndGetOption = async (questionId: string, opt: NewOption, i: number) => {
+        let url: string | null = null;
+        let storagePath: string | null = null;
+        if (opt.file) {
+          const safeName = opt.file.name.replaceAll(" ", "-");
+          const path = `questions/${questionId}/options/${Date.now()}-${uid()}-${safeName}`;
+          const { error: upErr } = await supabase.storage.from(storageBucket).upload(path, opt.file, { upsert: false });
           if (upErr) throw new Error(upErr.message);
-          const publicUrl = supabase.storage.from(storageBucket).getPublicUrl(path).data.publicUrl;
-          return { bucket: storageBucket, storage_path: path, url: publicUrl, alt: file.name, kind, sort_order: i };
-      };
+          url = supabase.storage.from(storageBucket).getPublicUrl(path).data.publicUrl;
+          storagePath = path;
+        }
+        return { text: opt.text.trim() || null, bucket: storageBucket, storage_path: storagePath, url, is_correct: opt.is_correct };
+    };
 
-      const uploadAndGetOption = async (opt: NewOption, i: number) => {
-          let url: string | null = null;
-          let storagePath: string | null = null;
-          if (opt.file) {
-            const safeName = opt.file.name.replaceAll(" ", "-");
-            const path = `questions/${questionId}/options/${Date.now()}-${uid()}-${safeName}`;
-            const { error: upErr } = await supabase.storage.from(storageBucket).upload(path, opt.file, { upsert: false });
-            if (upErr) throw new Error(upErr.message);
-            url = supabase.storage.from(storageBucket).getPublicUrl(path).data.publicUrl;
-            storagePath = path;
-          }
-          return { text: opt.text.trim() || null, bucket: storageBucket, storage_path: storagePath, url, is_correct: opt.is_correct };
-      };
+    try {
+      if (type === 'reference_block') {
+        // 1. Create Parent Block
+        const blockCreated = await adminFetch(`/api/admin/exams/${examId}`, {
+          method: "POST",
+          body: JSON.stringify({
+            action: "create_question",
+            type: "reference_block",
+            prompt_text: prompt.trim() || null,
+            points: 0,
+            topic_id: topicId || null,
+            subtopic_id: subtopicId || null,
+          })
+        }) as { question: { id: string } };
 
-      const assetPromises = [
-        ...questionFiles.map((f, i) => uploadAndGetAsset(f, "prompt", i)),
-        ...explanationFiles.map((f, i) => uploadAndGetAsset(f, "explanation", i))
-      ];
+        const blockId = blockCreated.question.id;
 
-      const optionPromises = type === "mcq" 
-        ? options.filter(o => o.text.trim() || o.file).map((o, i) => uploadAndGetOption(o, i))
-        : [];
+        // 2. Upload Block Assets
+        if (questionFiles.length > 0) {
+          const bAssets = await Promise.all(questionFiles.map((f, i) => uploadAndGetAsset(blockId, f, "prompt", i)));
+          await adminFetch(`/api/admin/questions/${blockId}`, {
+            method: "POST",
+            body: JSON.stringify({ action: "batch_assets", assets: bAssets })
+          });
+        }
 
-      const [pAssets, pOptions] = await Promise.all([
-          Promise.all(assetPromises),
-          Promise.all(optionPromises)
-      ]);
+        // 3. Create Sub-questions
+        // Important: question_number is handled by the server (increments current max)
+        for (let s of subQuestions) {
+           const sCreated = await adminFetch(`/api/admin/exams/${examId}`, {
+             method: "POST",
+             body: JSON.stringify({
+               action: "create_question",
+               type: s.type,
+               parent_id: blockId,
+               prompt_text: s.prompt.trim(),
+               explanation_text: s.explanation.trim() || null,
+               points: Math.max(0, Math.trunc(Number(s.points))),
+               correct_text: s.type === 'fill' ? s.correctText.trim() : null,
+               topic_id: s.topicId || null,
+               subtopic_id: s.subtopicId || null,
+               allow_multiple: false // Assuming single choice sub-questions for simplicity, can expand
+             })
+           }) as { question: { id: string } };
 
-      const batchPromises = [];
-      if (pAssets.length > 0) {
-          batchPromises.push(adminFetch(`/api/admin/questions/${questionId}`, {
-              method: "POST",
-              body: JSON.stringify({ action: "batch_assets", assets: pAssets })
-          }));
+           const sId = sCreated.question.id;
+           
+           // Upload sub-question options
+           if (s.type === 'mcq') {
+              const sOptions = await Promise.all(s.options.filter(o => o.text.trim() || o.file).map((o, i) => uploadAndGetOption(sId, o, i)));
+              await adminFetch(`/api/admin/questions/${sId}`, {
+                method: "POST",
+                body: JSON.stringify({ action: "batch_options", options: sOptions })
+              });
+           }
+        }
+
+      } else {
+        // Standard logic
+        const created = (await adminFetch(`/api/admin/exams/${examId}`, {
+          method: "POST",
+          body: JSON.stringify({
+            action: "create_question",
+            type,
+            points: pts,
+            allow_multiple: type === "mcq" ? allowMultiple : false,
+            prompt_text: prompt.trim() || null,
+            explanation_text: explanationText.trim() || null,
+            correct_text: type === "fill" ? correctText.trim() : null,
+            passage_id: passageId || null,
+            topic_id: topicId || null,
+            subtopic_id: subtopicId || null,
+          }),
+        })) as { question: { id: string } };
+
+        const questionId = created.question.id;
+
+        const assetPromises = [
+          ...questionFiles.map((f, i) => uploadAndGetAsset(questionId, f, "prompt", i)),
+          ...explanationFiles.map((f, i) => uploadAndGetAsset(questionId, f, "explanation", i))
+        ];
+
+        const optionPromises = type === "mcq" 
+          ? options.filter(o => o.text.trim() || o.file).map((o, i) => uploadAndGetOption(questionId, o, i))
+          : [];
+
+        const [pAssets, pOptions] = await Promise.all([
+            Promise.all(assetPromises),
+            Promise.all(optionPromises)
+        ]);
+
+        const batchPromises = [];
+        if (pAssets.length > 0) {
+            batchPromises.push(adminFetch(`/api/admin/questions/${questionId}`, {
+                method: "POST",
+                body: JSON.stringify({ action: "batch_assets", assets: pAssets })
+            }));
+        }
+        if (pOptions.length > 0) {
+            batchPromises.push(adminFetch(`/api/admin/questions/${questionId}`, {
+                method: "POST",
+                body: JSON.stringify({ action: "batch_options", options: pOptions })
+            }));
+        }
+        await Promise.all(batchPromises);
       }
-      if (pOptions.length > 0) {
-          batchPromises.push(adminFetch(`/api/admin/questions/${questionId}`, {
-              method: "POST",
-              body: JSON.stringify({ action: "batch_options", options: pOptions })
-          }));
-      }
 
-      await Promise.all(batchPromises);
-
-      setMessage("Question added successfully! You can add another one below.");
+      setMessage("Question added successfully!");
       resetForm();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Something went wrong.";
@@ -375,25 +610,25 @@ function NewQuestionContent() {
           <div className="xl:col-span-8 space-y-10">
             <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden">
                <div className="p-6 border-b border-outline/40 bg-slate-50/50 flex items-center gap-3">
-                  <span className="material-symbols-outlined text-primary">edit_note</span>
-                  <h2 className="text-sm font-black uppercase tracking-widest text-primary">Question Content</h2>
+                  <span className="material-symbols-outlined text-primary">{type === 'reference_block' ? 'auto_awesome_motion' : 'edit_note'}</span>
+                  <h2 className="text-sm font-black uppercase tracking-widest text-primary">{type === 'reference_block' ? 'Reference Block Content' : 'Question Content'}</h2>
                </div>
                <div className="p-8 space-y-8">
                   <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">Question Prompt</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">{type === 'reference_block' ? 'Block Text / Passage' : 'Question Prompt'}</label>
                     <textarea
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
-                      rows={8}
+                      rows={type === 'reference_block' ? 12 : 8}
                       className="w-full px-6 py-5 bg-slate-50 border border-slate-100 rounded-2xl focus:border-primary focus:bg-white outline-none transition-all font-medium text-lg leading-relaxed"
-                      placeholder="Enter the question text here..."
+                      placeholder={type === 'reference_block' ? "Enter the block content or passage text..." : "Enter the question text here..."}
                     />
                     {prompt && (
                       <div className="mt-4 p-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl"><MathText text={prompt} /></div>
                     )}
                   </div>
 
-                  {type === "fill" && (
+                  {type !== "reference_block" && type === "fill" && (
                     <div className="animate-fade-in">
                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] block mb-3 ml-1">Correct Answer (Fill Only)</label>
                        <input
@@ -407,7 +642,7 @@ function NewQuestionContent() {
 
                   <div className="pt-6 border-t border-outline/20">
                     <div className="text-xs font-black text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[18px]">imagesmode</span>Question Images
+                        <span className="material-symbols-outlined text-[18px]">imagesmode</span>{type === 'reference_block' ? 'Block Images' : 'Question Images'}
                     </div>
                     <input type="file" multiple accept="image/*" onChange={(e) => setQuestionFiles(Array.from(e.target.files ?? []))} className="mb-2 text-xs" />
                     <div className="text-[9px] font-bold text-slate-400">{questionFiles.length} files selected</div>
@@ -415,8 +650,45 @@ function NewQuestionContent() {
                </div>
             </div>
 
-            {/* Detailed Explanation Section */}
-            <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden">
+            {type === 'reference_block' && (
+               <div className="space-y-10">
+                  <div className="flex items-center justify-between">
+                     <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                           <span className="material-symbols-outlined">format_list_numbered</span>
+                        </div>
+                        <h2 className="text-sm font-black uppercase tracking-widest text-indigo-700">Sub-Questions</h2>
+                     </div>
+                     <button type="button" onClick={addSubQuestion} className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-800 transition-all active:scale-95 shadow-lg shadow-indigo-100">+ Add Sub-Question</button>
+                  </div>
+                  
+                  <div className="space-y-8">
+                     {subQuestions.map((sub, idx) => (
+                        <SubQuestionInput 
+                          key={sub.key} 
+                          sub={sub} 
+                          index={idx} 
+                          topics={topics} 
+                          allSubtopics={allSubtopics}
+                          onUpdate={updateSubQuestion}
+                          onRemove={removeSubQuestion}
+                          onReorder={reorderSubQuestion}
+                        />
+                     ))}
+                  </div>
+
+                  {subQuestions.length === 0 && (
+                     <div className="p-12 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center text-center bg-slate-50/50">
+                        <span className="material-symbols-outlined text-6xl text-slate-200 mb-4">add_circle</span>
+                        <p className="text-slate-400 font-bold">No sub-questions added yet.<br/>Click the button above to start adding questions to this block.</p>
+                     </div>
+                  )}
+               </div>
+            )}
+
+            {/* Detailed Explanation Section - Hidden for Reference Block itself unless needed */}
+            {type !== 'reference_block' && (
+              <div className="bg-white border border-outline/60 shadow-soft-xl rounded-3xl overflow-hidden">
                <div className="p-6 border-b border-outline/40 bg-amber-50/50 flex items-center gap-3">
                   <span className="material-symbols-outlined text-amber-600">psychology</span>
                   <h2 className="text-sm font-black uppercase tracking-widest text-amber-700">Detailed Explanation</h2>
@@ -474,6 +746,7 @@ function NewQuestionContent() {
                   <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-outline/40">
                      <button type="button" onClick={() => setType("mcq")} className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${type === 'mcq' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-primary'}`}>MCQ</button>
                      <button type="button" onClick={() => setType("fill")} className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${type === 'fill' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-primary'}`}>Fill</button>
+                     <button type="button" onClick={() => setType("reference_block")} className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${type === 'reference_block' ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-primary'}`}>Reference</button>
                   </div>
                </div>
 

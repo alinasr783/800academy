@@ -6,7 +6,7 @@ type QuestionRow = {
   id: string;
   exam_id: string;
   question_number: number;
-  type: "mcq" | "fill";
+  type: "mcq" | "fill" | "reference_block";
   prompt_text: string | null;
   explanation_text: string | null;
   points: number;
@@ -15,6 +15,7 @@ type QuestionRow = {
   passage_id: string | null;
   topic_id: string | null;
   subtopic_id: string | null;
+  parent_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -64,7 +65,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const { data: question, error } = await admin
     .from("exam_questions")
     .select(
-      "id,exam_id,question_number,type,prompt_text,explanation_text,points,allow_multiple,correct_text,passage_id,topic_id,subtopic_id,created_at,updated_at",
+      "id,exam_id,question_number,type,prompt_text,explanation_text,points,allow_multiple,correct_text,passage_id,topic_id,subtopic_id,parent_id,created_at,updated_at",
     )
     .eq("id", id)
     .single();
@@ -99,7 +100,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const body = (await req.json().catch(() => null)) as Partial<
     Pick<
       QuestionRow,
-      "type" | "prompt_text" | "explanation_text" | "points" | "allow_multiple" | "correct_text" | "passage_id" | "topic_id" | "subtopic_id"
+      "type" | "prompt_text" | "explanation_text" | "points" | "allow_multiple" | "correct_text" | "passage_id" | "topic_id" | "subtopic_id" | "parent_id"
     >
   > | null;
   if (!body) return NextResponse.json({ error: "Invalid body." }, { status: 400 });
@@ -108,7 +109,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!admin) return NextResponse.json({ error: adminErr }, { status: 500 });
 
   const patch: Record<string, unknown> = {};
-  if ("type" in body && (body.type === "mcq" || body.type === "fill")) patch.type = body.type;
+  if ("type" in body && (body.type === "mcq" || body.type === "fill" || body.type === "reference_block")) patch.type = body.type;
   if ("prompt_text" in body) patch.prompt_text = body.prompt_text ?? null;
   if ("explanation_text" in body) patch.explanation_text = body.explanation_text ?? null;
   if ("points" in body && typeof body.points === "number") patch.points = Math.max(0, Math.trunc(body.points));
@@ -117,13 +118,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if ("passage_id" in body) patch.passage_id = body.passage_id ?? null;
   if ("topic_id" in body) patch.topic_id = body.topic_id ?? null;
   if ("subtopic_id" in body) patch.subtopic_id = body.subtopic_id ?? null;
+  if ("parent_id" in body) patch.parent_id = body.parent_id ?? null;
 
   const { data, error } = await admin
     .from("exam_questions")
     .update(patch)
     .eq("id", id)
     .select(
-      "id,exam_id,question_number,type,prompt_text,explanation_text,points,allow_multiple,correct_text,passage_id,topic_id,subtopic_id,created_at,updated_at",
+      "id,exam_id,question_number,type,prompt_text,explanation_text,points,allow_multiple,correct_text,passage_id,topic_id,subtopic_id,parent_id,created_at,updated_at",
     )
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
