@@ -272,6 +272,39 @@ export default function ExamClient({
     return offers.find((o) => o.id === selectedOfferId) ?? offers[0] ?? null;
   }, [offers, selectedOfferId]);
 
+  const flatQuestions = useMemo(() => {
+    const list: Question[] = [];
+    function walk(qs: Question[]) {
+      for (const q of qs) {
+        if (!q) continue;
+        if (q.type === 'reference_block') {
+          if (q.sub_questions && q.sub_questions.length > 0) walk(q.sub_questions);
+          continue;
+        }
+        // Ensure the question has a valid ID and type to avoid phantom items
+        if (q.id && q.type) {
+           list.push(q);
+        }
+      }
+    }
+    walk(questions);
+    return list;
+  }, [questions]);
+
+  const currentUnit = useMemo(() => {
+    const targetId = flatQuestions[currentIndex]?.id;
+    if (!targetId) return questions[0] ?? null;
+    return questions.find(q => {
+      if (q.id === targetId) return true;
+      if (q.type === 'reference_block' && q.sub_questions) {
+        return q.sub_questions.some(sub => sub.id === targetId);
+      }
+      return false;
+    }) ?? questions[0] ?? null;
+  }, [questions, flatQuestions, currentIndex]);
+
+  const totalQuestionsCount = flatQuestions.length;
+
   useEffect(() => {
     setSelectedOfferId((prev) => prev ?? offers[0]?.id ?? null);
   }, [offers]);
@@ -723,7 +756,8 @@ export default function ExamClient({
     return () => { mounted = false; };
   }, [result, exam.id]);
 
-  const currentQuestion = questions[currentIndex] ?? null;
+  const currentQuestion = currentUnit;
+  const currentSubQuestionId = flatQuestions[currentIndex]?.id;
 
   useEffect(() => {
     if (!started) return;
@@ -758,6 +792,12 @@ export default function ExamClient({
     onSubmit(true);
   }, [remaining, started, result]);
 
+  useEffect(() => {
+    if (result) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [result]);
+
   const answeredCount = useMemo(() => {
     let count = 0;
     function walk(qs: Question[]) {
@@ -785,15 +825,18 @@ export default function ExamClient({
     const list: { q: Question; seen: boolean; marked: boolean; answered: boolean }[] = [];
     function walk(qs: Question[]) {
        for (const q of qs) {
+          if (!q) continue;
           if (q.type === 'reference_block') {
-             if (q.sub_questions) walk(q.sub_questions);
+             if (q.sub_questions && q.sub_questions.length > 0) walk(q.sub_questions);
              continue;
           }
-          const st = qState.get(q.id);
-          const seen = !!st?.seen;
-          const marked = !!st?.marked;
-          const answered = q.type === "fill" ? !!st?.fillText.trim() : (st?.selectedOptionIds?.length ?? 0) > 0;
-          list.push({ q, seen, marked, answered });
+          if (q.id && q.type) {
+             const st = qState.get(q.id);
+             const seen = !!st?.seen;
+             const marked = !!st?.marked;
+             const answered = q.type === "fill" ? !!st?.fillText.trim() : (st?.selectedOptionIds?.length ?? 0) > 0;
+             list.push({ q, seen, marked, answered });
+          }
        }
     }
     walk(questions);
@@ -852,11 +895,11 @@ export default function ExamClient({
 
     const score = Math.max(minScore, Math.min(800, minScore + earnedPoints));
     const percent = totalPoints ? (earnedPoints / totalPoints) * 100 : 0;
-    const passed = percent >= exam.pass_percent;
+    
+    // We'll calculate 'passed' in onSubmit using both score and accuracy for consistency
     return {
       score,
       percent,
-      passed,
       earnedPoints,
       totalPoints,
     };
@@ -994,11 +1037,13 @@ export default function ExamClient({
         });
       }
 
+      const passed = correctness.percent >= exam.pass_percent && computed.score >= exam.min_score;
+
       setResult({
         attemptId: data.id,
         score: computed.score,
         percent: computed.percent,
-        passed: computed.passed,
+        passed,
         earnedPoints: computed.earnedPoints,
         totalPoints: computed.totalPoints,
         correctQuestions: correctness.correct,
@@ -1278,7 +1323,7 @@ export default function ExamClient({
                   <div className="mt-3 sm:mt-4 flex flex-wrap gap-2">
                     <div className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-blue-50 border border-blue-200 text-[10px] sm:text-xs font-extrabold text-blue-700 rounded-lg">
                       <span className="material-symbols-outlined text-[14px] sm:text-[16px] text-blue-500">quiz</span>
-                      {questions.length} questions
+                      {totalQuestionsCount} questions
                     </div>
                     <div className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-indigo-50 border border-indigo-200 text-[10px] sm:text-xs font-extrabold text-indigo-700 rounded-lg">
                       <span className="material-symbols-outlined text-[14px] sm:text-[16px] text-indigo-500">timer</span>
@@ -1355,7 +1400,7 @@ export default function ExamClient({
                       />
                     </div>
                     <div className="mt-1.5 text-[10px] sm:text-xs text-on-surface-variant font-medium">
-                      Answered {answeredCount}/{questions.length}
+                      Answered {answeredCount}/{totalQuestionsCount}
                     </div>
                   </div>
                   <div className="flex bg-slate-100 p-1.5 rounded-xl border border-outline/30">
@@ -1637,9 +1682,17 @@ export default function ExamClient({
                   const border = !item.hasAnswer ? "border-outline/40" : item.isCorrect ? "border-emerald-400" : "border-rose-400";
                   const bg = !item.hasAnswer ? "bg-slate-100" : item.isCorrect ? "bg-emerald-50" : "bg-rose-50";
                   return (
-                    <div key={item.id} className={`h-8 sm:h-10 border-2 ${border} ${bg} font-bold text-xs sm:text-sm text-primary flex items-center justify-center rounded-lg`}>
+                    <button 
+                      key={item.id} 
+                      type="button"
+                      onClick={() => {
+                        const el = document.getElementById(`rev-q-${item.id}`);
+                        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+                      }}
+                      className={`h-8 sm:h-10 border-2 ${border} ${bg} font-bold text-xs sm:text-sm text-primary flex items-center justify-center rounded-lg hover:brightness-95 transition-all outline-none`}
+                    >
                       {idx + 1}
-                    </div>
+                    </button>
                   );
                 });
               })()}
@@ -1673,7 +1726,7 @@ export default function ExamClient({
                        })();
 
                     return (
-                       <div key={reviewQ.id} className={`${isSub ? 'border-l-4 border-primary/10 pl-6 py-6' : 'bg-white border-2 border-outline/30 shadow-sm rounded-2xl overflow-hidden'}`}>
+                       <div id={`rev-q-${reviewQ.id}`} key={reviewQ.id} className={`${isSub ? 'border-l-4 border-primary/10 pl-6 py-6' : 'bg-white border-2 border-outline/30 shadow-sm rounded-2xl overflow-hidden'}`}>
                           {!isSub && (
                              <div className="p-4 sm:p-6 border-b border-outline/30 flex items-start justify-between gap-4 sm:gap-6 bg-slate-50">
                                 <div className="text-xs font-bold text-primary uppercase tracking-widest">Question {reviewQ.question_number}</div>
@@ -1773,7 +1826,7 @@ export default function ExamClient({
                  const isReference = passage?.kind === "reference";
 
                  const reviewBody = q.type === 'reference_block' ? (
-                    <div key={q.id} className="space-y-10">
+                    <div id={`rev-q-${q.id}`} key={q.id} className="space-y-10">
                        <div className="bg-white border-2 border-outline/30 shadow-sm rounded-3xl overflow-hidden p-6 sm:p-10">
                           <div className="text-[10px] font-black text-primary/40 uppercase tracking-[0.3em] mb-4">Reference Block {q.question_number}</div>
                           <div className="text-sm sm:text-lg text-on-surface leading-relaxed font-medium">
@@ -1929,13 +1982,20 @@ export default function ExamClient({
                   const currentRing = isCurrent ? "ring-2 ring-primary/30" : "";
                   return (
                     <button
-                      key={q.id}
+                      key={`${q.id}-${idx}`}
                       type="button"
-                      onClick={() => setCurrentIndex(idx)}
+                      onClick={() => {
+                        setCurrentIndex(idx);
+                        setTimeout(() => {
+                          const el = document.getElementById(`q-item-${q.id}`);
+                          if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+                          else questionTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }, 100);
+                      }}
                       className={`h-8 sm:h-10 border-2 ${border} ${bg} ${currentRing} font-bold text-xs sm:text-sm text-primary hover:brightness-[0.96] transition-all rounded-lg`}
-                      aria-label={`Question ${q.question_number}`}
+                      aria-label={`Question ${idx + 1}`}
                     >
-                      {q.question_number}
+                      {idx + 1}
                     </button>
                   );
                 })}
@@ -1949,7 +2009,7 @@ export default function ExamClient({
                   <div ref={questionTopRef} className="flex items-start justify-between gap-4 sm:gap-6">
                     <div>
                       <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-3 sm:mb-4">
-                        Unit {currentQuestion.question_number} of {questions.length}
+                        Question {currentIndex + 1} of {totalQuestionsCount}
                       </div>
                     </div>
                     {currentQuestion.type !== 'reference_block' && (
@@ -1971,13 +2031,12 @@ export default function ExamClient({
                              : "bg-white text-primary border-2 border-outline/40 hover:bg-primary/5",
                          ].join(" ")}
                        >
-                         <span className="material-symbols-outlined text-sm">flag</span>
-                         <span className="hidden sm:inline">Mark for review</span>
+                         <span className="material-symbols-outlined text-[18px]">flag</span>
+                         {qState.get(currentQuestion.id)?.marked ? "Marked" : "Mark"}
                        </button>
                     )}
                   </div>
-
-                  {/* Passage + Question layout */}
+                  <div key={currentIndex} className="animate-question-slide">
                   {(() => {
                     const passage = currentQuestion.passage_id ? passagesById.get(currentQuestion.passage_id) : null;
                     const isReference = passage?.kind === "reference";
@@ -1993,7 +2052,7 @@ export default function ExamClient({
                        const list = [...ordered, ...leftovers];
 
                        return (
-                          <div key={q.id} className={`${isSub ? 'border-l-4 border-primary/20 pl-4 sm:pl-6 py-4' : 'bg-gradient-to-br from-white to-slate-50 border-2 border-outline/30 shadow-sm rounded-2xl p-4 sm:p-6 md:p-8'}`}>
+                          <div id={`q-item-${q.id}`} key={q.id} className={`${isSub ? 'border-l-4 border-primary/20 pl-4 sm:pl-6 py-4' : 'bg-gradient-to-br from-white to-slate-50 border-2 border-outline/30 shadow-sm rounded-2xl p-4 sm:p-6 md:p-8'}`}>
                              {isSub && (
                                 <div className="flex items-center justify-between mb-4">
                                    <div className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/60">Question Item</div>
@@ -2161,13 +2220,26 @@ export default function ExamClient({
                       </div>
                     );
                   })()}
+                  </div>
 
                   <div className="mt-6 sm:mt-10 flex items-center justify-between gap-3 sm:gap-4">
                     <button
                       type="button"
                       onClick={() => {
-                        setCurrentIndex((v) => Math.max(0, v - 1));
-                        setTimeout(() => questionTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                        const nextIndex = Math.max(0, currentIndex - 1);
+                        setCurrentIndex(nextIndex);
+                        const sameUnit = flatQuestions[nextIndex] && currentUnit && 
+                          (currentUnit.id === flatQuestions[nextIndex].id || 
+                           (currentUnit.sub_questions?.some(s => s.id === flatQuestions[nextIndex].id)));
+                        
+                        setTimeout(() => {
+                           if (sameUnit) {
+                              const el = document.getElementById(`q-item-${flatQuestions[nextIndex].id}`);
+                              if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+                           } else {
+                              questionTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                           }
+                        }, 50);
                       }}
                       disabled={currentIndex === 0}
                       className="bg-white text-primary border-2 border-outline/40 px-4 sm:px-8 py-3 sm:py-4 font-bold text-sm hover:bg-primary/5 transition-all rounded-xl disabled:opacity-50 active:scale-[0.97]"
@@ -2177,17 +2249,29 @@ export default function ExamClient({
                     <button
                       type="button"
                       onClick={() => {
-                        if (currentIndex === questions.length - 1) {
+                        if (currentIndex === totalQuestionsCount - 1) {
                           onSubmit(false);
                         } else {
-                          setCurrentIndex((v) => Math.min(questions.length - 1, v + 1));
-                          setTimeout(() => questionTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                          const nextIndex = Math.min(totalQuestionsCount - 1, currentIndex + 1);
+                          setCurrentIndex(nextIndex);
+                          const sameUnit = flatQuestions[nextIndex] && currentUnit && 
+                            (currentUnit.id === flatQuestions[nextIndex].id || 
+                             (currentUnit.sub_questions?.some(s => s.id === flatQuestions[nextIndex].id)));
+                          
+                          setTimeout(() => {
+                             if (sameUnit) {
+                                const el = document.getElementById(`q-item-${flatQuestions[nextIndex].id}`);
+                                if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+                             } else {
+                                questionTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                             }
+                          }, 50);
                         }
                       }}
                       disabled={submitting || !!result}
                       className="bg-primary text-white px-4 sm:px-8 py-3 sm:py-4 font-bold text-sm hover:bg-slate-800 transition-all rounded-xl disabled:opacity-50 active:scale-[0.97]"
                     >
-                      {currentIndex === questions.length - 1 ? "Submit" : "Next"}
+                      {currentIndex === totalQuestionsCount - 1 ? "Submit" : "Next"}
                     </button>
                   </div>
                 </>
