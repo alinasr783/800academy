@@ -57,7 +57,8 @@
 }
 
 .floating-pill span {
-  @apply text-secondary text-xl font-variation-settings-fill-1 !important;
+  @apply text-secondary text-xl;
+  font-variation-settings: 'FILL' 1 !important;
 }
 
 .floating-pill p {
@@ -128,5 +129,13 @@ html {
 .math-text-container {
   white-space: pre-wrap !important;
   word-wrap: break-word;
+}
+
+.font-variation-settings-fill-1 {
+  font-variation-settings: 'FILL' 1;
+}
+
+.font-variation-settings-fill-0 {
+  font-variation-settings: 'FILL' 0;
 }
 
