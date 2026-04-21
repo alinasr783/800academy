@@ -3,6 +3,7 @@ import SiteHeader from "@/components/SiteHeader";
 import Image from "next/image";
 import Link from "next/link";
 import logo from "./logo.png";
+import HeroSection from "./HeroSection";
 
 export default function Home() {
   const whatsappHref =
@@ -13,153 +14,133 @@ export default function Home() {
     <>
       <SiteHeader active="home" />
       <main className="pt-24">
-        <section
-          id="home"
-          className="relative max-w-[1440px] mx-auto overflow-hidden scroll-mt-32"
-        >
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 items-center">
-            <div className="lg:col-span-6 px-8 lg:px-12 py-20 lg:py-32 relative z-10">
-              <h1 className="font-headline text-6xl lg:text-[5.5rem] font-extrabold text-primary leading-[1.05] mb-10 tracking-tight">
-                Master the EST with <span className="gradient-text">Precision</span>.
-              </h1>
-              <p className="text-on-surface-variant text-lg lg:text-xl max-w-xl mb-12 leading-[1.6] font-medium opacity-80">
-                Experience the most faithful digital recreation of official Egyptian
-                Scholastic Test environments. Built for the modern student.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-5">
-                <a
-                  href="#plans"
-                  className="bg-secondary text-white px-10 py-5 font-bold text-lg transition-all active:scale-[0.98] btn-sharp text-center"
-                >
-                  Explore Packages
-                </a>
-                <Link
-                  href="/join?mode=signup"
-                  className="bg-white text-primary border border-outline px-10 py-5 font-bold text-lg hover:bg-surface-variant transition-all flex items-center justify-center gap-2 group btn-sharp"
-                >
-                  Create Account
-                  <span className="material-symbols-outlined text-xl group-hover:translate-x-1 transition-transform">
-                    arrow_forward
-                  </span>
-                </Link>
-              </div>
-              <div className="mt-16 flex items-center gap-3">
-                <span
-                  className="material-symbols-outlined text-secondary font-variation-settings-fill-1"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  verified
-                </span>
-                <p className="text-sm font-bold text-on-surface uppercase tracking-widest">
-                  Quality Guaranteed • Expertly Crafted Questions
-                </p>
-              </div>
-            </div>
-            <div className="lg:col-span-6 h-full relative">
-              <img
-                alt="Focused 18-year-old male student studying"
-                className="w-full h-full object-cover min-h-[600px] block"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuB9aI_JT1Wtrztthvf3pEUcIC1cro79Oce2-b0bTnNfwOAlAx6x6OsSYWANEPNEi6_24dXxEs_HC7Rhq4WJ1SfzdDQBNaKUoBhIAxehtepUJZp3puqtCJSb68JeJ4mwq1u3nop8UuvumMRXBJvhtyRZplisUkQF4teaUcEw6BXaALEDOCO_3pTHo6CxCyTfN-mKzwhMciFiuNBPvy8G3G15ZGL25If1hQHccb-cjNxNIXCK6vpSENm82_lkZhQaoLH2VrJnk1T56vd6"
-              />
-              <div className="absolute top-10 right-10 bg-white/90 backdrop-blur-xl p-6 shadow-soft-xl border border-white/50 flex flex-col items-center">
-                <div className="flex items-center gap-3 mb-2">
-                  <span
-                    className="material-symbols-outlined text-rose-500 font-variation-settings-fill-1 text-2xl"
-                    style={{ fontVariationSettings: "'FILL' 1" }}
-                  >
-                    timer
-                  </span>
-                  <span className="font-headline font-bold text-2xl text-primary tracking-tighter">
-                    24:59
-                  </span>
-                </div>
-                <div className="text-[10px] uppercase font-extrabold text-on-surface-variant tracking-[0.2em]">
-                  Remaining
-                </div>
-              </div>
-              <div className="absolute bottom-10 left-10 bg-primary/95 backdrop-blur-xl p-5 shadow-soft-xl border border-white/10 flex items-center gap-4">
-                <div className="w-12 h-12 bg-secondary flex items-center justify-center">
-                  <span className="material-symbols-outlined text-white text-2xl">
-                    insights
-                  </span>
-                </div>
-                <div>
-                  <div className="text-[10px] uppercase font-bold text-slate-400 tracking-widest">
-                    Interface
-                  </div>
-                  <div className="text-white font-bold text-xl">1:1 Fidelity</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+        <HeroSection />
         <PlansSection />
         <section
           id="benefits"
-          className="bg-slate-50 py-32 border-y border-outline/30 relative scroll-mt-32"
+          className="bg-brand-light py-32 border-y border-outline/30 relative scroll-mt-32 overflow-hidden"
         >
-          <div className="max-w-[1440px] mx-auto px-8 lg:px-12">
-            <div className="max-w-2xl mb-20">
-              <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
+          {/* Decorative background flare */}
+          <div className="absolute top-0 right-0 w-96 h-96 bg-primary/5 rounded-full blur-[100px] pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-secondary/5 rounded-full blur-[120px] pointer-events-none" />
+
+          <div className="max-w-[1440px] mx-auto px-8 lg:px-12 relative z-10">
+            <div className="max-w-2xl mb-24">
+              <div className="text-secondary font-extrabold text-[12px] uppercase tracking-[0.4em] mb-4">
                 Excellence
               </div>
-              <h2 className="font-headline text-5xl lg:text-6xl font-extrabold text-primary tracking-tighter">
+              <h2 className="font-headline text-5xl lg:text-7xl font-extrabold text-primary tracking-tighter leading-tight">
                 Why 800 Academy
               </h2>
+              <p className="mt-6 text-on-surface-variant text-xl font-medium opacity-70 leading-relaxed">
+                The most advanced platform designed specifically for EST excellence. 
+                Everything you need to master the test in one place.
+              </p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-              <div className="bg-white p-10 border-2 border-outline/30 rounded-2xl shadow-premium hover:shadow-2xl hover:border-blue-200 transition-all duration-500 hover:-translate-y-2 group relative overflow-hidden">
-                <div className="absolute -top-10 -right-10 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl group-hover:bg-blue-500/20 transition-all"></div>
-                <div className="w-16 h-16 bg-blue-50 rounded-xl flex items-center justify-center mb-10 group-hover:scale-110 group-hover:bg-blue-600 transition-all duration-500 shadow-sm relative z-10 hover:rotate-3">
-                  <span
-                    className="material-symbols-outlined text-blue-600 text-3xl group-hover:text-white transition-colors"
-                    data-icon="schedule"
-                  >
-                    schedule
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {/* Card 1: True Exam Simulation */}
+              <div className="group bg-white p-10 border border-outline/50 rounded-3xl shadow-premium hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 relative overflow-hidden">
+                <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 group-hover:bg-primary transition-all duration-500">
+                  <span className="material-symbols-outlined text-primary text-3xl group-hover:text-white transition-colors">
+                    desktop_windows
                   </span>
                 </div>
-                <h3 className="font-headline text-2xl font-extrabold text-primary mb-5 tracking-tight relative z-10">
+                <h3 className="font-headline text-2xl font-extrabold text-primary mb-4 tracking-tight">
                   True Exam Simulation
                 </h3>
-                <p className="text-on-surface-variant leading-relaxed font-medium relative z-10">
-                  A 1:1 interface with the official exam, plus a real-time timer per exam
-                  that matches the test-day pacing and pressure.
+                <p className="text-on-surface-variant leading-relaxed font-medium">
+                  A 1:1 interface with the official EST environment, providing the most realistic Digital testing experience.
                 </p>
               </div>
-              <div className="bg-white p-10 border-2 border-outline/30 rounded-2xl shadow-premium hover:shadow-2xl hover:border-indigo-200 transition-all duration-500 hover:-translate-y-2 group relative overflow-hidden">
-                <div className="absolute -top-10 -right-10 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl group-hover:bg-indigo-500/20 transition-all"></div>
-                <div className="w-16 h-16 bg-indigo-50 rounded-xl flex items-center justify-center mb-10 group-hover:scale-110 group-hover:bg-indigo-600 transition-all duration-500 shadow-sm relative z-10 hover:-rotate-3">
-                  <span
-                    className="material-symbols-outlined text-indigo-600 text-3xl group-hover:text-white transition-colors"
-                    data-icon="fact_check"
-                  >
-                    fact_check
+
+              {/* Card 2: Thousands of Questions */}
+              <div className="group bg-white p-10 border border-outline/50 rounded-3xl shadow-premium hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 relative overflow-hidden">
+                <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 group-hover:bg-amber-500 transition-all duration-500">
+                  <span className="material-symbols-outlined text-amber-600 text-3xl group-hover:text-white transition-colors">
+                    quiz
                   </span>
                 </div>
-                <h3 className="font-headline text-2xl font-extrabold text-primary mb-5 tracking-tight relative z-10">
-                  800-Scale Scoring
+                <h3 className="font-headline text-2xl font-extrabold text-primary mb-4 tracking-tight">
+                  Thousands of Questions
                 </h3>
-                <p className="text-on-surface-variant leading-relaxed font-medium relative z-10">
-                  Instant results with a score calculated on the real 800 scale, so you can
-                  track progress clearly and confidently.
+                <p className="text-on-surface-variant leading-relaxed font-medium">
+                  A massive library of high-quality questions covering all subjects, crafted by academic experts.
                 </p>
               </div>
-              <div className="bg-white p-10 border-2 border-outline/30 rounded-2xl shadow-premium hover:shadow-2xl hover:border-emerald-200 transition-all duration-500 hover:-translate-y-2 group relative overflow-hidden">
-                <div className="absolute -top-10 -right-10 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl group-hover:bg-emerald-500/20 transition-all"></div>
-                <div className="w-16 h-16 bg-emerald-50 rounded-xl flex items-center justify-center mb-10 group-hover:scale-110 group-hover:bg-emerald-600 transition-all duration-500 shadow-sm relative z-10 hover:rotate-3">
-                  <span
-                    className="material-symbols-outlined text-emerald-600 text-3xl group-hover:text-white transition-colors"
-                    data-icon="bolt"
-                  >
-                    bolt
+
+              {/* Card 3: Detailed Explanations */}
+              <div className="group bg-white p-10 border border-outline/50 rounded-3xl shadow-premium hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 relative overflow-hidden">
+                <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 group-hover:bg-emerald-500 transition-all duration-500">
+                  <span className="material-symbols-outlined text-emerald-600 text-3xl group-hover:text-white transition-colors">
+                    lightbulb
                   </span>
                 </div>
-                <h3 className="font-headline text-2xl font-extrabold text-primary mb-5 tracking-tight relative z-10">
-                  Smart Review
+                <h3 className="font-headline text-2xl font-extrabold text-primary mb-4 tracking-tight">
+                  Detailed Explanations
                 </h3>
-                <p className="text-on-surface-variant leading-relaxed font-medium relative z-10">
-                  Clear insights after every attempt: performance breakdowns, mistakes
-                  analysis, and targeted next steps to improve faster.
+                <p className="text-on-surface-variant leading-relaxed font-medium">
+                  Step-by-step solution breakdowns for every question to help you learn from every mistake.
+                </p>
+              </div>
+
+              {/* Card 4: Personalized Practice */}
+              <div className="group bg-white p-10 border border-outline/50 rounded-3xl shadow-premium hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 relative overflow-hidden">
+                <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 group-hover:bg-indigo-600 transition-all duration-500">
+                  <span className="material-symbols-outlined text-indigo-600 text-3xl group-hover:text-white transition-colors">
+                    person
+                  </span>
+                </div>
+                <h3 className="font-headline text-2xl font-extrabold text-primary mb-4 tracking-tight">
+                  Personalized Practice
+                </h3>
+                <p className="text-on-surface-variant leading-relaxed font-medium">
+                  Smart question selection that adapts to your performance, focusing on areas where you need it most.
+                </p>
+              </div>
+
+              {/* Card 5: Performance Tracking */}
+              <div className="group bg-white p-10 border border-outline/50 rounded-3xl shadow-premium hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 relative overflow-hidden">
+                <div className="w-14 h-14 bg-rose-50 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 group-hover:bg-rose-500 transition-all duration-500">
+                  <span className="material-symbols-outlined text-rose-600 text-3xl group-hover:text-white transition-colors">
+                    trending_up
+                  </span>
+                </div>
+                <h3 className="font-headline text-2xl font-extrabold text-primary mb-4 tracking-tight">
+                  Performance Tracking
+                </h3>
+                <p className="text-on-surface-variant leading-relaxed font-medium">
+                  Real-time analytics and instant scoring on the real 800-scale to monitor your progress accurately.
+                </p>
+              </div>
+
+              {/* Card 6: Lesson-wise Practice */}
+              <div className="group bg-white p-10 border border-outline/50 rounded-3xl shadow-premium hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 relative overflow-hidden">
+                <div className="w-14 h-14 bg-sky-50 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 group-hover:bg-sky-500 transition-all duration-500">
+                  <span className="material-symbols-outlined text-sky-600 text-3xl group-hover:text-white transition-colors">
+                    menu_book
+                  </span>
+                </div>
+                <h3 className="font-headline text-2xl font-extrabold text-primary mb-4 tracking-tight">
+                  Lesson-wise Practice
+                </h3>
+                <p className="text-on-surface-variant leading-relaxed font-medium">
+                  Master the curriculum topic by topic with practice sessions organized exactly like your lessons.
+                </p>
+              </div>
+
+              {/* Card 7: Past EST Exams */}
+              <div className="group bg-white p-10 border border-outline/50 rounded-3xl shadow-premium lg:col-span-1 transition-all duration-500 hover:-translate-y-2 relative overflow-hidden">
+                 <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 group-hover:bg-slate-800 transition-all duration-500">
+                  <span className="material-symbols-outlined text-slate-700 text-3xl group-hover:text-white transition-colors">
+                    history_edu
+                  </span>
+                </div>
+                <h3 className="font-headline text-2xl font-extrabold text-primary mb-4 tracking-tight">
+                  Past EST Exams
+                </h3>
+                <p className="text-on-surface-variant leading-relaxed font-medium">
+                  Full access to historical exam trails, allowing you to practice with real past test questions.
                 </p>
               </div>
             </div>
@@ -167,7 +148,7 @@ export default function Home() {
         </section>
         <section
           id="contact"
-          className="py-40 px-8 relative overflow-hidden bg-[#0A192F] section-curve scroll-mt-32"
+          className="py-40 px-8 relative overflow-hidden bg-[#020617] section-curve scroll-mt-32"
         >
           <div className="absolute inset-0 opacity-20">
             <div className="absolute top-0 left-0 w-[800px] h-[800px] bg-secondary rounded-full blur-[150px] -translate-x-1/2 -translate-y-1/2" />

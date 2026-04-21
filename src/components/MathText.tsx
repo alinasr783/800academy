@@ -19,20 +19,36 @@ const MathText = memo(function MathText({ text, className = "" }: MathTextProps)
     if (!text) return "";
     let res = text;
 
-    // 1. Convert shorthand fractions like [complex-expression]/[complex-expression] or 5/8 to \frac{a}{b}
-    // We use square brackets [ ] for complex numerators/denominators to allow ( ) inside them.
-    res = res.replace(/(?<![\$])(\[[^\$\[\]]+\]|[\w\d\.]+)\s*\/\s*(\[[^\$\[\]]+\]|[\w\d\.]+)(?![\$])/g, (match, p1, p2) => {
-      let num = p1.trim();
-      let den = p2.trim();
-      // Strip outer square brackets if present
-      if (num.startsWith('[') && num.endsWith(']')) num = num.slice(1, -1);
-      if (den.startsWith('[') && den.endsWith(']')) den = den.slice(1, -1);
-      return `$ \\frac{${num}}{${den}} $`;
-    });
+    // 1. Convert Arabic shorthand "اس" to "^"
+    res = res.replace(/\s+اس\s+/g, "^");
 
-    // 2. Exponents like x^2, (x+1)^2, a^b that aren't already preceded by $
-    res = res.replace(/(?<![\$])(\b[a-zA-Z0-9]+\^\{?[a-zA-Z0-9]+\}?|\([^\$]+\)\^\{?[a-zA-Z0-9]+\}?)(?![\$])/g, (match) => {
-      return `$${match}$`;
+    // 2. Multi-pass replacement for fractions and exponents to support nesting
+    // We do this up to 3 times to handle nested [ ] [ ] structures
+    for (let i = 0; i < 3; i++) {
+      // Fractions: [a]/[b] or 5/8 -> \frac{a}{b}
+      res = res.replace(/(\[[^\[\]]+\]|[\w\d\.]+)\s*\/\s*(\[[^\[\]]+\]|[\w\d\.]+)/g, (match, p1, p2) => {
+        let num = p1.trim();
+        let den = p2.trim();
+        if (num.startsWith('[') && num.endsWith(']')) num = num.slice(1, -1);
+        if (den.startsWith('[') && den.endsWith(']')) den = den.slice(1, -1);
+        return `\\frac{${num}}{${den}}`;
+      });
+
+      // Exponents: Base^[Exp] or Base^Exp -> Base^{Exp}
+      res = res.replace(/(\[[^\[\]]+\]|[\w\d\.]+)\s*\^\s*(\[[^\[\]]+\]|[\w\d\.]+)/g, (match, p1, p2) => {
+        let base = p1.trim();
+        let exp = p2.trim();
+        if (base.startsWith('[') && base.endsWith(']')) base = base.slice(1, -1);
+        if (exp.startsWith('[') && exp.endsWith(']')) exp = exp.slice(1, -1);
+        return `${base}^{${exp}}`;
+      });
+    }
+
+    // 3. Final pass: Wrap KaTeX commands in $ delimiters if not already wrapped
+    // This looks for \frac or letters/numbers followed by ^{...}
+    // We avoid wrapping if already wrapped in $
+    res = res.replace(/(?<![\$])(\\frac\{[^\}]+\}\{[^\}]+\}|[\w\d]+\^\{[^\}]+\}|[\w\d]+\^[ \w\d]+)(?![\$])/g, (match) => {
+      return `$ ${match} $`;
     });
 
     return res;

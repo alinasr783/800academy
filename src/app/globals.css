@@ -32,6 +32,36 @@
   --font-headline: "Plus Jakarta Sans", sans-serif;
   --font-body: "Manrope", sans-serif;
   --font-inter: "Inter", sans-serif;
+
+  --color-brand-blue: #002d62;
+  --color-brand-light: #f8fafc;
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-15px); }
+  100% { transform: translateY(0px); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.hero-grid {
+  background-image: radial-gradient(circle at 1px 1px, rgba(0, 45, 98, 0.05) 1px, transparent 0);
+  background-size: 40px 40px;
+}
+
+.floating-pill {
+  @apply bg-white border border-outline/60 px-5 py-2.5 rounded-full flex items-center gap-3 shadow-premium transition-all duration-500 hover:shadow-soft-xl hover:scale-105 active:scale-95;
+}
+
+.floating-pill span {
+  @apply text-secondary text-xl font-variation-settings-fill-1 !important;
+}
+
+.floating-pill p {
+  @apply font-bold text-[13px] text-primary whitespace-nowrap;
 }
 
 html,
