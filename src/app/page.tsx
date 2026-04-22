@@ -13,7 +13,7 @@ export default function Home() {
   return (
     <>
       <SiteHeader active="home" />
-      <main className="pt-24">
+      <main className="pt-[90px]">
         <HeroSection />
         <PlansSection />
         <section
@@ -33,7 +33,7 @@ export default function Home() {
                 Why 800 Academy
               </h2>
               <p className="mt-6 text-on-surface-variant text-xl font-medium opacity-70 leading-relaxed">
-                The most advanced platform designed specifically for EST excellence. 
+                The most advanced platform designed specifically for EST excellence.
                 Everything you need to master the test in one place.
               </p>
             </div>
@@ -129,20 +129,6 @@ export default function Home() {
                 </p>
               </div>
 
-              {/* Card 7: Past EST Exams */}
-              <div className="group bg-white p-10 border border-outline/50 rounded-3xl shadow-premium lg:col-span-1 transition-all duration-500 hover:-translate-y-2 relative overflow-hidden">
-                 <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 group-hover:bg-slate-800 transition-all duration-500">
-                  <span className="material-symbols-outlined text-slate-700 text-3xl group-hover:text-white transition-colors">
-                    history_edu
-                  </span>
-                </div>
-                <h3 className="font-headline text-2xl font-extrabold text-primary mb-4 tracking-tight">
-                  Past EST Exams
-                </h3>
-                <p className="text-on-surface-variant leading-relaxed font-medium">
-                  Full access to historical exam trails, allowing you to practice with real past test questions.
-                </p>
-              </div>
             </div>
           </div>
         </section>
