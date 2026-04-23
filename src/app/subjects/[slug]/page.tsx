@@ -24,6 +24,7 @@ type Offer = {
   label: string;
   expires_at: string;
   price_cents: number;
+  original_price_cents: number | null;
   currency: string;
 };
 
@@ -66,7 +67,7 @@ export default async function SubjectPage({ params, searchParams }: PageProps) {
 
   const { data: offers } = await supabase
     .from("subject_offers")
-    .select("id, label, expires_at, price_cents, currency")
+    .select("id, label, expires_at, price_cents, original_price_cents, currency")
     .eq("subject_id", subject.id)
     .order("expires_at", { ascending: true })
     .returns<Offer[]>();
@@ -106,49 +107,40 @@ export default async function SubjectPage({ params, searchParams }: PageProps) {
             <Breadcrumbs items={[{ label: "Home", href: "/" }, { label: subject.title }]} />
           </div>
         </div>
-        <section className="relative max-w-[1440px] mx-auto overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 items-start">
-            <div className="lg:col-span-7 px-8 lg:px-12 py-20 lg:py-24 relative z-10">
+        <section className="relative max-w-[1440px] mx-auto overflow-hidden mt-6 mb-12">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start px-8 lg:px-12">
+            <div className="lg:col-span-7 py-12 lg:py-20 relative z-10 flex flex-col justify-center">
               <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
                 {subject.track ?? "Subject"}
               </div>
-              <h1 className="font-headline text-5xl lg:text-6xl font-extrabold text-primary leading-[1.05] mb-8 tracking-tight">
+              <h1 className="font-headline text-4xl sm:text-5xl lg:text-6xl font-extrabold text-primary leading-[1.1] mb-6 tracking-tight">
                 {subject.title}
               </h1>
-              <p className="text-on-surface-variant text-lg max-w-2xl leading-[1.7] font-medium opacity-80">
+              <p className="text-on-surface-variant text-base sm:text-lg max-w-2xl leading-[1.7] font-medium opacity-90">
                 {subject.description ??
                   "A premium exam-prep track with high-fidelity practice and structured progression."}
               </p>
 
-              <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl">
-                <div className="bg-surface-variant border border-outline/40 p-6">
-                  <div className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">
-                    Exams
-                  </div>
-                  <div className="text-3xl font-extrabold text-primary mt-2">
-                    {exams?.length ?? 0}
-                  </div>
+              {shouldHideOffers ? null : (
+                <div className="mt-10">
+                  <SubjectOfferActions subjectId={subject.id} offers={offers ?? []} examsCount={exams?.length ?? 0} />
                 </div>
-                <div className="bg-surface-variant border border-outline/40 p-6">
-                  <div className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">
-                    Format
-                  </div>
-                  <div className="text-3xl font-extrabold text-primary mt-2">Mock</div>
-                </div>
-                <div className="bg-surface-variant border border-outline/40 p-6">
-                  <div className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">
-                    Access
-                  </div>
-                  <div className="text-3xl font-extrabold text-primary mt-2">Timed</div>
-                </div>
-              </div>
+              )}
             </div>
 
-            {shouldHideOffers ? null : (
-              <div className="lg:col-span-5 px-8 lg:px-12 py-20 lg:py-24">
-                <SubjectOfferActions subjectId={subject.id} offers={offers ?? []} />
-              </div>
-            )}
+            <div className="lg:col-span-5 relative py-12 lg:py-20">
+              {promoAssets && promoAssets.length > 0 ? (
+                <div className="relative w-full aspect-square md:aspect-[4/3] lg:aspect-square rounded-[2rem] overflow-hidden shadow-soft-2xl border border-outline/30">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={promoAssets[0].url ?? ""}
+                    alt={promoAssets[0].alt ?? subject.title}
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-primary/80 via-primary/20 to-transparent mix-blend-multiply" />
+                </div>
+              ) : null}
+            </div>
           </div>
         </section>
 
@@ -171,33 +163,33 @@ export default async function SubjectPage({ params, searchParams }: PageProps) {
             {(exams ?? []).map((exam) => (
               <div
                 key={exam.id}
-                className="bg-white border border-outline/60 overflow-hidden flex flex-col transition-all duration-500 hover:shadow-soft-xl hover:border-blue-200 micro-interaction"
+                className="bg-white rounded-3xl border border-outline/40 overflow-hidden flex flex-col transition-all duration-500 hover:shadow-soft-2xl hover:-translate-y-1 hover:border-blue-200 micro-interaction"
               >
-                <div className="p-8 border-b border-outline/40">
+                <div className="p-8 border-b border-outline/20">
                   <div className="flex items-start justify-between gap-4">
-                    <div className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant">
+                    <div className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant bg-surface-variant px-3 py-1 rounded-full">
                       Exam {exam.exam_number}
                     </div>
                     <div
                       className={
                         exam.is_free
-                          ? "px-3 py-1 bg-emerald-100 text-emerald-800 text-[10px] font-black tracking-[0.2em] uppercase"
-                          : "px-3 py-1 bg-slate-100 text-on-surface-variant text-[10px] font-black tracking-[0.2em] uppercase"
+                          ? "px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black tracking-[0.2em] uppercase"
+                          : "px-3 py-1 rounded-full bg-slate-100 text-on-surface-variant text-[10px] font-black tracking-[0.2em] uppercase"
                       }
                     >
                       {exam.is_free ? "Free" : "Paid"}
                     </div>
                   </div>
-                  <div className="text-2xl font-extrabold text-primary mt-3 tracking-tight">
+                  <div className="text-2xl font-extrabold text-primary mt-5 tracking-tight">
                     {exam.title}
                   </div>
                 </div>
-                <div className="p-8 flex flex-col gap-4">
+                <div className="p-6 flex flex-col gap-4 mt-auto">
                   <Link
                     href={`/subjects/${subject.slug}/exams/${exam.exam_number}`}
-                    className="w-full bg-slate-100 border border-outline/70 py-4 font-bold text-primary hover:bg-primary hover:text-white transition-all flex items-center justify-center gap-2 rounded-full"
+                    className="w-full bg-white border-2 border-outline/40 py-4 font-bold text-primary hover:border-primary hover:bg-primary hover:text-white transition-all duration-300 flex items-center justify-center gap-2 rounded-full"
                   >
-                    Open exam
+                    Open Exam
                     <span className="material-symbols-outlined text-lg">arrow_forward</span>
                   </Link>
                 </div>

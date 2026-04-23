@@ -10,12 +10,14 @@ type Offer = {
   label: string;
   expires_at: string;
   price_cents: number;
+  original_price_cents?: number | null;
   currency: string;
 };
 
 type Props = {
   subjectId: string;
   offers: Offer[];
+  examsCount?: number;
 };
 
 function formatMoney(cents: number, currency: string) {
@@ -27,7 +29,7 @@ function formatMoney(cents: number, currency: string) {
   }).format(value);
 }
 
-export default function SubjectOfferActions({ subjectId, offers }: Props) {
+export default function SubjectOfferActions({ subjectId, offers, examsCount }: Props) {
   const router = useRouter();
   const cart = useCart();
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(
@@ -78,13 +80,22 @@ export default function SubjectOfferActions({ subjectId, offers }: Props) {
   }
 
   return (
-    <div className="bg-white border border-outline/60 shadow-soft-xl p-8">
-      <div className="text-xs font-bold text-primary uppercase tracking-widest mb-4">
-        Choose Access Period
+    <div className="bg-white/95 backdrop-blur-md border border-outline/30 shadow-soft-2xl p-6 sm:p-8 rounded-[2rem]">
+      <div className="flex items-center justify-between gap-4 mb-6">
+        <div className="text-xs font-bold text-primary uppercase tracking-widest">
+          Choose Access Period
+        </div>
+        {typeof examsCount === "number" ? (
+          <div className="flex items-center gap-2 bg-surface-variant px-4 py-2 rounded-full">
+            <span className="material-symbols-outlined text-base text-primary">quiz</span>
+            <span className="text-sm font-extrabold text-primary">{examsCount}</span>
+            <span className="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">Exams</span>
+          </div>
+        ) : null}
       </div>
 
       {offers.length ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+        <div className="flex flex-col gap-3 mb-8">
           {offers.map((offer) => {
             const active = offer.id === selectedOfferId;
             return (
@@ -94,8 +105,8 @@ export default function SubjectOfferActions({ subjectId, offers }: Props) {
                 onClick={() => setSelectedOfferId(offer.id)}
                 className={
                   active
-                    ? "text-left bg-surface-variant border border-primary px-4 py-4 transition-all"
-                    : "text-left bg-white border border-outline/60 px-4 py-4 hover:bg-surface-variant transition-all"
+                    ? "text-left bg-surface-variant border-2 border-primary px-5 py-5 rounded-2xl transition-all transform shadow-soft-md"
+                    : "text-left bg-white border-2 border-outline/30 px-5 py-5 rounded-2xl hover:border-outline/80 transition-all hover:-translate-y-0.5"
                 }
                 aria-pressed={active}
               >
@@ -126,8 +137,20 @@ export default function SubjectOfferActions({ subjectId, offers }: Props) {
                     </span>
                   </div>
                 </div>
-                <div className="text-sm mt-4 font-extrabold text-primary">
-                  {formatMoney(offer.price_cents, offer.currency)}
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <div className="text-xl sm:text-2xl font-extrabold text-primary">
+                    {formatMoney(offer.price_cents, offer.currency)}
+                  </div>
+                  {offer.original_price_cents && offer.original_price_cents > offer.price_cents ? (
+                    <div className="text-sm sm:text-base font-semibold text-on-surface-variant line-through opacity-70">
+                      {formatMoney(offer.original_price_cents, offer.currency)}
+                    </div>
+                  ) : null}
+                  {offer.original_price_cents && offer.original_price_cents > offer.price_cents ? (
+                    <div className="ml-auto text-[10px] sm:text-xs font-bold uppercase tracking-wider text-white bg-green-500 px-3 py-1 rounded-full">
+                      Save {Math.round(((offer.original_price_cents - offer.price_cents) / offer.original_price_cents) * 100)}%
+                    </div>
+                  ) : null}
                 </div>
               </button>
             );
