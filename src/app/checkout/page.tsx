@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import SiteHeader from "@/components/SiteHeader";
 import { supabase } from "@/lib/supabaseClient";
 import { useCart } from "@/components/cart/CartProvider";
+import AuthRequiredModal from "@/components/AuthRequiredModal";
+import { useRouter } from "next/navigation";
 
 type CartRow = {
   id: string;
@@ -35,36 +37,28 @@ function formatMoney(cents: number, currency: string) {
 const WHATSAPP_NUMBER = "201158954215";
 
 export default function CheckoutPage() {
+  const router = useRouter();
   const cart = useCart();
   const [loading, setLoading] = useState(true);
-  const [rows, setRows] = useState<CartRow[]>([]);
   const [paying, setPaying] = useState(false);
   const [userEmail, setUserEmail] = useState("");
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     async function run() {
       const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
-        window.location.href = "/join?mode=login";
-        return;
-      }
-      setUserEmail(sessionData.session.user.email || "");
-
-      const { data, error } = await supabase
-        .from("cart_items")
-        .select(
-          "id, quantity, subject_offers(id, label, expires_at, price_cents, original_price_cents, currency, subjects(title, slug, track))",
-        )
-        .order("created_at", { ascending: false })
-        .returns<CartRow[]>();
-
       if (!mounted) return;
-      if (error) {
-        setRows([]);
+      
+      if (sessionData.session) {
+        setUserEmail(sessionData.session.user.email || "");
+        setIsAuthenticated(true);
       } else {
-        setRows(data ?? []);
+        setIsAuthenticated(false);
+        setIsAuthModalOpen(true);
       }
+      
       setLoading(false);
     }
     run();
@@ -72,6 +66,8 @@ export default function CheckoutPage() {
       mounted = false;
     };
   }, []);
+
+  const rows = cart.items;
 
   const total = useMemo(() => {
     return rows.reduce((sum, r) => sum + r.subject_offers.price_cents * r.quantity, 0);
@@ -103,19 +99,19 @@ export default function CheckoutPage() {
     return encodeURIComponent(lines.join("\n"));
   }
 
-  function handleWhatsApp() {
+  async function handleWhatsApp() {
+    if (!isAuthenticated) return;
     const msg = buildWhatsAppMessage();
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`, "_blank");
   }
 
   async function handlePayment() {
+    if (!isAuthenticated) return;
+
     setPaying(true);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) {
-        window.location.href = "/join?mode=login";
-        return;
-      }
+      if (!sessionData.session) return;
 
       const offerIds = rows.map((r) => r.subject_offers.id);
       const res = await fetch("/api/easykash/pay", {
@@ -145,9 +141,24 @@ export default function CheckoutPage() {
   }
 
   async function handleRemove(cartItemId: string) {
-    await supabase.from("cart_items").delete().eq("id", cartItemId);
-    setRows((prev) => prev.filter((r) => r.id !== cartItemId));
-    cart.refresh();
+    await cart.removeItem(cartItemId);
+  }
+
+  // If not authenticated, only show the modal and header, prevent viewing checkout content
+  if (isAuthenticated === false) {
+    return (
+      <>
+        <SiteHeader />
+        <main className="min-h-screen bg-surface-variant/50" />
+        <AuthRequiredModal 
+          isOpen={isAuthModalOpen} 
+          onClose={() => {
+            setIsAuthModalOpen(false);
+            router.push("/");
+          }} 
+        />
+      </>
+    );
   }
 
   return (
@@ -168,7 +179,7 @@ export default function CheckoutPage() {
             </p>
           </div>
 
-          {loading ? (
+          {loading || isAuthenticated === null ? (
             <div className="bg-white rounded-3xl border border-outline/30 shadow-soft-xl p-10 sm:p-14 text-center">
               <span className="material-symbols-outlined text-4xl text-primary animate-spin">progress_activity</span>
               <p className="text-on-surface-variant font-medium mt-4">Loading...</p>
@@ -304,7 +315,7 @@ export default function CheckoutPage() {
       </main>
 
       {/* Floating Sticky Payment Footer */}
-      {!loading && rows.length > 0 && (
+      {!loading && isAuthenticated === true && rows.length > 0 && (
         <div className="fixed bottom-6 left-6 right-6 z-50 flex flex-col md:flex-row items-center justify-center gap-4">
           {/* Main Action: WhatsApp Payment (Prominent) */}
           <button

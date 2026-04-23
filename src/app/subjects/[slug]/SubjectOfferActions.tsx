@@ -41,15 +41,6 @@ export default function SubjectOfferActions({ subjectId, offers, examsCount }: P
     return offers.find((o) => o.id === selectedOfferId) ?? null;
   }, [offers, selectedOfferId]);
 
-  async function requireAuth() {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) {
-      router.push("/join?mode=login");
-      return null;
-    }
-    return data.session.user;
-  }
-
   async function addToCart() {
     if (!selectedOffer) return;
     setLoading(true);
@@ -65,14 +56,7 @@ export default function SubjectOfferActions({ subjectId, offers, examsCount }: P
 
     setLoading(true);
     try {
-      const user = await requireAuth();
-      if (!user) return;
-      const { error } = await supabase.from("cart_items").upsert(
-        { user_id: user.id, subject_offer_id: selectedOffer.id, quantity: 1 },
-        { onConflict: "user_id,subject_offer_id" },
-      );
-      if (error) throw error;
-      await cart.refresh();
+      await cart.addOfferToCart(selectedOffer.id);
       router.push("/checkout");
     } finally {
       setLoading(false);

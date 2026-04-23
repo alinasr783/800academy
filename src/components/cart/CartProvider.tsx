@@ -62,7 +62,7 @@ function CartFloating() {
 
   const currency = cart.items[0]?.subject_offers.currency ?? "EGP";
 
-  const visible = cart.count > 0 && pathname !== "/checkout";
+  const visible = cart.count > 0 && pathname !== "/checkout" && pathname !== "/join";
   if (!visible) return null;
 
   return (
@@ -174,6 +174,8 @@ function CartFloating() {
   );
 }
 
+const GUEST_CART_KEY = "800academy_guest_cart";
+
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -181,45 +183,96 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(async () => {
     const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData.session) {
-      setItems([]);
-      setOpen(false);
-      return;
-    }
+    
+    if (sessionData.session) {
+      // Authenticated: Fetch from DB
+      const { data, error } = await supabase
+        .from("cart_items")
+        .select(
+          "id, quantity, created_at, subject_offers(id, label, expires_at, price_cents, currency, subjects(title, slug, track))",
+        )
+        .order("created_at", { ascending: false })
+        .returns<CartItem[]>();
 
-    const { data, error } = await supabase
-      .from("cart_items")
-      .select(
-        "id, quantity, created_at, subject_offers(id, label, expires_at, price_cents, currency, subjects(title, slug, track))",
-      )
-      .order("created_at", { ascending: false })
-      .returns<CartItem[]>();
+      if (!error) {
+        setItems(data ?? []);
+        // Also clear guest cart if any (it should have been synced)
+        localStorage.removeItem(GUEST_CART_KEY);
+      }
+    } else {
+      // Guest: Fetch from localStorage and get details from DB
+      const guestIds = JSON.parse(localStorage.getItem(GUEST_CART_KEY) || "[]") as string[];
+      if (guestIds.length === 0) {
+        setItems([]);
+        return;
+      }
 
-    if (error) {
-      setItems([]);
-      return;
+      const { data, error } = await supabase
+        .from("subject_offers")
+        .select("id, label, expires_at, price_cents, currency, subjects(title, slug, track)")
+        .in("id", guestIds);
+
+      if (!error && data) {
+        const guestItems: CartItem[] = data.map(off => ({
+          id: `guest_${off.id}`,
+          quantity: 1,
+          created_at: new Date().toISOString(),
+          subject_offers: off as any
+        }));
+        setItems(guestItems);
+      }
     }
-    setItems(data ?? []);
   }, []);
+
+  const syncCart = useCallback(async (userId: string) => {
+    const guestIds = JSON.parse(localStorage.getItem(GUEST_CART_KEY) || "[]") as string[];
+    if (guestIds.length === 0) return;
+
+    // Overwrite DB with local storage: First delete existing items
+    await supabase.from("cart_items").delete().eq("user_id", userId);
+
+    // Then insert the items from local storage
+    for (const offerId of guestIds) {
+      await supabase.from("cart_items").upsert(
+        { user_id: userId, subject_offer_id: offerId, quantity: 1 },
+        { onConflict: "user_id,subject_offer_id" }
+      );
+    }
+    localStorage.removeItem(GUEST_CART_KEY);
+    await refresh();
+  }, [refresh]);
 
   useEffect(() => {
     refresh();
-    const { data } = supabase.auth.onAuthStateChange(() => {
-      refresh();
+    const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_IN" && session) {
+        await syncCart(session.user.id);
+      } else {
+        refresh();
+      }
     });
     return () => {
       data.subscription.unsubscribe();
     };
-  }, [refresh]);
+  }, [refresh, syncCart]);
 
   const addOfferToCart = useCallback(
     async (subjectOfferId: string) => {
       const { data: sessionData } = await supabase.auth.getSession();
+      
       if (!sessionData.session) {
-        router.push("/join?mode=login");
+        // Guest: Save to localStorage
+        const guestIds = JSON.parse(localStorage.getItem(GUEST_CART_KEY) || "[]") as string[];
+        if (!guestIds.includes(subjectOfferId)) {
+          guestIds.push(subjectOfferId);
+          localStorage.setItem(GUEST_CART_KEY, JSON.stringify(guestIds));
+        }
+        await refresh();
+        setOpen(true);
         return;
       }
 
+      // Authenticated: Save to DB
       const user = sessionData.session.user;
       const { error } = await supabase.from("cart_items").upsert(
         {
@@ -233,11 +286,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       await refresh();
       setOpen(true);
     },
-    [refresh, router],
+    [refresh]
   );
 
   const removeItem = useCallback(
     async (cartItemId: string) => {
+      if (cartItemId.startsWith("guest_")) {
+        const offerId = cartItemId.replace("guest_", "");
+        const guestIds = JSON.parse(localStorage.getItem(GUEST_CART_KEY) || "[]") as string[];
+        const filtered = guestIds.filter(id => id !== offerId);
+        localStorage.setItem(GUEST_CART_KEY, JSON.stringify(filtered));
+        await refresh();
+        return;
+      }
+
       const { error } = await supabase.from("cart_items").delete().eq("id", cartItemId);
       if (error) return;
       await refresh();

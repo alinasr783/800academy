@@ -78,6 +78,9 @@ export default function AuthCard({ mode }: Props) {
 
     setLoading(true);
     try {
+      const next = new URLSearchParams(window.location.search).get("next");
+      const target = next || "/profile";
+
       if (mode === "signup") {
         const { data, error: signUpError } = await supabase.auth.signUp({
           email: normalizedEmail,
@@ -90,7 +93,7 @@ export default function AuthCard({ mode }: Props) {
             "Email confirmation is enabled. Disable Confirm email in Supabase Auth to sign up without confirmation.",
           );
         } else {
-          router.push("/profile");
+          router.push(target);
         }
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -98,7 +101,7 @@ export default function AuthCard({ mode }: Props) {
           password: pass,
         });
         if (signInError) throw signInError;
-        router.push("/profile");
+        router.push(target);
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Something went wrong.";
