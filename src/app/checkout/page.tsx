@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import SiteHeader from "@/components/SiteHeader";
 import { supabase } from "@/lib/supabaseClient";
+import { useCart } from "@/components/cart/CartProvider";
 
 type CartRow = {
   id: string;
@@ -12,6 +13,7 @@ type CartRow = {
     label: string;
     expires_at: string;
     price_cents: number;
+    original_price_cents?: number | null;
     currency: string;
     subjects: {
       title: string;
@@ -23,37 +25,39 @@ type CartRow = {
 
 function formatMoney(cents: number, currency: string) {
   const value = cents / 100;
-  return new Intl.NumberFormat(undefined, {
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,
     maximumFractionDigits: 0,
   }).format(value);
 }
 
+const WHATSAPP_NUMBER = "201158954215";
+
 export default function CheckoutPage() {
+  const cart = useCart();
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<CartRow[]>([]);
+  const [paying, setPaying] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
 
   useEffect(() => {
     let mounted = true;
     async function run() {
-      const offerId = new URLSearchParams(window.location.search).get("offer");
       const { data: sessionData } = await supabase.auth.getSession();
       if (!sessionData.session) {
         window.location.href = "/join?mode=login";
         return;
       }
+      setUserEmail(sessionData.session.user.email || "");
 
-      let q = supabase
+      const { data, error } = await supabase
         .from("cart_items")
         .select(
-          "id, quantity, subject_offers(id, label, expires_at, price_cents, currency, subjects(title, slug, track))",
+          "id, quantity, subject_offers(id, label, expires_at, price_cents, original_price_cents, currency, subjects(title, slug, track))",
         )
-        .order("created_at", { ascending: false });
-
-      if (offerId) q = q.eq("subject_offer_id", offerId);
-
-      const { data, error } = await q.returns<CartRow[]>();
+        .order("created_at", { ascending: false })
+        .returns<CartRow[]>();
 
       if (!mounted) return;
       if (error) {
@@ -73,89 +77,272 @@ export default function CheckoutPage() {
     return rows.reduce((sum, r) => sum + r.subject_offers.price_cents * r.quantity, 0);
   }, [rows]);
 
+  const originalTotal = useMemo(() => {
+    return rows.reduce((sum, r) => {
+      const orig = r.subject_offers.original_price_cents;
+      const price = orig && orig > r.subject_offers.price_cents ? orig : r.subject_offers.price_cents;
+      return sum + price * r.quantity;
+    }, 0);
+  }, [rows]);
+
   const currency = rows[0]?.subject_offers.currency ?? "EGP";
+  const hasDiscount = originalTotal > total;
+
+  function buildWhatsAppMessage() {
+    const lines: string[] = [];
+    lines.push("Hello, I want to subscribe to the following packages:");
+    lines.push("");
+    rows.forEach((r, i) => {
+      lines.push(`${i + 1}. ${r.subject_offers.subjects.title} — ${r.subject_offers.label}`);
+      lines.push(`   Price: ${formatMoney(r.subject_offers.price_cents, currency)}`);
+      lines.push(`   Expires: ${new Date(r.subject_offers.expires_at).toLocaleDateString("en-US")}`);
+    });
+    lines.push("");
+    lines.push(`Total: ${formatMoney(total, currency)}`);
+    lines.push(`Email: ${userEmail}`);
+    return encodeURIComponent(lines.join("\n"));
+  }
+
+  function handleWhatsApp() {
+    const msg = buildWhatsAppMessage();
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`, "_blank");
+  }
+
+  async function handlePayment() {
+    setPaying(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        window.location.href = "/join?mode=login";
+        return;
+      }
+
+      const offerIds = rows.map((r) => r.subject_offers.id);
+      const res = await fetch("/api/easykash/pay", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+        },
+        body: JSON.stringify({
+          offer_ids: offerIds,
+          redirect_url: `${window.location.origin}/checkout/callback`,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || "An error occurred with the payment gateway. Please try again.");
+        setPaying(false);
+      }
+    } catch {
+      alert("Connection error. Please try again.");
+      setPaying(false);
+    }
+  }
+
+  async function handleRemove(cartItemId: string) {
+    await supabase.from("cart_items").delete().eq("id", cartItemId);
+    setRows((prev) => prev.filter((r) => r.id !== cartItemId));
+    cart.refresh();
+  }
 
   return (
     <>
       <SiteHeader />
-      <main className="pt-24">
-        <section className="max-w-[1440px] mx-auto px-8 lg:px-12 py-20">
-          <div className="flex items-end justify-between gap-10 mb-12">
-            <div>
-              <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
-                Checkout
-              </div>
-              <h1 className="font-headline text-5xl font-extrabold text-primary tracking-tighter">
-                Review your order
-              </h1>
+      <main className="pt-24 pb-40 min-h-screen bg-gradient-to-b from-surface-variant/50 to-white">
+        <section className="max-w-[1440px] mx-auto px-6 sm:px-8 lg:px-12 py-12 sm:py-20">
+          {/* Header */}
+          <div className="mb-10 sm:mb-14">
+            <div className="text-secondary font-extrabold text-[10px] sm:text-[11px] uppercase tracking-[0.3em] mb-3">
+              Checkout
             </div>
-            <div className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">
-              EasyKash coming next
-            </div>
+            <h1 className="font-headline text-3xl sm:text-4xl lg:text-5xl font-extrabold text-primary tracking-tight">
+              Complete your payment
+            </h1>
+            <p className="text-on-surface-variant text-sm sm:text-base font-medium mt-3 max-w-xl">
+              Choose your preferred payment method to complete your subscription.
+            </p>
           </div>
 
           {loading ? (
-            <div className="bg-surface-variant border border-outline/40 p-10 text-on-surface-variant font-medium">
-              Loading…
+            <div className="bg-white rounded-3xl border border-outline/30 shadow-soft-xl p-10 sm:p-14 text-center">
+              <span className="material-symbols-outlined text-4xl text-primary animate-spin">progress_activity</span>
+              <p className="text-on-surface-variant font-medium mt-4">Loading...</p>
             </div>
-          ) : rows.length ? (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
-              <div className="lg:col-span-8 space-y-6">
-                {rows.map((r) => (
-                  <div
-                    key={r.id}
-                    className="bg-white border border-outline/60 shadow-soft-xl p-8 flex flex-col md:flex-row justify-between gap-6"
-                  >
-                    <div>
-                      <div className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant">
-                        {r.subject_offers.subjects.track ?? "Subject"}
-                      </div>
-                      <div className="text-2xl font-extrabold text-primary mt-3 tracking-tight">
-                        {r.subject_offers.subjects.title}
-                      </div>
-                      <div className="text-sm text-on-surface-variant font-medium mt-2">
-                        {r.subject_offers.label} • Expires{" "}
-                        {new Date(r.subject_offers.expires_at).toLocaleDateString()}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm text-on-surface-variant font-medium">
-                        Qty {r.quantity}
-                      </div>
-                      <div className="text-2xl font-extrabold text-primary mt-2">
-                        {formatMoney(r.subject_offers.price_cents * r.quantity, currency)}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="lg:col-span-4">
-                <div className="bg-white border border-outline/60 shadow-soft-xl p-8">
-                  <div className="text-xs font-bold text-primary uppercase tracking-widest mb-6">
-                    Summary
-                  </div>
-                  <div className="flex justify-between text-sm text-on-surface-variant font-medium">
-                    <span>Total</span>
-                    <span>{formatMoney(total, currency)}</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="w-full mt-8 bg-secondary text-white py-4 font-bold text-base hover:bg-primary transition-all rounded-full"
-                    onClick={() => alert("Payment (EasyKash) will be added next.")}
-                  >
-                    Proceed to payment
-                  </button>
-                </div>
-              </div>
+          ) : rows.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-outline/30 shadow-soft-xl p-10 sm:p-14 text-center">
+              <span className="material-symbols-outlined text-5xl text-on-surface-variant/50">shopping_cart</span>
+              <h2 className="text-xl font-extrabold text-primary mt-4">Cart is empty</h2>
+              <p className="text-on-surface-variant font-medium mt-2">You haven't added any packages yet.</p>
+              <a
+                href="/"
+                className="inline-block mt-6 bg-primary text-white px-8 py-3 rounded-full font-bold hover:bg-secondary transition-all"
+              >
+                Browse Packages
+              </a>
             </div>
           ) : (
-            <div className="bg-surface-variant border border-outline/40 p-10 text-on-surface-variant font-medium">
-              Your cart is empty.
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              {/* Left: Order Items */}
+              <div className="lg:col-span-7 space-y-5">
+                <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">
+                  Order Items ({rows.length})
+                </div>
+                {rows.map((r) => {
+                  const hasItemDiscount =
+                    r.subject_offers.original_price_cents &&
+                    r.subject_offers.original_price_cents > r.subject_offers.price_cents;
+
+                  return (
+                    <div
+                      key={r.id}
+                      className="bg-white rounded-2xl border border-outline/30 shadow-soft-xl p-5 sm:p-7 flex flex-col sm:flex-row justify-between gap-5 transition-all hover:shadow-soft-2xl"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant bg-surface-variant px-3 py-1 rounded-full inline-block">
+                          {r.subject_offers.subjects.track ?? "Subject"}
+                        </div>
+                        <div className="text-lg sm:text-xl font-extrabold text-primary mt-3 tracking-tight">
+                          {r.subject_offers.subjects.title}
+                        </div>
+                        <div className="text-sm text-on-surface-variant font-medium mt-1.5 flex flex-wrap items-center gap-2">
+                          <span>{r.subject_offers.label}</span>
+                          <span className="text-outline">•</span>
+                          <span>Until {new Date(r.subject_offers.expires_at).toLocaleDateString("en-US")}</span>
+                        </div>
+                      </div>
+                      <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-3">
+                        <div className="text-right">
+                          {hasItemDiscount ? (
+                            <>
+                              <div className="text-sm font-semibold text-on-surface-variant line-through opacity-60">
+                                {formatMoney(r.subject_offers.original_price_cents!, currency)}
+                              </div>
+                              <div className="text-xl font-extrabold text-primary">
+                                {formatMoney(r.subject_offers.price_cents, currency)}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-xl font-extrabold text-primary">
+                              {formatMoney(r.subject_offers.price_cents * r.quantity, currency)}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemove(r.id)}
+                          className="text-xs font-bold text-on-surface-variant/60 hover:text-red-500 transition-colors flex items-center gap-1"
+                        >
+                          <span className="material-symbols-outlined text-sm">delete</span>
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Right: Summary */}
+              <div className="lg:col-span-5 space-y-6 lg:sticky lg:top-28">
+                <div className="bg-white rounded-[2rem] border border-outline/30 shadow-soft-2xl p-6 sm:p-8">
+                  <div className="text-xs font-bold text-primary uppercase tracking-widest mb-6">
+                    Order Summary
+                  </div>
+
+                  <div className="space-y-3 mb-6">
+                    {rows.map((r) => (
+                      <div key={r.id} className="flex justify-between text-sm">
+                        <span className="text-on-surface-variant font-medium truncate max-w-[60%]">
+                          {r.subject_offers.subjects.title}
+                        </span>
+                        <span className="font-bold text-primary">
+                          {formatMoney(r.subject_offers.price_cents, currency)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="border-t border-outline/30 pt-4">
+                    {hasDiscount && (
+                      <div className="flex justify-between text-sm mb-2">
+                        <span className="text-on-surface-variant font-medium">Original Price</span>
+                        <span className="font-semibold text-on-surface-variant line-through">
+                          {formatMoney(originalTotal, currency)}
+                        </span>
+                      </div>
+                    )}
+                    {hasDiscount && (
+                      <div className="flex justify-between text-sm mb-3">
+                        <span className="text-green-600 font-bold">Savings</span>
+                        <span className="text-green-600 font-bold">
+                          - {formatMoney(originalTotal - total, currency)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center">
+                      <span className="text-base font-bold text-primary">Total</span>
+                      <span className="text-2xl sm:text-3xl font-extrabold text-primary">
+                        {formatMoney(total, currency)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Security Badge */}
+                  <div className="mt-8 flex items-center justify-center gap-2 text-xs text-on-surface-variant/60">
+                    <span className="material-symbols-outlined text-sm">verified_user</span>
+                    <span>All transactions are encrypted and secure</span>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </section>
       </main>
+
+      {/* Floating Sticky Payment Footer */}
+      {!loading && rows.length > 0 && (
+        <div className="fixed bottom-6 left-6 right-6 z-50 flex flex-col md:flex-row items-center justify-center gap-4">
+          {/* Main Action: WhatsApp Payment (Prominent) */}
+          <button
+            onClick={handleWhatsApp}
+            className="group bg-[#25D366] hover:bg-[#20bd5c] text-white shadow-soft-2xl px-10 py-5 rounded-full flex items-center gap-4 animate-in fade-in slide-in-from-bottom-6 duration-500 hover:scale-105 active:scale-95 transition-all"
+          >
+            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0 group-hover:rotate-12 transition-transform">
+              <svg viewBox="0 0 24 24" className="w-6 h-6 fill-white">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+              </svg>
+            </div>
+            <div className="flex flex-col items-start">
+              <span className="text-[10px] font-black uppercase tracking-widest opacity-80">Manual Payment</span>
+              <span className="text-lg font-bold">Pay via WhatsApp</span>
+            </div>
+            <div className="ml-4 w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+              <span className="material-symbols-outlined text-white">chevron_right</span>
+            </div>
+          </button>
+
+          {/* Secondary Action: Pay Online (Less Prominent) */}
+          <div className="bg-white/80 backdrop-blur-xl border border-outline/30 shadow-soft-xl px-6 py-3 rounded-full flex items-center gap-6 animate-in fade-in slide-in-from-bottom-6 duration-500 delay-200">
+            <div className="flex flex-col">
+              <span className="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/60">Total</span>
+              <span className="text-base font-extrabold text-primary">{formatMoney(total, currency)}</span>
+            </div>
+            <div className="w-px h-6 bg-outline/20" />
+            <button
+              onClick={handlePayment}
+              disabled={paying}
+              className="text-sm font-bold text-primary hover:text-secondary transition-all disabled:opacity-50 flex items-center gap-2"
+            >
+              {paying ? "Redirecting..." : "Pay Now Online"}
+              {!paying && <span className="material-symbols-outlined text-base">credit_card</span>}
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

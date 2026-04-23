@@ -62,7 +62,7 @@ function CartFloating() {
 
   const currency = cart.items[0]?.subject_offers.currency ?? "EGP";
 
-  const visible = cart.count > 0;
+  const visible = cart.count > 0 && pathname !== "/checkout";
   if (!visible) return null;
 
   return (

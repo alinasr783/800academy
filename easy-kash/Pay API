@@ -1,0 +1,86 @@
+# Pay API
+
+## Create direct pay link
+
+<mark style="color:green;">`POST`</mark> `https://back.easykash.net/api/directpayv1/pay`
+
+To get your api key, open your [Integration Settings](https://www.easykash.net/seller/cash-api) page
+
+#### Headers
+
+| Name                                            | Type   | Description |
+| ----------------------------------------------- | ------ | ----------- |
+| authorization<mark style="color:red;">\*</mark> | String | API key     |
+
+#### Request Body
+
+| Name                                                | Type             | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| --------------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| amount<mark style="color:red;">\*</mark>            | number           | Amount MUST be in EGP and EasyKash will convert it to the provided currency                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| currency<mark style="color:red;">\*</mark>          | string           | <p>Available currency list: </p><p>EGP</p><p>USD</p><p>SAR</p><p>EUR</p>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| paymentOptions                                      | array of numbers | <p>Note: the below payment options will ONLY appear if they are enabled to your business account.<br>Must be an array of numbers represents the payment option</p><p>Options: </p><p>1 (for Cash through AMAN)</p><p>2 (for Credit & Debit Card)</p><p>3 (for Qassatly)</p><p>4 (for Mobile Wallet)</p><p>5 (for Cash Through Fawry)</p><p>6 (for Meeza)</p><p>8 (for 6 Months - NBE installments)</p><p>9 (for 12 Months - NBE installments)</p><p>10 (for 18 Months - NBE installments)<br>17 (for ValU)<br>18 (for 6 months - Banque Misr installments)<br>19 (for 12 months - Banque Misr installments)<br>20 (for 18 months - Banque Misr installments)<br>21 (for Aman installments)<br>22 (for Souhoula)<br>23 (for Contact)<br>24 (for Mogo/MidTakseet)<br>25 (for Blnk)<br>26 (for 6 months installments - Multiple Banks)<br>27 (for 12 months installments - Multiple Banks)<br>28 (for 18 months installments - Multiple Banks)<br>29 (for Halan)<br>31 (for Apple Pay)<br>32 (for TRU)<br>33 (for Klivvr)</p> |
+| cashExpiry                                          | number           | <p>Must be a number (reflects time in hours i.e: 12 means 12 hours) </p><p>If not given, a default value of 3 will be taken</p>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| name<mark style="color:red;">\*</mark>              | string           | Buyer's name                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| email<mark style="color:red;">\*</mark>             | string           | Buyer's email                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| mobile<mark style="color:red;">\*</mark>            | string           | Buyer’s mobile number as string                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| redirectUrl<mark style="color:red;">\*</mark>       | string           | The link to redirect back to your website                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| customerReference<mark style="color:red;">\*</mark> | number           | Product's reference number of the Direct Pay customer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+
+#### **Request Body Example:**
+
+```
+{
+    "amount": 10,
+    "currency": "EGP",
+    "paymentOptions": [
+        2,
+        3,
+        4,
+        5,
+        6
+    ],
+    "cashExpiry": 3,
+    "name": "John Doe",
+    "email": "JohnDoe@example.com",
+    "mobile": "01010101010",
+    "redirectUrl": "https://www.yourshop.com/",
+    "customerReference": 123
+}
+
+```
+
+{% tabs %}
+{% tab title="200 Direct Pay link created successfully. User must be redirected to that link to be able to proceed with payment" %}
+
+```javascript
+{
+    "redirectUrl"="https://www.easykash.net/DirectPayV1/{productCode}"
+}
+```
+
+{% endtab %}
+{% endtabs %}
+
+***The user must be redirected to the link received in the previous response to be able to proceed with payment.***
+
+#### Direct Payment Screen:
+
+![Direct Payment product payment options](https://598016363-files.gitbook.io/~/files/v0/b/gitbook-x-prod.appspot.com/o/spaces%2F6PoB6b79Xd7zFLs2dbxe%2Fuploads%2FtYXxj7JLNhgfsoFT1kzk%2Fdirect-pay-screenshot.png?alt=media\&token=f1f45033-f7cd-48be-9611-f50c9f9295ff)
+
+After the buyer completes the payment on the Direct Payment screen above, EasyKash redirects them back to your website using the redirectUrl you initially sent in the first request.
+
+The redirect link will have additional parameters embedded to it representing the basic results of the payment. You can rely on them to display custom messages on your website. (For example, if the status returned in 'success', show a customized success page/message)
+
+For detailed payment information, use either the [Callback Service](https://easykash.gitbook.io/easykash-apis-documentation/callback-service) for automated callbacks from Easykash to your system, or the [Payment Inquiry](https://easykash.gitbook.io/easykash-apis-documentation/direct-payment-hosted/inquire-a-payment) service by inquirying about a payment.
+
+#### **Redirect Link example:**
+
+[https://www.yourshop.com/?status=NEW\&providerRefNum=2206290593680\&customerReference=721227](https://www.google.com/?status=NEW\&providerRefNum=2206290593680\&customerReference=721227)
+
+|                       |                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------- |
+| **status**            | Status of the payment (‘success’, ‘pending’, or ‘failed’)                                   |
+| **providerRefNum**    | Payment Method provider reference number                                                    |
+| **customerReference** | The Provided customer Reference                                                             |
+| **voucher**           | Incase of Aman or Fawry payment option, Returning a Voucher Number for the customer to pay. |
+re

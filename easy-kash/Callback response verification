@@ -1,0 +1,121 @@
+# Callback response verification
+
+### Prerequisites&#x20;
+
+HMAC secret key is needed for response verification, you can find it in your [Integration Settings](https://www.easykash.net/seller/cash-api) page
+
+### HMAC calculation&#x20;
+
+Whenever you receive a callback from Easykash, you will receive a value of the HMAC related to the data, HMAC value is **signatureHash** in response body .
+
+In order to calculate an HMAC similar to the one you received, prepare your endpoint to perform the following:
+
+1. Sort the data received by the following order .&#x20;
+
+```
+      ProductCode,
+      Amount,
+      ProductType,
+      PaymentMethod,
+      status,
+      easykashRef,
+      customerReference,
+
+```
+
+&#x20; 2\. Concatenate the **values of the keys/params** in one string&#x20;
+
+3. Calculate the hash of the concatenated string using **SHA512** and your **HMAC secret key , HEX** digest&#x20;
+4. Now compare both HMAC values, the one you received with the sent request and the one you calculated out of this request if both are equal you can safely use this data in your system.
+
+### Example :&#x20;
+
+payload example :&#x20;
+
+```
+{"ProductCode":"EDV4471","Amount":"11.00","ProductType":"Direct Pay","PaymentMethod":"Cash Through Fawry","BuyerName":"mee","BuyerEmail":"test@mail.com","BuyerMobile":"0123456789","status":"PAID","voucher":"","easykashRef":"2911105009","VoucherData":"Direct Pay","customerReference":"TEST11111","signatureHash":"0bd9ce502950ffa358314c170dace42e7ba3e0c776f5a32eb15c3d496bc9c294835036dd90d4f287233b800c9bde2f6591b6b8a1f675b6bfe64fd799da29d1d0"}
+```
+
+secret key example : da9fe30575517d987762a859842b5631&#x20;
+
+Concatenated data = `EDV447111.00Direct PayCash Through FawryPAID2911105009TEST11111`
+
+### Sample code :
+
+{% tabs %}
+{% tab title="Javascript" %}
+
+```javascript
+function verifyCallback(payload, secretKey) {
+  // Extract data from the payload
+  const {
+    ProductCode,
+    Amount,
+    ProductType,
+    PaymentMethod,
+    status,
+    easykashRef,
+    customerReference,
+    signatureHash,
+  } = payload;
+
+  // Prepare data for verification
+  const dataToSocure = [
+    ProductCode,
+    Amount,
+    ProductType,
+    PaymentMethod,
+    status,
+    easykashRef,
+    customerReference,
+  ];
+  const dataStr = dataToSocure.join('');
+
+  // Generate HMAC SHA-512 hash for verification
+  const calculatedSignature = crypto
+    .createHmac('sha512', secretKey)
+    .update(dataStr)
+    .digest('hex');
+
+  // Check if the calculated hash matches the received signatureHash
+  return calculatedSignature === signatureHash;
+}
+```
+
+{% endtab %}
+
+{% tab title="PHP" %}
+
+```php
+function verifyCallback($payload, $secretKey ) {
+    // Extract data from the payload
+    $productCode = $payload->ProductCode;
+    $amount = $payload->Amount;
+    $productType = $payload->ProductType;
+    $paymentMethod = $payload->PaymentMethod;
+    $status = $payload->status;
+    $easykashRef = $payload->easykashRef;
+    $customerReference = $payload->customerReference;
+    $signatureHash = $payload->signatureHash;
+
+    // Prepare data for verification
+    $dataToSecure = [
+        $productCode,
+        $amount,
+        $productType,
+        $paymentMethod,
+        $status,
+        $easykashRef,
+        $customerReference,
+    ];
+    $dataStr = implode('', $dataToSecure);
+
+    // Generate HMAC SHA-512 hash for verification
+    $calculatedSignature = hash_hmac('sha512', $dataStr,  $secretKey);
+    // Check if the calculated hash matches the received signatureHash
+    return $calculatedSignature === $signatureHash;
+}
+```
+
+{% endtab %}
+{% endtabs %}

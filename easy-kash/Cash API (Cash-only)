@@ -1,0 +1,18 @@
+# Cash API (Cash-only)
+
+#### What is our API feature?
+
+For Businesses that already have running websites, EasyKash provides an integration feature to perform two things.
+
+1. Create payments (cash only) with two types. Quick Cash (Type: in) and Cash Out (Type: out)
+2. Callback service, to confirm current pending payments (all payment methods)
+
+#### Prerequisites:
+
+To be able to begin the integration of your website with Easykash, you must have the feature enabled for your EasyKash business account (contact support for that).
+
+When it’s enabled head to the [Integration Settings](https://www.easykash.net/seller/cash-api) page on your side menu (under Settings) for the below:
+
+1. The API Key is your authentication in the initial request.
+2. Callback URL is the URL you’ll receive the details of transactions on such as status, reference number, etc. Make sure it’s a working URL on your end that will receive and process the payload once received.
+3. HMAC Secret Key, you will need this to verify the callback from Easykash.

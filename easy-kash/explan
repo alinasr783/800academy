@@ -1,0 +1,59 @@
+# Create a payment
+
+\*\*\* Cash out **ONLY** Works with Fawry
+
+## Request to create a cash payment
+
+<mark style="color:green;">`POST`</mark> `https://back.easykash.net/api/cash-api/create`
+
+#### Request Body
+
+| Name                                             | Type   | Description                                                                                                                           |
+| ------------------------------------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| payerEmail<mark style="color:red;">\*</mark>     | string | Email of the buyer                                                                                                                    |
+| payerMobile<mark style="color:red;">\*</mark>    | string | Mobile number of the buyer                                                                                                            |
+| amount<mark style="color:red;">\*</mark>         | number | Price of the payment                                                                                                                  |
+| expiryDuration<mark style="color:red;">\*</mark> | number | <p>The expiry duration of the payment reference number returned </p><p>cash in {3, 6, 12, 48} </p><p>cash out {48}</p>                |
+| apiKey<mark style="color:red;">\*</mark>         | String | The identifier of the business. Found in the cash api page on EasyKash                                                                |
+| VoucherData<mark style="color:red;">\*</mark>    | String | Title of the payment                                                                                                                  |
+| payerName<mark style="color:red;">\*</mark>      | string | Name of the buyer                                                                                                                     |
+| type                                             | String | type of cash payment. Pass "in" for cash in and "out" for cash out payment. Default value is "in". Note: "out" only works with Fawry. |
+|                                                  |        |                                                                                                                                       |
+
+#### **Request Body Example:** <a href="#request-body-example" id="request-body-example"></a>
+
+```json
+{
+    "payerEmail": "mostafa@gmail.com",
+    "payerMobile": "01011111157",
+    "payerName": "Mostafa",
+    "amount": 10,
+    "expiryDuration": 48,
+    "apiKey": "1si4c9",
+    "VoucherData": "description",
+    "type": "in"
+}
+```
+
+{% tabs %}
+{% tab title="200: OK Success case" %}
+
+```javascript
+// response example
+{
+    //voucher: The payment code the buyer will use to pay at a POS (Fawry or Aman, depending on what the business has configured with Easykash).
+    //in case of cash out, voucher will return mobile number
+    "voucher": "9100596414",
+    //expiryDate: The expiry date/time of the payment.
+    "expiryDate": "9/08/2021, 10:23:35 PM",
+    //provider: Business provider. Fawry or Aman.
+    "provider": "Fawry",
+    //easykashRef: The reference number of the payment.
+    "easykashRef": "900397518"
+}
+```
+
+{% endtab %}
+{% endtabs %}
+
+After the buyer pays the voucher, you will receive a callback notifying you of the success of the payment. See the [Callback Service](https://easykash.gitbook.io/easykash-apis-documentation/callback-service), and the [Callback response verification](https://easykash.gitbook.io/easykash-apis-documentation/direct-payment-hosted/callback-service/callback-response-verification) pages

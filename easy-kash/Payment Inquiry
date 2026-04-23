@@ -1,0 +1,53 @@
+# Payment Inquiry
+
+## Inquire about specific transaction on Easykash&#x20;
+
+<mark style="color:green;">`POST`</mark> `https://back.easykash.net/api/cash-api/inquire`
+
+#### Headers
+
+| Name                                            | Type   | Description |
+| ----------------------------------------------- | ------ | ----------- |
+| authorization<mark style="color:red;">\*</mark> | String | API key     |
+
+#### Request Body
+
+| Name                                                | Type   | Description                                           |
+| --------------------------------------------------- | ------ | ----------------------------------------------------- |
+| customerReference<mark style="color:red;">\*</mark> | String | Product's reference number of the Direct Pay customer |
+
+#### Request Example
+
+```json
+{
+    "customerReference": "111"
+}
+```
+
+#### Response
+
+|                   |                                                                                                                                                                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **PaymentMethod** | <p>Method of payment. </p><p>All possible outcomes: </p><ul><li>Cash Through Fawry</li><li>Cash Through Aman</li><li>Credit & Debit Card</li><li>Mobile Wallet</li><li>Meeza</li><li>Qassatly</li><li>Cash Api</li></ul> |
+| **Amount**        | Amount paid                                                                                                                                                                                                              |
+| **BuyerEmail**    | Email of the buyer                                                                                                                                                                                                       |
+| **BuyerMobile**   | Number of the buyer                                                                                                                                                                                                      |
+| **BuyerName**     | Name of the buyer                                                                                                                                                                                                        |
+| **status**        | <p>Status of the payment.</p><ul><li>DELIVERED</li><li>EXPIRED</li><li>FAILED</li><li>NEW</li><li>PAID</li><li>REFUNDED</li><li>CANCELED</li></ul>                                                                       |
+| **voucher**       | Payment number that the buyer uses to pay (sent only if the payment method is Cash)                                                                                                                                      |
+| **easykashRef**   | Reference number of the payment                                                                                                                                                                                          |
+
+#### Response Example: <a href="#response-example" id="response-example"></a>
+
+```json
+{
+    "PaymentMethod": "Cash Through Fawry",
+    "Amount": "10.05",
+    "BuyerName": "John Doe",
+    "BuyerEmail": "JohnDoe@example.com",
+    "BuyerMobile": "01010101010",
+    "status": "PAID",
+    "voucher": "32423432",
+    "easykashRef": "1206102054"
+}
+```
