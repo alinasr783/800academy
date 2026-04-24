@@ -32,16 +32,18 @@ export default function DashboardExams() {
   const [newNumber, setNewNumber] = useState("");
   const [newTitle, setNewTitle] = useState("");
 
+  async function getToken() {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) throw new Error("Not authenticated.");
+    return token;
+  }
+
   async function load() {
     setLoading(true);
     setError(null);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      if (!token) {
-        router.push("/join?mode=login");
-        return;
-      }
+      const token = await getToken();
 
       const subjectsRes = await fetch(`/api/admin/packages?limit=200`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -78,9 +80,7 @@ export default function DashboardExams() {
     setLoading(true);
     setError(null);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      if (!token) throw new Error("Not authenticated.");
+      const token = await getToken();
       const examsRes = await fetch(`/api/admin/exams?subject_id=${encodeURIComponent(nextSubjectId)}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -108,9 +108,7 @@ export default function DashboardExams() {
     setCreating(true);
     setError(null);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      if (!token) throw new Error("Not authenticated.");
+      const token = await getToken();
       const res = await fetch(`/api/admin/exams`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },

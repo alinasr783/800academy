@@ -48,7 +48,7 @@ export default function DashboardGuard({ children }: { children: React.ReactNode
     return () => {
       mounted = false;
     };
-  }, [router]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (status !== "ok") {
     return (

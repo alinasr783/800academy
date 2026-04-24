@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import MathText from "@/components/MathText";
@@ -546,9 +546,35 @@ export default function DashboardQuestionDetails() {
            .eq('parent_id', questionId)
            .order('question_number', { ascending: true });
          
-         const mappedSubs: SubQuestion[] = await Promise.all((subs || []).map(async (s) => {
-            const { data: sOpts } = await supabase.from('exam_question_options').select('*').eq('question_id', s.id).order('option_number', { ascending: true });
-            const { data: sAssets } = await supabase.from('exam_question_assets').select('*').eq('question_id', s.id).order('sort_order', { ascending: true });
+         const subIds = (subs || []).map(s => s.id);
+         
+         // Batch fetch all options and assets for all sub-questions in just 2 queries
+         const [{ data: allSubOpts }, { data: allSubAssets }] = await Promise.all([
+           subIds.length > 0 
+             ? supabase.from('exam_question_options').select('*').in('question_id', subIds).order('option_number', { ascending: true })
+             : Promise.resolve({ data: [] as any[] }),
+           subIds.length > 0
+             ? supabase.from('exam_question_assets').select('*').in('question_id', subIds).order('sort_order', { ascending: true })
+             : Promise.resolve({ data: [] as any[] }),
+         ]);
+         
+         // Group by question_id for O(1) lookup
+         const optsByQId = new Map<string, any[]>();
+         const assetsByQId = new Map<string, any[]>();
+         (allSubOpts || []).forEach(o => {
+           const arr = optsByQId.get(o.question_id) || [];
+           arr.push(o);
+           optsByQId.set(o.question_id, arr);
+         });
+         (allSubAssets || []).forEach(a => {
+           const arr = assetsByQId.get(a.question_id) || [];
+           arr.push(a);
+           assetsByQId.set(a.question_id, arr);
+         });
+         
+         const mappedSubs: SubQuestion[] = (subs || []).map((s) => {
+            const sOpts = optsByQId.get(s.id) || [];
+            const sAssets = assetsByQId.get(s.id) || [];
             
             return {
                id: s.id,
@@ -562,8 +588,8 @@ export default function DashboardQuestionDetails() {
                subtopicId: s.subtopic_id ?? "",
                questionFiles: [],
                explanationFiles: [],
-               existingAssets: sAssets || [],
-               options: (sOpts || []).map(o => ({
+               existingAssets: sAssets,
+               options: sOpts.map(o => ({
                   id: o.id,
                   key: uid(),
                   text: o.text ?? "",
@@ -572,7 +598,7 @@ export default function DashboardQuestionDetails() {
                   url: o.url // Include existing URL
                })) as any
             };
-         }));
+         });
          setSubQuestions(mappedSubs);
       }
 
@@ -906,15 +932,15 @@ export default function DashboardQuestionDetails() {
     ]);
   };
 
-  const updateSubQuestion = (key: string, patch: Partial<SubQuestion>) => {
+  const updateSubQuestion = useCallback((key: string, patch: Partial<SubQuestion>) => {
     setSubQuestions(prev => prev.map(s => s.key === key ? { ...s, ...patch } : s));
-  };
+  }, []);
 
-  const removeSubQuestion = (key: string) => {
+  const removeSubQuestion = useCallback((key: string) => {
     setSubQuestions(prev => prev.filter(s => s.key !== key));
-  };
+  }, []);
 
-  const reorderSubQuestion = (key: string, direction: 'up' | 'down') => {
+  const reorderSubQuestion = useCallback((key: string, direction: 'up' | 'down') => {
     setSubQuestions(prev => {
       const idx = prev.findIndex(s => s.key === key);
       if (idx === -1) return prev;
@@ -924,7 +950,7 @@ export default function DashboardQuestionDetails() {
       [copy[idx], copy[nextIdx]] = [copy[nextIdx], copy[idx]];
       return copy;
     });
-  };
+  }, []);
 
   async function saveOrder() {
     setSaving(true);

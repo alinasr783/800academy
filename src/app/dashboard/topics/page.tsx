@@ -52,16 +52,18 @@ export default function DashboardTopics() {
   const [subtopicForm, setSubtopicForm] = useState({ title: "", description: "", topicId: "", subjectId: "" });
   const [submittingSubtopic, setSubmittingSubtopic] = useState(false);
 
+  async function getToken() {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) throw new Error("Not authenticated.");
+    return token;
+  }
+
   async function load() {
     setLoading(true);
     setError(null);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      if (!token) {
-        router.push("/join?mode=login");
-        return;
-      }
+      const token = await getToken();
 
       // Load Subjects
       const sRes = await fetch(`/api/admin/packages`, {
@@ -104,8 +106,7 @@ export default function DashboardTopics() {
     }
     setSubmittingTopic(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
+      const token = await getToken();
       const method = editingTopic ? "PATCH" : "POST";
       const url = editingTopic ? `/api/admin/topics?id=${editingTopic.id}` : `/api/admin/topics`;
 
@@ -134,8 +135,7 @@ export default function DashboardTopics() {
   async function deleteTopic(id: string) {
     if (!confirm("Are you sure? This will delete all subtopics and questions under this topic.")) return;
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
+      const token = await getToken();
       const res = await fetch(`/api/admin/topics?id=${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
@@ -154,8 +154,7 @@ export default function DashboardTopics() {
     }
     setSubmittingSubtopic(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
+      const token = await getToken();
       const method = editingSubtopic ? "PATCH" : "POST";
       const url = editingSubtopic ? `/api/admin/subtopics?id=${editingSubtopic.id}` : `/api/admin/subtopics`;
 
@@ -185,8 +184,7 @@ export default function DashboardTopics() {
   async function deleteSubtopic(id: string) {
     if (!confirm("Are you sure you want to delete this subtopic? Questions will be unlinked.")) return;
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
+      const token = await getToken();
       const res = await fetch(`/api/admin/subtopics?id=${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },

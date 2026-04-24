@@ -559,15 +559,15 @@ function NewQuestionContent() {
     ]);
   };
 
-  const updateSubQuestion = (key: string, patch: Partial<SubQuestion>) => {
+  const updateSubQuestion = useCallback((key: string, patch: Partial<SubQuestion>) => {
     setSubQuestions(prev => prev.map(s => s.key === key ? { ...s, ...patch } : s));
-  };
+  }, []);
 
-  const removeSubQuestion = (key: string) => {
+  const removeSubQuestion = useCallback((key: string) => {
     setSubQuestions(prev => prev.filter(s => s.key !== key));
-  };
+  }, []);
 
-  const reorderSubQuestion = (key: string, direction: 'up' | 'down') => {
+  const reorderSubQuestion = useCallback((key: string, direction: 'up' | 'down') => {
     setSubQuestions(prev => {
       const idx = prev.findIndex(s => s.key === key);
       if (idx === -1) return prev;
@@ -577,7 +577,7 @@ function NewQuestionContent() {
       [copy[idx], copy[nextIdx]] = [copy[nextIdx], copy[idx]];
       return copy;
     });
-  };
+  }, []);
 
   function resetForm() {
     setPrompt("");
@@ -982,36 +982,40 @@ function NewQuestionContent() {
                  </div>
                )}
 
-               <div className="grid grid-cols-2 gap-6">
-                 <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Points</label>
-                    <input type="number" value={points} onChange={(e) => setPoints(e.target.value)} className="h-12 w-full px-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-primary outline-none font-bold text-center" />
+               {type !== "reference_block" && (
+                 <div className="grid grid-cols-2 gap-6">
+                   <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Points</label>
+                      <input type="number" value={points} onChange={(e) => setPoints(e.target.value)} className="h-12 w-full px-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-primary outline-none font-bold text-center" />
+                   </div>
+                   <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Reading Passage</label>
+                      <select value={passageId} onChange={(e) => setPassageId(e.target.value)} className="h-12 w-full px-4 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-xs appearance-none">
+                        <option value="">None</option>
+                        {passages.map(p => <option key={p.id} value={p.id}>{p.title || p.kind}</option>)}
+                      </select>
+                   </div>
                  </div>
-                 <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Reading Passage</label>
-                    <select value={passageId} onChange={(e) => setPassageId(e.target.value)} className="h-12 w-full px-4 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-xs appearance-none">
-                      <option value="">None</option>
-                      {passages.map(p => <option key={p.id} value={p.id}>{p.title || p.kind}</option>)}
-                    </select>
-                 </div>
-               </div>
+               )}
 
-               <div className="space-y-6 pt-6 border-t border-outline/20">
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Topic</label>
-                    <select value={topicId} onChange={(e) => { setTopicId(e.target.value); setSubtopicId(""); }} className="h-12 w-full px-4 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-xs">
-                      <option value="">Select Topic</option>
-                      {topics.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Subtopic</label>
-                    <select value={subtopicId} onChange={(e) => setSubtopicId(e.target.value)} disabled={!topicId} className="h-12 w-full px-4 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-xs disabled:opacity-50">
-                      <option value="">{topicId ? "Select Subtopic" : "Select Topic First"}</option>
-                      {filteredSubtopics.map(st => <option key={st.id} value={st.id}>{st.title}</option>)}
-                    </select>
-                  </div>
-               </div>
+               {type !== "reference_block" && (
+                 <div className="space-y-6 pt-6 border-t border-outline/20">
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Topic</label>
+                      <select value={topicId} onChange={(e) => { setTopicId(e.target.value); setSubtopicId(""); }} className="h-12 w-full px-4 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-xs">
+                        <option value="">Select Topic</option>
+                        {topics.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Subtopic</label>
+                      <select value={subtopicId} onChange={(e) => setSubtopicId(e.target.value)} disabled={!topicId} className="h-12 w-full px-4 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-xs disabled:opacity-50">
+                        <option value="">{topicId ? "Select Subtopic" : "Select Topic First"}</option>
+                        {filteredSubtopics.map(st => <option key={st.id} value={st.id}>{st.title}</option>)}
+                      </select>
+                    </div>
+                 </div>
+               )}
             </div>
           </div>
         </div>

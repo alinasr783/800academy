@@ -47,10 +47,18 @@ export default function DashboardSubscriptions() {
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
   const [expiresAt, setExpiresAt] = useState("");
 
-  async function adminFetch(path: string, init?: RequestInit) {
+  let cachedToken: string | null = null;
+
+  async function getToken() {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
     if (!token) throw new Error("Not authenticated.");
+    cachedToken = token;
+    return token;
+  }
+
+  async function adminFetch(path: string, init?: RequestInit) {
+    const token = cachedToken || await getToken();
     const res = await fetch(path, {
       ...init,
       headers: {
@@ -68,14 +76,7 @@ export default function DashboardSubscriptions() {
     setLoading(true);
     setError(null);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-      if (!token) {
-        router.push("/join?mode=login");
-        setItems([]);
-        setCount(0);
-        return;
-      }
+      const token = await getToken();
 
       const url = new URL("/api/admin/subscriptions", window.location.origin);
       url.searchParams.set("kind", "active");

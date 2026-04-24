@@ -1,14 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import MathText from "@/components/MathText";
 import LoadingAnimation from "@/components/LoadingAnimation";
-// @ts-ignore
-import renderMathInElement from 'katex/dist/contrib/auto-render';
-import 'katex/dist/katex.min.css';
 
 type ExamRow = {
   id: string;
@@ -39,7 +36,7 @@ type QuestionRow = {
   id: string;
   exam_id: string;
   question_number: number;
-  type: "mcq" | "fill";
+  type: "mcq" | "fill" | "reference_block";
   prompt_text: string | null;
   points: number;
   allow_multiple: boolean;
@@ -152,19 +149,8 @@ export default function DashboardExamDetails() {
     load();
   }, [examId]);
 
-  useEffect(() => {
-    // Auto-render math in passage previews
-    const elements = document.querySelectorAll('.prose-preview');
-    elements.forEach(el => {
-      renderMathInElement(el as HTMLElement, {
-        delimiters: [
-          { left: "$$", right: "$$", display: true },
-          { left: "$", right: "$", display: false },
-        ],
-        throwOnError: false
-      });
-    });
-  }, [passages, passageBody]);
+  // Note: MathText component handles its own KaTeX rendering internally.
+  // No need for a separate useEffect to render math in passage previews.
 
   async function saveExam() {
     const num = Math.trunc(Number(examNumber));
@@ -802,7 +788,7 @@ export default function DashboardExamDetails() {
                <div className="p-5 border-b border-outline/40 bg-slate-50/50 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <span className="material-symbols-outlined text-primary text-[20px]">list_alt</span>
-                    <h2 className="text-[10px] font-black uppercase tracking-widest text-primary">Question Bank ({questions.length})</h2>
+                    <h2 className="text-[10px] font-black uppercase tracking-widest text-primary">Question Bank ({questions.filter(q => q.type !== 'reference_block').length})</h2>
                   </div>
                   <button
                     type="button"
