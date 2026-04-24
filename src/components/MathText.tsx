@@ -389,12 +389,85 @@ function wrapLatexDelimiters(str: string): string {
   return result;
 }
 
+// ─── Table processing ────────────────────────────────────────────────
+// Syntax:  {table} row1col1 | row1col2 \n row2col1 | row2col2 {/table}
+// First row is the header. Each | separates columns.
+
+const TABLE_CELL_STYLE = 'border:1px solid #cbd5e1;padding:8px 14px;text-align:center;';
+const TABLE_HEADER_STYLE = TABLE_CELL_STYLE + 'background:#f1f5f9;font-weight:700;';
+const TABLE_STYLE = 'border-collapse:collapse;margin:10px 0;width:auto;font-size:inherit;';
+
+function processSingleCellMath(cell: string): string {
+  let r = cell;
+  r = r.replace(/\s+اس\s+/g, " ^ ");
+  r = r.replace(/جذر/g, "sqrt");
+  r = processNthRoot(r);
+  r = processAbs(r);
+  for (let pass = 0; pass < 5; pass++) {
+    const prev = r;
+    r = processBracketedFunc(r, 'sqrt', '\\sqrt');
+    r = processBracketedOps(r);
+    r = processBracketedFractions(r);
+    r = processMixedFractions(r);
+    r = processSimpleFractions(r);
+    r = processSimpleExponents(r);
+    if (r === prev) break;
+  }
+  r = processSymbols(r);
+  r = wrapLatexDelimiters(r);
+  return r;
+}
+
+function processTables(str: string): string {
+  return str.replace(/\{table\}([\s\S]*?)\{\/table\}/gi, (_match, content: string) => {
+    const lines = content.trim().split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    if (lines.length === 0) return '';
+
+    let html = `<table style="${TABLE_STYLE}">`;
+
+    lines.forEach((line, idx) => {
+      // Split by | and trim, filter empty edge cells from |col1|col2| style
+      const cells = line.split('|').map(c => c.trim()).filter((c, ci, arr) => {
+        // Remove empty first/last entries (from leading/trailing |)
+        if (ci === 0 && c === '') return false;
+        if (ci === arr.length - 1 && c === '') return false;
+        return true;
+      });
+      if (cells.length === 0) return;
+
+      const isHeader = idx === 0;
+      const tag = isHeader ? 'th' : 'td';
+      const style = isHeader ? TABLE_HEADER_STYLE : TABLE_CELL_STYLE;
+
+      if (idx === 0) html += '<thead>';
+      else if (idx === 1) html += '<tbody>';
+
+      html += '<tr>';
+      cells.forEach(cell => {
+        const processed = processSingleCellMath(cell);
+        html += `<${tag} style="${style}">${processed}</${tag}>`;
+      });
+      html += '</tr>';
+
+      if (idx === 0) html += '</thead>';
+    });
+
+    if (lines.length > 1) html += '</tbody>';
+    html += '</table>';
+    return html;
+  });
+}
+
 // ─── Main processText ────────────────────────────────────────────────
 
 function processText(text: string): string {
   if (!text) return "";
   let res = text;
 
+  // Step 1: Extract & process tables first (cells get individual math processing)
+  res = processTables(res);
+
+  // Step 2: Process remaining (non-table) math
   // Arabic shortcuts
   res = res.replace(/\s+اس\s+/g, " ^ ");
   res = res.replace(/جذر/g, "sqrt");
@@ -409,7 +482,7 @@ function processText(text: string): string {
     res = processBracketedFunc(res, 'sqrt', '\\sqrt');
     res = processBracketedOps(res);          // ^[...] → ^{...}, _[...] → _{...}
     res = processBracketedFractions(res);    // [a]/[b] → \frac{a}{b}
-    res = processMixedFractions(res);        // simple/[b] or [a]/simple → \frac{}{} 
+    res = processMixedFractions(res);        // simple/[b] or [a]/simple → \frac{}{}
     res = processSimpleFractions(res);       // a/b → \frac{a}{b}
     res = processSimpleExponents(res);       // x^2, x^-3 → x^{2}, x^{-3}
     if (res === prev) break;
