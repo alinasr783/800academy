@@ -321,7 +321,20 @@ function wrapLatexDelimiters(str: string): string {
   let result = '', i = 0;
 
   while (i < str.length) {
-    // Skip existing $...$
+    // Skip existing $$...$$ (display mode) — must check BEFORE single $
+    if (str[i] === '$' && i + 1 < str.length && str[i + 1] === '$') {
+      let j = i + 2;
+      // Find closing $$
+      while (j < str.length - 1) {
+        if (str[j] === '$' && str[j + 1] === '$') break;
+        j++;
+      }
+      result += str.substring(i, j + 2);
+      i = j + 2;
+      continue;
+    }
+
+    // Skip existing $...$ (inline mode)
     if (str[i] === '$') {
       let j = i + 1;
       while (j < str.length && str[j] !== '$') j++;
