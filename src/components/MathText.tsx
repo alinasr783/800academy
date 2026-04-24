@@ -181,7 +181,64 @@ function processAbs(str: string): string {
   return result;
 }
 
-// ─── Phase 2: Simple regex fallbacks ─────────────────────────────────
+// ─── Phase 2: Mixed fractions (one side bracketed, other simple) ─────
+// Handles: simple/[bracket] and [bracket]/simple
+
+function processMixedFractions(str: string): string {
+  let result = '', i = 0;
+  while (i < str.length) {
+    // Case A: [bracket]/simple  (e.g., [x^2+1]/2)
+    if (str[i] === '[') {
+      const numClose = findClosingBracket(str, i);
+      if (numClose !== -1) {
+        let j = numClose + 1;
+        while (j < str.length && str[j] === ' ') j++;
+        if (j < str.length && str[j] === '/') {
+          let k = j + 1;
+          while (k < str.length && str[k] === ' ') k++;
+          // Check if denominator is a simple token (not another bracket — that's handled by processBracketedFractions)
+          if (k < str.length && /[a-zA-Z0-9.]/.test(str[k]) && str[k] !== '[') {
+            const tokenStart = k;
+            while (k < str.length && /[a-zA-Z0-9.]/.test(str[k])) k++;
+            result += `\\frac{${str.substring(i + 1, numClose)}}{${str.substring(tokenStart, k)}}`;
+            i = k;
+            continue;
+          }
+        }
+      }
+    }
+
+    // Case B: simple/[bracket]  (e.g., 1/[7^{6x}])
+    if (/[a-zA-Z0-9.]/.test(str[i])) {
+      const tokenStart = i;
+      while (i < str.length && /[a-zA-Z0-9.]/.test(str[i])) i++;
+      const token = str.substring(tokenStart, i);
+
+      let j = i;
+      while (j < str.length && str[j] === ' ') j++;
+      if (j < str.length && str[j] === '/') {
+        let k = j + 1;
+        while (k < str.length && str[k] === ' ') k++;
+        if (k < str.length && str[k] === '[') {
+          const denClose = findClosingBracket(str, k);
+          if (denClose !== -1) {
+            result += `\\frac{${token}}{${str.substring(k + 1, denClose)}}`;
+            i = denClose + 1;
+            continue;
+          }
+        }
+      }
+      // Not a fraction, just add the token
+      result += token;
+      continue;
+    }
+
+    result += str[i]; i++;
+  }
+  return result;
+}
+
+// ─── Phase 3: Simple regex fallbacks ─────────────────────────────────
 
 function processSimpleFractions(str: string): string {
   return str.replace(/([\w\d\.]+)\s*\/\s*([\w\d\.]+)/g, (_, n, d) => `\\frac{${n.trim()}}{${d.trim()}}`);
@@ -350,10 +407,11 @@ function processText(text: string): string {
   for (let pass = 0; pass < 5; pass++) {
     const prev = res;
     res = processBracketedFunc(res, 'sqrt', '\\sqrt');
-    res = processBracketedOps(res);
-    res = processBracketedFractions(res);
-    res = processSimpleFractions(res);
-    res = processSimpleExponents(res);
+    res = processBracketedOps(res);          // ^[...] → ^{...}, _[...] → _{...}
+    res = processBracketedFractions(res);    // [a]/[b] → \frac{a}{b}
+    res = processMixedFractions(res);        // simple/[b] or [a]/simple → \frac{}{} 
+    res = processSimpleFractions(res);       // a/b → \frac{a}{b}
+    res = processSimpleExponents(res);       // x^2, x^-3 → x^{2}, x^{-3}
     if (res === prev) break;
   }
 
