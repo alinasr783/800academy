@@ -458,14 +458,50 @@ function processTables(str: string): string {
   });
 }
 
+// ─── System of equations processing ──────────────────────────────────
+// Syntax:  {sys} equation1 \n equation2 \n ... {/sys}
+// Renders with a left curly brace grouping all equations (LaTeX cases environment)
+
+function processEquationLine(line: string): string {
+  let r = line;
+  r = r.replace(/\s+اس\s+/g, " ^ ");
+  r = r.replace(/جذر/g, "sqrt");
+  r = processNthRoot(r);
+  r = processAbs(r);
+  for (let pass = 0; pass < 5; pass++) {
+    const prev = r;
+    r = processBracketedFunc(r, 'sqrt', '\\sqrt');
+    r = processBracketedOps(r);
+    r = processBracketedFractions(r);
+    r = processMixedFractions(r);
+    r = processSimpleFractions(r);
+    r = processSimpleExponents(r);
+    if (r === prev) break;
+  }
+  r = processSymbols(r);
+  return r;
+}
+
+function processSystems(str: string): string {
+  return str.replace(/\{sys\}([\s\S]*?)\{\/sys\}/gi, (_match, content: string) => {
+    const lines = content.trim().split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    if (lines.length === 0) return '';
+
+    const processedLines = lines.map(line => processEquationLine(line));
+    const casesContent = processedLines.join(' \\\\ ');
+    return `$$\\begin{cases} ${casesContent} \\end{cases}$$`;
+  });
+}
+
 // ─── Main processText ────────────────────────────────────────────────
 
 function processText(text: string): string {
   if (!text) return "";
   let res = text;
 
-  // Step 1: Extract & process tables first (cells get individual math processing)
+  // Step 1: Extract & process block-level structures first
   res = processTables(res);
+  res = processSystems(res);
 
   // Step 2: Process remaining (non-table) math
   // Arabic shortcuts
