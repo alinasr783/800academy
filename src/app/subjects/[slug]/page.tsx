@@ -1,6 +1,7 @@
 import SiteHeader from "@/components/SiteHeader";
 import { supabase } from "@/lib/supabaseClient";
 import SubjectOfferActions from "./SubjectOfferActions";
+import SubjectCarousel from "./SubjectCarousel";
 import Link from "next/link";
 import SubjectScrollToExams from "./SubjectScrollToExams";
 import BackButton from "@/components/BackButton";
@@ -15,6 +16,7 @@ type Subject = {
   id: string;
   slug: string;
   title: string;
+  marketing_title: string | null;
   description: string | null;
   track: string | null;
 };
@@ -45,7 +47,7 @@ export default async function SubjectPage({ params, searchParams }: PageProps) {
 
   const { data: subject, error: subjectError } = await supabase
     .from("subjects")
-    .select("id, slug, title, description, track")
+    .select("id, slug, title, marketing_title, description, track")
     .eq("slug", slug)
     .single<Subject>();
 
@@ -113,10 +115,10 @@ export default async function SubjectPage({ params, searchParams }: PageProps) {
               <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
                 {subject.track ?? "Subject"}
               </div>
-              <h1 className="font-headline text-4xl sm:text-5xl lg:text-6xl font-extrabold text-primary leading-[1.1] mb-6 tracking-tight">
-                {subject.title}
+              <h1 className="font-headline text-2xl sm:text-4xl lg:text-5xl xl:text-6xl font-extrabold text-primary leading-[1.1] mb-4 sm:mb-6 tracking-tight">
+                {subject.marketing_title || subject.title}
               </h1>
-              <p className="text-on-surface-variant text-base sm:text-lg max-w-2xl leading-[1.7] font-medium opacity-90">
+              <p className="text-on-surface-variant text-sm sm:text-base lg:text-lg max-w-2xl leading-[1.7] font-medium opacity-90">
                 {subject.description ??
                   "A premium exam-prep track with high-fidelity practice and structured progression."}
               </p>
@@ -128,29 +130,21 @@ export default async function SubjectPage({ params, searchParams }: PageProps) {
               )}
             </div>
 
-            <div className="lg:col-span-5 relative py-12 lg:py-20">
+            <div className="lg:col-span-5 relative py-8 lg:py-20">
               {promoAssets && promoAssets.length > 0 ? (
-                <div className="relative w-full aspect-square md:aspect-[4/3] lg:aspect-square rounded-[2rem] overflow-hidden shadow-soft-2xl border border-outline/30">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={promoAssets[0].url ?? ""}
-                    alt={promoAssets[0].alt ?? subject.title}
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-primary/80 via-primary/20 to-transparent mix-blend-multiply" />
-                </div>
+                <SubjectCarousel assets={promoAssets} title={subject.title} />
               ) : null}
             </div>
           </div>
         </section>
 
-        <section id="exams-library" className="py-24 px-8 lg:px-12 max-w-[1440px] mx-auto">
+        <section id="exams-library" className="py-12 sm:py-24 px-6 sm:px-8 lg:px-12 max-w-[1440px] mx-auto">
           <div className="flex items-end justify-between gap-10 mb-12">
             <div>
               <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
                 Content
               </div>
-              <h2 className="font-headline text-4xl lg:text-5xl font-extrabold text-primary tracking-tighter">
+              <h2 className="font-headline text-2xl sm:text-3xl lg:text-5xl font-extrabold text-primary tracking-tighter">
                 Exams Library
               </h2>
             </div>
@@ -163,9 +157,9 @@ export default async function SubjectPage({ params, searchParams }: PageProps) {
             {(exams ?? []).map((exam) => (
               <div
                 key={exam.id}
-                className="bg-white rounded-3xl border border-outline/40 overflow-hidden flex flex-col transition-all duration-500 hover:shadow-soft-2xl hover:-translate-y-1 hover:border-blue-200 micro-interaction"
+                className="bg-white rounded-3xl border-2 border-slate-200 overflow-hidden flex flex-col transition-all duration-500 hover:shadow-soft-2xl hover:-translate-y-1 hover:border-blue-300 micro-interaction"
               >
-                <div className="p-8 border-b border-outline/20">
+                <div className="p-6 sm:p-8 border-b border-slate-200">
                   <div className="flex items-start justify-between gap-4">
                     <div className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant bg-surface-variant px-3 py-1 rounded-full">
                       Exam {exam.exam_number}
@@ -180,7 +174,7 @@ export default async function SubjectPage({ params, searchParams }: PageProps) {
                       {exam.is_free ? "Free" : "Paid"}
                     </div>
                   </div>
-                  <div className="text-2xl font-extrabold text-primary mt-5 tracking-tight">
+                  <div className="text-lg sm:text-2xl font-extrabold text-primary mt-5 tracking-tight">
                     {exam.title}
                   </div>
                 </div>

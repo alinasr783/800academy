@@ -493,6 +493,32 @@ export default function ProfileClient() {
         </button>
       </div>
 
+      {/* ── No Active Plan Banner ── */}
+      {activeEntitlements.length === 0 && (
+        <div className="mb-8 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-200 rounded-2xl p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
+          <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+            <span className="material-symbols-outlined text-amber-600 text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>
+              info
+            </span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-base sm:text-lg font-extrabold text-primary tracking-tight">
+              You don&apos;t have an active plan yet
+            </div>
+            <div className="text-sm text-on-surface-variant font-medium mt-1">
+              Subscribe to a package to unlock full exam access, progress tracking, and more.
+            </div>
+          </div>
+          <a
+            href="/plans"
+            className="flex-shrink-0 bg-primary text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-slate-800 transition-all flex items-center gap-2 w-full sm:w-auto justify-center"
+          >
+            Browse Plans
+            <span className="material-symbols-outlined text-lg">arrow_forward</span>
+          </a>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
         {/* ── Sidebar ── */}
         <div className="lg:col-span-4">

@@ -6,6 +6,7 @@ type SubjectRow = {
   id: string;
   slug: string;
   title: string;
+  marketing_title: string | null;
   track: string | null;
   card_description: string | null;
   description: string | null;
@@ -55,7 +56,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   const { data: subject, error } = await admin
     .from("subjects")
-    .select("id,slug,title,track,card_description,description,created_at,updated_at")
+    .select("id,slug,title,marketing_title,track,card_description,description,created_at,updated_at")
     .eq("id", id)
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 404 });
@@ -89,6 +90,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     | {
         slug?: string;
         title?: string;
+        marketing_title?: string | null;
         track?: string | null;
         card_description?: string | null;
         description?: string | null;
@@ -104,6 +106,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if ("slug" in body && typeof body.slug === "string") patch.slug = body.slug.trim();
   if ("title" in body && typeof body.title === "string") patch.title = body.title.trim();
   if ("track" in body) patch.track = body.track ?? null;
+  if ("marketing_title" in body) patch.marketing_title = body.marketing_title ?? null;
   if ("card_description" in body) patch.card_description = body.card_description ?? null;
   if ("description" in body) patch.description = body.description ?? null;
 
@@ -111,7 +114,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     .from("subjects")
     .update(patch)
     .eq("id", id)
-    .select("id,slug,title,track,card_description,description,created_at,updated_at")
+    .select("id,slug,title,marketing_title,track,card_description,description,created_at,updated_at")
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
   return NextResponse.json({ subject: data as SubjectRow });

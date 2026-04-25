@@ -8,6 +8,7 @@ type SubjectRow = {
   id: string;
   slug: string;
   title: string;
+  marketing_title: string | null;
   track: string | null;
   card_description: string | null;
   description: string | null;
@@ -53,6 +54,7 @@ export default function DashboardPackageDetails() {
 
   const [slug, setSlug] = useState("");
   const [title, setTitle] = useState("");
+  const [marketingTitle, setMarketingTitle] = useState("");
   const [track, setTrack] = useState("");
   const [cardDescription, setCardDescription] = useState("");
   const [description, setDescription] = useState("");
@@ -97,6 +99,7 @@ export default function DashboardPackageDetails() {
       setAssets(json.assets ?? []);
       setSlug(json.subject.slug);
       setTitle(json.subject.title);
+      setMarketingTitle(json.subject.marketing_title ?? "");
       setTrack(json.subject.track ?? "");
       setCardDescription(json.subject.card_description ?? "");
       setDescription(json.subject.description ?? "");
@@ -122,6 +125,7 @@ export default function DashboardPackageDetails() {
         body: JSON.stringify({
           slug: slug.trim(),
           title: title.trim(),
+          marketing_title: marketingTitle.trim() || null,
           track: track.trim() || null,
           card_description: cardDescription.trim() || null,
           description: description.trim() || null,
@@ -389,6 +393,17 @@ export default function DashboardPackageDetails() {
               <input
                 value={track}
                 onChange={(e) => setTrack(e.target.value)}
+                className="h-12 w-full px-4 bg-background border border-border/60 focus:border-primary outline-none transition-colors"
+              />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">
+                Marketing Title <span className="text-on-surface-variant font-medium normal-case tracking-normal">(shown on subject page instead of title)</span>
+              </div>
+              <input
+                value={marketingTitle}
+                onChange={(e) => setMarketingTitle(e.target.value)}
+                placeholder="e.g. Master Math EST 1 — Your Path to 800"
                 className="h-12 w-full px-4 bg-background border border-border/60 focus:border-primary outline-none transition-colors"
               />
             </div>
