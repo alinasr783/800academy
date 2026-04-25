@@ -15,7 +15,7 @@ export default function Home() {
       <SiteHeader active="home" />
       <main className="pt-[90px]">
         <HeroSection />
-        <PlansSection />
+        <PlansSection showMoreLink />
         <section
           id="benefits"
           className="bg-brand-light py-32 border-y border-outline/30 relative scroll-mt-32 overflow-hidden"

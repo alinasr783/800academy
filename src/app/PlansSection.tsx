@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
+import useSWR from "swr";
 import { supabase } from "@/lib/supabaseClient";
 
 type Subject = {
@@ -117,114 +119,86 @@ const hardcodedImageUrls: Record<string, string> = {
   "est 2 : biology specialist": "https://lh3.googleusercontent.com/aida-public/AB6AXuCiCPMDNg2SABiwtBz_x0WE8dI-RWI72uctsbRs-8VinPLQJhOmR-RAaiPS4bSsEjp5jgU0ZmNSf1K9TH-CkCThfC6YfzzVkaOZ55mLlFQvBvZk_CBSfKVggtExdqs5vaIj_VcsQeGa8xthCcd7hF8iF56eLFXwAJnyGIkaBeC0A0eXbJ3X2AX9CrndBWyhax6Z2oHJHQKrDVcG735gyWExuFbuCHG1hG_VXYZ5ziYclGsPeYdW14F2lFHEJvMp_-kKJ9w33lolY3KB",
 };
 
-export default function PlansSection() {
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [offersBySubjectId, setOffersBySubjectId] = useState<Record<string, Offer[]>>({});
-  const [primaryAssetBySubjectId, setPrimaryAssetBySubjectId] = useState<Record<string, Asset | null>>({});
+export default function PlansSection({ showMoreLink = false }: { showMoreLink?: boolean }) {
   const [selectedOfferIdBySubjectId, setSelectedOfferIdBySubjectId] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let mounted = true;
+  const fetcher = useCallback(async () => {
+    const { data: subjectsRows, error: subjectsError } = await supabase
+      .from("subjects")
+      .select("id, slug, title, description, track")
+      .order("title", { ascending: true })
+      .returns<Subject[]>();
 
-    async function run() {
-      setLoading(true);
-      setError(null);
+    if (subjectsError) throw new Error(subjectsError.message);
+    const rows = subjectsRows ?? [];
+    const ids = rows.map((s) => s.id);
+    if (ids.length === 0) return { subjects: rows, offersBySubjectId: {}, primaryAssetBySubjectId: {} };
 
-      try {
-        const { data: subjectsRows, error: subjectsError } = await supabase
-          .from("subjects")
-          .select("id, slug, title, description, track")
-          .order("title", { ascending: true })
-          .returns<Subject[]>();
+    const [{ data: offersRows, error: offersError }, { data: assetsRows, error: assetsError }] = await Promise.all([
+      supabase
+        .from("subject_offers")
+        .select("id, subject_id, label, expires_at, price_cents, currency")
+        .in("subject_id", ids)
+        .order("expires_at", { ascending: true })
+        .returns<Offer[]>(),
+      supabase
+        .from("subject_assets")
+        .select("id, subject_id, url, bucket, storage_path, alt, sort_order")
+        .in("subject_id", ids)
+        .order("sort_order", { ascending: true })
+        .returns<Asset[]>(),
+    ]);
 
-        if (!mounted) return;
-
-        if (subjectsError) {
-          setError(subjectsError.message);
-          setLoading(false);
-          return;
-        }
-
-        const rows = subjectsRows ?? [];
-        setSubjects(rows);
-
-        const ids = rows.map((s) => s.id);
-        if (ids.length === 0) {
-          setLoading(false);
-          return;
-        }
-
-        console.log("[PlansSection] Fetching offers and assets...");
-        const [{ data: offersRows, error: offersError }, { data: assetsRows, error: assetsError }] = await Promise.all([
-          supabase
-            .from("subject_offers")
-            .select("id, subject_id, label, expires_at, price_cents, currency")
-            .in("subject_id", ids)
-            .order("expires_at", { ascending: true })
-            .returns<Offer[]>(),
-          supabase
-            .from("subject_assets")
-            .select("id, subject_id, url, bucket, storage_path, alt, sort_order")
-            .in("subject_id", ids)
-            .order("sort_order", { ascending: true })
-            .returns<Asset[]>(),
-        ]);
-
-        if (!mounted) return;
-
-        if (offersError || assetsError) {
-          console.error("[PlansSection] Offers/Assets error:", offersError || assetsError);
-        }
-
-        const nextOffersBySubjectId: Record<string, Offer[]> = {};
-        for (const offer of offersRows ?? []) {
-          const key = offer.subject_id;
-          if (!nextOffersBySubjectId[key]) nextOffersBySubjectId[key] = [];
-          nextOffersBySubjectId[key].push(offer);
-        }
-        setOffersBySubjectId(nextOffersBySubjectId);
-
-        const nextPrimaryAssetBySubjectId: Record<string, Asset | null> = {};
-        for (const asset of assetsRows ?? []) {
-          if (nextPrimaryAssetBySubjectId[asset.subject_id]) continue;
-          nextPrimaryAssetBySubjectId[asset.subject_id] = asset;
-        }
-        for (const id of ids) {
-          if (!(id in nextPrimaryAssetBySubjectId)) nextPrimaryAssetBySubjectId[id] = null;
-        }
-        setPrimaryAssetBySubjectId(nextPrimaryAssetBySubjectId);
-
-        setSelectedOfferIdBySubjectId((prev) => {
-          const next = { ...prev };
-          for (const subject of rows) {
-            const offers = nextOffersBySubjectId[subject.id] ?? [];
-            if (!next[subject.id] && offers[0]?.id) next[subject.id] = offers[0].id;
-          }
-          return next;
-        });
-
-        setLoading(false);
-      } catch (err: any) {
-        console.error("[PlansSection] Unexpected error during fetch:", err);
-        if (mounted) {
-          setError(err.message || "An unexpected error occurred");
-          setLoading(false);
-        }
-      }
+    if (offersError || assetsError) {
+      console.error("[PlansSection] Offers/Assets error:", offersError || assetsError);
     }
 
-    run();
+    const nextOffersBySubjectId: Record<string, Offer[]> = {};
+    for (const offer of offersRows ?? []) {
+      const key = offer.subject_id;
+      if (!nextOffersBySubjectId[key]) nextOffersBySubjectId[key] = [];
+      nextOffersBySubjectId[key].push(offer);
+    }
 
-    return () => {
-      mounted = false;
-    };
+    const nextPrimaryAssetBySubjectId: Record<string, Asset | null> = {};
+    for (const asset of assetsRows ?? []) {
+      if (nextPrimaryAssetBySubjectId[asset.subject_id]) continue;
+      nextPrimaryAssetBySubjectId[asset.subject_id] = asset;
+    }
+    for (const id of ids) {
+      if (!(id in nextPrimaryAssetBySubjectId)) nextPrimaryAssetBySubjectId[id] = null;
+    }
+
+    return { subjects: rows, offersBySubjectId: nextOffersBySubjectId, primaryAssetBySubjectId: nextPrimaryAssetBySubjectId };
   }, []);
 
-  const orderedSubjects = useMemo(() => {
-    return subjects;
-  }, [subjects]);
+  const { data, error, isLoading: loading } = useSWR("plans-section-data", fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 60000, // Cache for 1 minute
+  });
+
+  const subjects = data?.subjects ?? [];
+  const offersBySubjectId = data?.offersBySubjectId ?? {};
+  const primaryAssetBySubjectId = data?.primaryAssetBySubjectId ?? {};
+
+  // Auto-select first offer for each subject
+  useEffect(() => {
+    if (subjects.length === 0) return;
+    setSelectedOfferIdBySubjectId((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const subject of subjects) {
+        const offers = offersBySubjectId[subject.id] ?? [];
+        if (!next[subject.id] && offers[0]?.id) {
+          next[subject.id] = offers[0].id;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [subjects, offersBySubjectId]);
+
+  const orderedSubjects = useMemo(() => subjects, [subjects]);
 
   return (
     <section
@@ -265,7 +239,7 @@ export default function PlansSection() {
         ) : error ? (
           <div className="col-span-full bg-white border border-outline/60 p-10 shadow-premium">
             <div className="text-xl font-extrabold text-primary">Could not load packages</div>
-            <div className="text-on-surface-variant mt-2">{error}</div>
+            <div className="text-on-surface-variant mt-2">{error?.message ?? "Unknown error"}</div>
           </div>
         ) : orderedSubjects.length === 0 ? (
           <div className="col-span-full bg-white border border-outline/60 p-10 shadow-premium">
@@ -292,10 +266,12 @@ export default function PlansSection() {
               >
                 <div className={["h-56 overflow-hidden relative", theme.imageBg].join(" ")}>
                   {assetUrl ? (
-                    <img
+                    <Image
                       alt={asset?.alt ?? subject.title}
                       className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700 group-hover:scale-110"
                       src={assetUrl}
+                      fill
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                     />
                   ) : (
                     <div className="w-full h-full bg-gradient-to-br from-primary to-secondary" />
@@ -391,7 +367,7 @@ export default function PlansSection() {
       </div>
 
       {/* Show more link */}
-      {!loading && !error && orderedSubjects.length > 0 && (
+      {showMoreLink && !loading && !error && orderedSubjects.length > 0 && (
         <div className="flex justify-center mt-16">
           <a
             href="/plans"

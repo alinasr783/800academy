@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
+import Image from "next/image";
 
 type Asset = {
   id: string;
@@ -103,12 +104,13 @@ export default function SubjectCarousel({
           className="absolute inset-0 transition-opacity duration-500 ease-in-out"
           style={{ opacity: idx === current ? 1 : 0, zIndex: idx === current ? 1 : 0 }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <Image
             src={asset.url ?? ""}
             alt={asset.alt ?? `${title} - ${idx + 1}`}
             className="absolute inset-0 w-full h-full object-cover pointer-events-none"
             draggable={false}
+            fill
+            sizes="(max-width: 768px) 100vw, 50vw"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-primary/80 via-primary/20 to-transparent mix-blend-multiply" />
         </div>

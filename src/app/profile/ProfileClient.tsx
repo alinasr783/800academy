@@ -7,6 +7,7 @@ import motivations from "@/data/motivations.json";
 import BackButton from "@/components/BackButton";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import LoadingAnimation from "@/components/LoadingAnimation";
+import Image from "next/image";
 
 type ProfileRow = {
   id: string;
@@ -539,13 +540,15 @@ export default function ProfileClient() {
 
                 <label
                   htmlFor="avatar-upload"
-                  className="w-16 h-16 min-w-[4rem] min-h-[4rem] bg-surface-variant border border-outline/40 overflow-hidden rounded-full flex items-center justify-center cursor-pointer group flex-shrink-0"
+                  className="w-16 h-16 min-w-[4rem] min-h-[4rem] bg-surface-variant border border-outline/40 overflow-hidden rounded-full flex items-center justify-center cursor-pointer group flex-shrink-0 relative"
                 >
                   {profile?.avatar_url ? (
-                    <img
+                    <Image
                       src={profile.avatar_url}
                       alt={profile.full_name ?? "Avatar"}
                       className="w-full h-full object-cover rounded-full"
+                      fill
+                      sizes="64px"
                     />
                   ) : (
                     <span className="material-symbols-outlined text-primary text-[28px]">

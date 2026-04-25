@@ -240,6 +240,8 @@ export default function ExamClient({
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<SubmitResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showAuthPopup, setShowAuthPopup] = useState(false);
+  const pendingSubmitRef = useRef<{ auto: boolean } | null>(null);
   const questionTopRef = useRef<HTMLDivElement | null>(null);
 
   const [accessChecked, setAccessChecked] = useState(false);
@@ -846,6 +848,11 @@ export default function ExamClient({
   async function requireAuth() {
     const { data } = await supabase.auth.getSession();
     if (!data.session) {
+      // For free exams, show the auth popup instead of redirecting
+      if (exam.is_free) {
+        setShowAuthPopup(true);
+        return null;
+      }
       router.push("/join?mode=login");
       return null;
     }
@@ -945,7 +952,12 @@ export default function ExamClient({
     setError(null);
     try {
       const user = await requireAuth();
-      if (!user) return;
+      if (!user) {
+        // Store that we were trying to submit
+        pendingSubmitRef.current = { auto };
+        setSubmitting(false);
+        return;
+      }
 
       const durationSeconds =
         startedAtRef.current ? Math.min(exam.duration_seconds, Math.floor((Date.now() - startedAtRef.current) / 1000)) : 0;
@@ -2222,23 +2234,49 @@ export default function ExamClient({
                   })()}
                   </div>
 
-                  <div className="mt-6 sm:mt-10 flex items-center justify-between gap-3 sm:gap-4">
+                  <div className="flex items-center gap-3 sm:gap-4 mt-6 sm:mt-10">
                     <button
                       type="button"
                       onClick={() => {
-                        const nextIndex = Math.max(0, currentIndex - 1);
-                        setCurrentIndex(nextIndex);
-                        const sameUnit = flatQuestions[nextIndex] && currentUnit && 
-                          (currentUnit.id === flatQuestions[nextIndex].id || 
-                           (currentUnit.sub_questions?.some(s => s.id === flatQuestions[nextIndex].id)));
-                        
+                        const curUnitId = currentUnit?.id;
+                        let firstOfCurrentUnit = currentIndex;
+                        for (let i = currentIndex - 1; i >= 0; i--) {
+                          const q = flatQuestions[i];
+                          const parentUnit = questions.find(top => {
+                            if (top.id === q.id) return true;
+                            if (top.type === 'reference_block' && top.sub_questions) {
+                              return top.sub_questions.some(s => s.id === q.id);
+                            }
+                            return false;
+                          });
+                          if (parentUnit?.id === curUnitId) {
+                            firstOfCurrentUnit = i;
+                          } else {
+                            break;
+                          }
+                        }
+                        let targetIndex = Math.max(0, firstOfCurrentUnit - 1);
+                        const prevQ = flatQuestions[targetIndex];
+                        if (prevQ) {
+                          const prevUnit = questions.find(top => {
+                            if (top.id === prevQ.id) return true;
+                            if (top.type === 'reference_block' && top.sub_questions) {
+                              return top.sub_questions.some(s => s.id === prevQ.id);
+                            }
+                            return false;
+                          });
+                          if (prevUnit) {
+                            const firstIdx = flatQuestions.findIndex(fq => {
+                              if (prevUnit.id === fq.id) return true;
+                              if (prevUnit.sub_questions?.some(s => s.id === fq.id)) return true;
+                              return false;
+                            });
+                            if (firstIdx >= 0) targetIndex = firstIdx;
+                          }
+                        }
+                        setCurrentIndex(targetIndex);
                         setTimeout(() => {
-                           if (sameUnit) {
-                              const el = document.getElementById(`q-item-${flatQuestions[nextIndex].id}`);
-                              if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-                           } else {
-                              questionTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-                           }
+                          questionTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
                         }, 50);
                       }}
                       disabled={currentIndex === 0}
@@ -2249,22 +2287,30 @@ export default function ExamClient({
                     <button
                       type="button"
                       onClick={() => {
-                        if (currentIndex === totalQuestionsCount - 1) {
+                        const curUnitId = currentUnit?.id;
+                        let lastOfCurrentUnit = currentIndex;
+                        for (let i = currentIndex + 1; i < totalQuestionsCount; i++) {
+                          const q = flatQuestions[i];
+                          const parentUnit = questions.find(top => {
+                            if (top.id === q.id) return true;
+                            if (top.type === 'reference_block' && top.sub_questions) {
+                              return top.sub_questions.some(s => s.id === q.id);
+                            }
+                            return false;
+                          });
+                          if (parentUnit?.id === curUnitId) {
+                            lastOfCurrentUnit = i;
+                          } else {
+                            break;
+                          }
+                        }
+                        const nextIndex = lastOfCurrentUnit + 1;
+                        if (nextIndex >= totalQuestionsCount) {
                           onSubmit(false);
                         } else {
-                          const nextIndex = Math.min(totalQuestionsCount - 1, currentIndex + 1);
                           setCurrentIndex(nextIndex);
-                          const sameUnit = flatQuestions[nextIndex] && currentUnit && 
-                            (currentUnit.id === flatQuestions[nextIndex].id || 
-                             (currentUnit.sub_questions?.some(s => s.id === flatQuestions[nextIndex].id)));
-                          
                           setTimeout(() => {
-                             if (sameUnit) {
-                                const el = document.getElementById(`q-item-${flatQuestions[nextIndex].id}`);
-                                if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-                             } else {
-                                questionTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-                             }
+                            questionTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
                           }, 50);
                         }
                       }}
@@ -2278,6 +2324,7 @@ export default function ExamClient({
               ) : null}
             </div>
           </div>
+
         )
       ) : (
         <div className="p-6 sm:p-10 text-center">
@@ -2299,6 +2346,46 @@ export default function ExamClient({
       )}
         </div>
       </div>
+
+      {/* Auth popup for guest users submitting free exams */}
+      {showAuthPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl p-6 sm:p-8 max-w-md w-full shadow-2xl text-center">
+            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-5">
+              <span className="material-symbols-outlined text-primary text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>person_add</span>
+            </div>
+            <h3 className="text-xl font-black text-primary mb-3">Create an Account to Save Your Score</h3>
+            <p className="text-on-surface-variant font-medium mb-2">You just completed the exam! Create a free account now to:</p>
+            <ul className="text-on-surface-variant text-sm space-y-2 mb-6 text-left pl-6">
+              <li className="flex items-center gap-2"><span className="material-symbols-outlined text-secondary text-base">check_circle</span> Save and review your score</li>
+              <li className="flex items-center gap-2"><span className="material-symbols-outlined text-secondary text-base">check_circle</span> Track your progress over time</li>
+              <li className="flex items-center gap-2"><span className="material-symbols-outlined text-secondary text-base">check_circle</span> Access detailed performance analytics</li>
+              <li className="flex items-center gap-2"><span className="material-symbols-outlined text-secondary text-base">check_circle</span> It&apos;s completely free!</li>
+            </ul>
+            <div className="flex flex-col gap-3">
+              <a
+                href={`/join?mode=signup&redirect=${encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname + window.location.search : '')}`}
+                className="w-full bg-primary text-white px-6 py-4 font-bold text-base rounded-xl hover:bg-slate-800 transition-all text-center"
+              >
+                Create Free Account
+              </a>
+              <a
+                href={`/join?mode=login&redirect=${encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname + window.location.search : '')}`}
+                className="w-full bg-white text-primary border-2 border-outline/40 px-6 py-4 font-bold text-base rounded-xl hover:bg-primary/5 transition-all text-center"
+              >
+                I Already Have an Account
+              </a>
+              <button
+                type="button"
+                onClick={() => setShowAuthPopup(false)}
+                className="text-sm text-on-surface-variant font-medium hover:text-primary transition-colors mt-1"
+              >
+                Maybe later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
