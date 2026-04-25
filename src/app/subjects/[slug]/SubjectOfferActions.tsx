@@ -67,13 +67,20 @@ export default function SubjectOfferActions({ subjectId, offers, examsCount }: P
     <div className="bg-white/95 backdrop-blur-md border border-outline/30 shadow-soft-2xl p-6 sm:p-8 rounded-[2rem]">
       <div className="flex items-center justify-between gap-4 mb-6">
         <div className="text-xs font-bold text-primary uppercase tracking-widest">
-          Choose Access Period
+          Choose a duration
         </div>
         {typeof examsCount === "number" ? (
-          <div className="flex items-center gap-2 bg-surface-variant px-4 py-2 rounded-full">
-            <span className="material-symbols-outlined text-base text-primary">quiz</span>
-            <span className="text-sm font-extrabold text-primary">{examsCount}</span>
-            <span className="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">Exams</span>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <div className="flex items-center gap-2 bg-surface-variant px-4 py-2 rounded-full">
+              <span className="material-symbols-outlined text-base text-primary">quiz</span>
+              <span className="text-sm font-extrabold text-primary">{examsCount}</span>
+              <span className="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">Exams</span>
+            </div>
+            <div className="flex items-center gap-2 bg-surface-variant px-4 py-2 rounded-full">
+              <span className="material-symbols-outlined text-base text-primary">help</span>
+              <span className="text-sm font-extrabold text-primary">1000+</span>
+              <span className="text-[10px] uppercase tracking-wider text-on-surface-variant font-bold">Questions</span>
+            </div>
           </div>
         ) : null}
       </div>
@@ -151,7 +158,7 @@ export default function SubjectOfferActions({ subjectId, offers, examsCount }: P
           type="button"
           disabled={!selectedOffer || loading}
           onClick={goToCheckout}
-          className="flex-1 bg-secondary text-white px-10 py-4 font-bold text-base hover:bg-primary transition-all rounded-full disabled:opacity-60"
+          className="flex-1 bg-primary text-white px-10 py-4 font-bold text-base hover:bg-slate-900 transition-all rounded-full disabled:opacity-60"
         >
           Subscribe
         </button>

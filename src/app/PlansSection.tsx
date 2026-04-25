@@ -389,6 +389,19 @@ export default function PlansSection() {
           })
         )}
       </div>
+
+      {/* Show more link */}
+      {!loading && !error && orderedSubjects.length > 0 && (
+        <div className="flex justify-center mt-16">
+          <a
+            href="/plans"
+            className="group inline-flex items-center gap-3 bg-white border-2 border-outline/40 px-10 py-4 rounded-full font-bold text-primary hover:bg-primary hover:text-white hover:border-primary transition-all duration-300 active:scale-[0.98]"
+          >
+            View All Plans
+            <span className="material-symbols-outlined text-lg transition-transform duration-300 group-hover:translate-x-1">arrow_forward</span>
+          </a>
+        </div>
+      )}
     </section>
   );
 }
