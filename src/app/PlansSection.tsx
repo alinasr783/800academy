@@ -111,14 +111,6 @@ function resolvePublicAssetUrl(asset: Asset | null) {
   return supabase.storage.from(asset.bucket).getPublicUrl(asset.storage_path).data.publicUrl;
 }
 
-const hardcodedImageUrls: Record<string, string> = {
-  "math est 1": "https://lh3.googleusercontent.com/aida-public/AB6AXuCtNnbsUAALfLVrxcs1tSN25Qzew2JMnmNq-VMBNf11Og6IGwh2AvRto2NAeuSSogdu_1C8SPKHEkY9o9bWXGDRNyVADFW5GQR9LlqD4nsxaxlLSciLUOBL3bHfnonP6-awTYmn9NJmdh2qhM7DfWSmdcTrT_ZC5tYBeW9fva2SO-XWVRx29XmOLh8wiZBmPKQdf_snUtZWPKoioJmvKzVS06EOqZFPjIsGl0gmqZD-ZE2W665zBl3HeUuqQOcttIi75a6SMLWPXzXd",
-  "est 1 : literacy": "https://lh3.googleusercontent.com/aida-public/AB6AXuAD42vkdJBe5Lv04TV6HRapZKUzmP62kF1U08pW_ji9UqZPxf33dWUJHkcGgSPptV_g6kuRNs5JPS5oTVknD1a9wSN99e7ezrui-BsWidF6XtvEQW1oSWuX5huqqYs775XP4OgqKtzaINTaimlSkSCpkE-rIua8UWZU_AVMwKvUtQ4xI-hmlwbHg-vYmZx-cj3eiDyS-bFrj7-52tRzjgS-HDh9IZ_UmY0jfiWrjPHVRvm7bhS_O2kMl9grtOMgliqF_Dsz0dzgqlUw",
-  "est 2 : math level 1": "https://lh3.googleusercontent.com/aida-public/AB6AXuBhkHRXJXYZui9x0jYc1lW1QohndBhaomlolRC5L0I6r-mP8ASJY5EFvKF-6zGgxgxURvZnB-aX79cooMh7zJuv_23-NWX2JyZypik9EMhfDbYhb9rjGczpVQWEUHrEPMcvA6iRohYDhUxckwRejG0jCjYc2_H9cnnAtjop-veJf7Z9zTUGvvDeCbrG8PmsR16qaxzqE5sfONE6qzMP8PqXFLYu8CTvebQ6zaCVq6YeB8Sx-bmrALNYIIFNnP5sJirYTMcMZuWT1bGF",
-  "biology est 2": "https://lh3.googleusercontent.com/aida-public/AB6AXuCiCPMDNg2SABiwtBz_x0WE8dI-RWI72uctsbRs-8VinPLQJhOmR-RAaiPS4bSsEjp5jgU0ZmNSf1K9TH-CkCThfC6YfzzVkaOZ55mLlFQvBvZk_CBSfKVggtExdqs5vaIj_VcsQeGa8xthCcd7hF8iF56eLFXwAJnyGIkaBeC0A0eXbJ3X2AX9CrndBWyhax6Z2oHJHQKrDVcG735gyWExuFbuCHG1hG_VXYZ5ziYclGsPeYdW14F2lFHEJvMp_-kKJ9w33lolY3KB",
-  "est 2 : biology specialist": "https://lh3.googleusercontent.com/aida-public/AB6AXuCiCPMDNg2SABiwtBz_x0WE8dI-RWI72uctsbRs-8VinPLQJhOmR-RAaiPS4bSsEjp5jgU0ZmNSf1K9TH-CkCThfC6YfzzVkaOZ55mLlFQvBvZk_CBSfKVggtExdqs5vaIj_VcsQeGa8xthCcd7hF8iF56eLFXwAJnyGIkaBeC0A0eXbJ3X2AX9CrndBWyhax6Z2oHJHQKrDVcG735gyWExuFbuCHG1hG_VXYZ5ziYclGsPeYdW14F2lFHEJvMp_-kKJ9w33lolY3KB",
-};
-
 export default function PlansSection({ showMoreLink = false }: { showMoreLink?: boolean }) {
   const [selectedOfferIdBySubjectId, setSelectedOfferIdBySubjectId] = useState<Record<string, string>>({});
 
@@ -252,8 +244,7 @@ export default function PlansSection({ showMoreLink = false }: { showMoreLink?: 
             const selectedOfferId = selectedOfferIdBySubjectId[subject.id] ?? offers[0]?.id ?? "";
             const selectedOffer = offers.find((o) => o.id === selectedOfferId) ?? offers[0] ?? null;
             const asset = primaryAssetBySubjectId[subject.id];
-            const dbAssetUrl = resolvePublicAssetUrl(asset);
-            const assetUrl = hardcodedImageUrls[subject.title.trim().toLowerCase()] || dbAssetUrl;
+            const assetUrl = resolvePublicAssetUrl(asset);
             const theme = cardThemes[idx % cardThemes.length];
 
             return (

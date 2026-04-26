@@ -17,6 +17,7 @@ type CartRow = {
     price_cents: number;
     original_price_cents?: number | null;
     currency: string;
+    subject_id: string;
     subjects: {
       title: string;
       slug: string;
@@ -44,6 +45,11 @@ export default function CheckoutPage() {
   const [userEmail, setUserEmail] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{ id: string; discountCents: number; code: string } | null>(null);
+  const [validating, setValidating] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -105,6 +111,44 @@ export default function CheckoutPage() {
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`, "_blank");
   }
 
+  async function handleApplyCoupon() {
+    if (!couponCode.trim()) return;
+    setValidating(true);
+    setCouponError(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      
+      const res = await fetch("/api/coupons/validate", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ 
+          code: couponCode, 
+          cartItems: rows.map(r => ({ subject_id: r.subject_offers.subject_id })),
+          totalCents: total
+        }),
+      });
+      const data = await res.json();
+      if (data.valid) {
+        setAppliedCoupon({
+          id: data.couponId,
+          discountCents: data.discountAmountCents,
+          code: data.code
+        });
+        setCouponCode("");
+      } else {
+        setCouponError(data.error || "Invalid coupon");
+      }
+    } catch {
+      setCouponError("Network error. Try again.");
+    } finally {
+      setValidating(false);
+    }
+  }
+
   async function handlePayment() {
     if (!isAuthenticated) return;
 
@@ -122,6 +166,7 @@ export default function CheckoutPage() {
         },
         body: JSON.stringify({
           offer_ids: offerIds,
+          coupon_id: appliedCoupon?.id || null,
           redirect_url: `${window.location.origin}/checkout/callback`,
         }),
       });
@@ -259,6 +304,55 @@ export default function CheckoutPage() {
 
               {/* Right: Summary */}
               <div className="lg:col-span-5 space-y-6 lg:sticky lg:top-28">
+                {/* Coupon Section */}
+                <div className="bg-white rounded-3xl border border-outline/30 shadow-soft-xl p-6 sm:p-8">
+                  <div className="text-xs font-bold text-primary uppercase tracking-widest mb-4">
+                    Have a coupon?
+                  </div>
+                  {appliedCoupon ? (
+                    <div className="flex items-center justify-between bg-green-50 border border-green-200 p-4 rounded-xl">
+                      <div className="flex items-center gap-3">
+                        <span className="material-symbols-outlined text-green-600">verified</span>
+                        <div>
+                          <div className="text-xs font-black text-green-800 uppercase tracking-widest">{appliedCoupon.code}</div>
+                          <div className="text-[10px] text-green-700 font-bold">Coupon Applied Successfully!</div>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => setAppliedCoupon(null)}
+                        className="text-green-800/40 hover:text-green-800 transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-lg">close</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={couponCode}
+                          onChange={(e) => setCouponCode(e.target.value)}
+                          placeholder="Enter code here..."
+                          className="flex-1 bg-surface-variant border border-outline/40 rounded-xl px-4 py-3 text-sm font-bold text-primary outline-none focus:border-primary transition-colors uppercase"
+                        />
+                        <button
+                          onClick={handleApplyCoupon}
+                          disabled={validating || !couponCode.trim()}
+                          className="bg-primary text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-secondary transition-all disabled:opacity-50"
+                        >
+                          {validating ? "..." : "Apply"}
+                        </button>
+                      </div>
+                      {couponError && (
+                        <div className="text-[10px] text-red-500 font-bold flex items-center gap-1">
+                          <span className="material-symbols-outlined text-xs">error</span>
+                          {couponError}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <div className="bg-white rounded-[2rem] border border-outline/30 shadow-soft-2xl p-6 sm:p-8">
                   <div className="text-xs font-bold text-primary uppercase tracking-widest mb-6">
                     Order Summary
@@ -288,16 +382,24 @@ export default function CheckoutPage() {
                     )}
                     {hasDiscount && (
                       <div className="flex justify-between text-sm mb-3">
-                        <span className="text-green-600 font-bold">Savings</span>
+                        <span className="text-green-600 font-bold">Package Savings</span>
                         <span className="text-green-600 font-bold">
                           - {formatMoney(originalTotal - total, currency)}
+                        </span>
+                      </div>
+                    )}
+                    {appliedCoupon && (
+                      <div className="flex justify-between text-sm mb-3">
+                        <span className="text-green-600 font-bold">Coupon ({appliedCoupon.code})</span>
+                        <span className="text-green-600 font-bold">
+                          - {formatMoney(appliedCoupon.discountCents, currency)}
                         </span>
                       </div>
                     )}
                     <div className="flex justify-between items-center">
                       <span className="text-base font-bold text-primary">Total</span>
                       <span className="text-2xl sm:text-3xl font-extrabold text-primary">
-                        {formatMoney(total, currency)}
+                        {formatMoney(Math.max(0, total - (appliedCoupon?.discountCents ?? 0)), currency)}
                       </span>
                     </div>
                   </div>

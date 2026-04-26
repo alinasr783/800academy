@@ -97,14 +97,26 @@ async function fulfillSubscription(admin: any, referenceNumber: number, easykash
     });
   }
 
-  // Clear cart items for these offers
-  const offerIds = offers.map((o: any) => o.offer_id);
-  if (offerIds.length > 0) {
-    await admin
-      .from("cart_items")
-      .delete()
-      .eq("user_id", userId)
-      .in("subject_offer_id", offerIds);
+  // Record Coupon Usage if applicable
+  if (tx.metadata?.coupon_id && tx.metadata?.discount_cents > 0) {
+    const { data: usageExists } = await admin
+      .from("coupon_usages")
+      .select("id")
+      .eq("order_id", tx.id) // Using tx.id as order_id here since transactions and orders are tightly coupled in this flow
+      .maybeSingle();
+
+    if (!usageExists) {
+      await admin.from("coupon_usages").insert({
+        coupon_id: tx.metadata.coupon_id,
+        user_id: userId,
+        order_id: null, // Since we don't have a separate orders table entry yet, or we use transaction_id
+        discount_applied_cents: tx.metadata.discount_cents,
+        ip_address: tx.metadata.ip_address || null,
+      });
+
+      // Increment coupon used_count
+      await admin.rpc("increment_coupon_usage", { coupon_id: tx.metadata.coupon_id });
+    }
   }
 
   return { ok: true, reason: "fulfilled" };

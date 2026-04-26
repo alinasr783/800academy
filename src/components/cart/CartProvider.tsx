@@ -23,6 +23,7 @@ type CartItem = {
     price_cents: number;
     original_price_cents?: number | null;
     currency: string;
+    subject_id: string;
     subjects: { title: string; slug: string; track: string | null };
   };
 };
@@ -190,7 +191,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       const { data, error } = await supabase
         .from("cart_items")
         .select(
-          "id, quantity, created_at, subject_offers(id, label, expires_at, price_cents, original_price_cents, currency, subjects(title, slug, track))",
+          "id, quantity, created_at, subject_offers(id, label, expires_at, price_cents, original_price_cents, currency, subject_id, subjects(title, slug, track))",
         )
         .order("created_at", { ascending: false })
         .returns<CartItem[]>();
@@ -210,7 +211,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
       const { data, error } = await supabase
         .from("subject_offers")
-        .select("id, label, expires_at, price_cents, original_price_cents, currency, subjects(title, slug, track)")
+        .select("id, label, expires_at, price_cents, original_price_cents, currency, subject_id, subjects(title, slug, track)")
         .in("id", guestIds);
 
       if (!error && data) {

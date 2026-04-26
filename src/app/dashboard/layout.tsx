@@ -50,6 +50,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       { href: "/dashboard/packages", label: "Packages", icon: "inventory_2" },
                       { href: "/dashboard/exams", label: "Exams", icon: "quiz" },
                       { href: "/dashboard/topics", label: "Topics", icon: "category" },
+                      { href: "/dashboard/coupons", label: "Coupons", icon: "local_offer" },
+                      { href: "/dashboard/ips", label: "IP Blacklist", icon: "block" },
                     ].map((item) => {
                       const isActive = pathname === item.href;
                       return (

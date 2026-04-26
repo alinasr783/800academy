@@ -175,42 +175,78 @@ export default function SubjectCarousel({
 
       {/* Lightbox Modal */}
       {lightboxOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm animate-in fade-in duration-300">
-          <button
-            onClick={() => setLightboxOpen(false)}
-            className="absolute top-8 right-8 z-[110] text-white/70 hover:text-white transition-colors"
-          >
-            <span className="material-symbols-outlined text-4xl">close</span>
-          </button>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm animate-in fade-in duration-300 overflow-hidden">
+          {/* Top Bar */}
+          <div className="absolute top-0 inset-x-0 h-20 flex items-center justify-between px-8 z-[120] bg-gradient-to-b from-black/50 to-transparent">
+            <div className="text-white/80 font-bold text-sm tracking-widest uppercase">
+              {assets[current].alt || `${title} — Gallery`}
+            </div>
+            <button
+              onClick={() => setLightboxOpen(false)}
+              className="w-12 h-12 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors text-white"
+            >
+              <span className="material-symbols-outlined text-3xl">close</span>
+            </button>
+          </div>
 
           {/* Lightbox Controls */}
           <button
-            onClick={prev}
-            className="absolute left-4 sm:left-8 top-1/2 -translate-y-1/2 z-[110] text-white/50 hover:text-white transition-colors"
+            onClick={(e) => { e.stopPropagation(); prev(); }}
+            className="absolute left-4 sm:left-8 top-1/2 -translate-y-1/2 z-[120] w-14 h-14 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/15 transition-all text-white group"
           >
-            <span className="material-symbols-outlined text-5xl sm:text-6xl">chevron_left</span>
+            <span className="material-symbols-outlined text-5xl group-hover:-translate-x-1 transition-transform">chevron_left</span>
           </button>
           <button
-            onClick={next}
-            className="absolute right-4 sm:right-8 top-1/2 -translate-y-1/2 z-[110] text-white/50 hover:text-white transition-colors"
+            onClick={(e) => { e.stopPropagation(); next(); }}
+            className="absolute right-4 sm:right-8 top-1/2 -translate-y-1/2 z-[120] w-14 h-14 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/15 transition-all text-white group"
           >
-            <span className="material-symbols-outlined text-5xl sm:text-6xl">chevron_right</span>
+            <span className="material-symbols-outlined text-5xl group-hover:translate-x-1 transition-transform">chevron_right</span>
           </button>
 
-          <div className="relative w-full h-full p-4 sm:p-20 flex items-center justify-center select-none" onClick={() => setLightboxOpen(false)}>
-            <div className="relative w-full h-full max-w-6xl max-h-[80vh] animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
-              <Image
-                src={assets[current].url ?? ""}
-                alt={assets[current].alt ?? title}
-                className="object-contain w-full h-full"
-                fill
-                priority
-              />
-            </div>
-            
-            {/* Caption */}
-            <div className="absolute bottom-10 left-1/2 -translate-x-1/2 text-white/80 font-medium text-sm sm:text-base bg-white/10 backdrop-blur-md px-6 py-3 rounded-full border border-white/10">
-              {current + 1} / {count} • {assets[current].alt || title}
+          {/* Scrollable Container */}
+          <div 
+            className="flex w-full h-full overflow-x-auto snap-x snap-mandatory hide-scrollbar cursor-default"
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              const idx = Math.round(el.scrollLeft / el.clientWidth);
+              if (idx !== current && idx >= 0 && idx < count) {
+                setCurrent(idx);
+              }
+            }}
+            ref={(el) => {
+              if (el) {
+                // Keep scroll in sync with current
+                const targetX = current * el.clientWidth;
+                if (Math.abs(el.scrollLeft - targetX) > 10) {
+                  el.scrollLeft = targetX;
+                }
+              }
+            }}
+          >
+            {assets.map((asset, idx) => (
+              <div 
+                key={asset.id} 
+                className="flex-shrink-0 w-full h-full flex items-center justify-center p-4 sm:p-20 snap-center"
+                onClick={() => setLightboxOpen(false)}
+              >
+                <div className="relative w-full h-full max-w-6xl max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+                  <Image
+                    src={asset.url ?? ""}
+                    alt={asset.alt ?? title}
+                    className="object-contain w-full h-full select-none"
+                    fill
+                    priority={idx === current}
+                    draggable={false}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          {/* Counter Overlay */}
+          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-[120]">
+            <div className="bg-white/10 backdrop-blur-xl px-6 py-3 rounded-full border border-white/10 text-white/90 font-black text-sm tracking-[0.2em] shadow-2xl">
+              {current + 1} / {count}
             </div>
           </div>
         </div>

@@ -323,6 +323,57 @@ export default function DashboardPackageDetails() {
     }
   }
 
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+
+  async function reorderAssets(newAssets: SubjectAssetRow[]) {
+    setAssets(newAssets);
+    setSaving(true);
+    try {
+      // Update all sort orders in DB
+      await Promise.all(
+        newAssets.map((asset, index) =>
+          adminFetch(`/api/admin/packages/${subjectId}`, {
+            method: "POST",
+            body: JSON.stringify({ 
+              action: "update_asset", 
+              asset_id: asset.id, 
+              sort_order: asset.sort_order === -1 ? -1 : index 
+            }),
+          })
+        )
+      );
+      setMessage("Order saved.");
+    } catch (e) {
+      setError("Failed to save order.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleDragStart(index: number) {
+    setDraggedIndex(index);
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+  }
+
+  function handleDrop(index: number) {
+    if (draggedIndex === null || draggedIndex === index) return;
+    const newAssets = [...assets].sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at));
+    const [movedItem] = newAssets.splice(draggedIndex, 1);
+    newAssets.splice(index, 0, movedItem);
+    
+    // Recalculate sort_order while preserving -1 for primary
+    const reordered = newAssets.map((item, idx) => ({
+      ...item,
+      sort_order: item.sort_order === -1 ? -1 : idx
+    }));
+    
+    reorderAssets(reordered);
+    setDraggedIndex(null);
+  }
+
   async function setAssetAsPrimary(assetId: string) {
     setSaving(true);
     setError(null);
@@ -572,7 +623,7 @@ export default function DashboardPackageDetails() {
           <div className="bg-white border border-outline/60 shadow-soft-xl overflow-hidden">
             <div className="p-5 border-b border-outline/40 flex items-center justify-between">
               <div className="text-xs font-bold text-primary uppercase tracking-widest">
-                Package Images
+                Package Images <span className="text-[10px] lowercase tracking-normal font-medium text-on-surface-variant/60 ml-2">(Drag to reorder)</span>
               </div>
               <div className="flex items-center gap-3">
                  <label className="h-8 px-4 bg-primary text-white font-bold text-[10px] uppercase tracking-widest rounded flex items-center justify-center cursor-pointer hover:bg-slate-800 transition-all">
@@ -594,89 +645,65 @@ export default function DashboardPackageDetails() {
                 No images uploaded for this package.
               </div>
             ) : (
-              <div className="divide-y divide-outline/40">
+              <div className="p-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                 {assets
                   .slice()
                   .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at))
-                  .map((a) => {
+                  .map((a, idx) => {
                     const isPrimary = a.sort_order === -1;
                     return (
-                      <div key={a.id} className={`p-5 transition-colors ${isPrimary ? "bg-primary/[0.02]" : ""}`}>
-                        <div className="flex items-start justify-between gap-6">
-                          <div className="flex gap-5 min-w-0">
-                            <div className="relative group flex-shrink-0">
-                              {a.url ? (
-                                <img
-                                  src={a.url}
-                                  alt={a.alt || "Asset"}
-                                  className={`h-24 w-40 object-cover border transition-all ${isPrimary ? "border-primary border-2 shadow-md" : "border-outline/40"}`}
-                                />
-                              ) : (
-                                <div className="h-24 w-40 bg-slate-100 flex items-center justify-center border border-outline/40">
-                                  <span className="material-symbols-outlined text-slate-400">image</span>
-                                </div>
-                              )}
-                              {isPrimary && (
-                                <div className="absolute top-0 left-0 bg-primary text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 shadow-md">
-                                  Main Card Image
-                                </div>
-                              )}
-                            </div>
-                            <div className="min-w-0 py-1">
-                              <div className="text-sm font-black text-primary truncate">
-                                {a.alt || a.storage_path?.split('/').pop() || "Untitled Image"}
-                              </div>
-                              <div className="text-[10px] text-on-surface-variant/60 font-bold uppercase tracking-wider mt-1.5 break-all">
-                                {a.url}
-                              </div>
-                              <div className="flex items-center gap-3 mt-4">
-                                {!isPrimary && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setAssetAsPrimary(a.id)}
-                                    disabled={saving}
-                                    className="h-7 px-3 bg-white border border-primary text-primary font-bold text-[9px] uppercase tracking-widest hover:bg-primary hover:text-white transition-all disabled:opacity-50"
-                                  >
-                                    Set as Card Image
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => deleteAsset(a.id)}
-                                  disabled={saving}
-                                  className="h-7 px-3 bg-white border border-rose-300 text-rose-700 font-bold text-[9px] uppercase tracking-widest hover:bg-rose-50 transition-all disabled:opacity-50"
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="flex flex-col gap-3">
-                             <div className="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/40 mb-1 text-center">Display Order</div>
-                             <input
-                                defaultValue={String(a.sort_order)}
-                                onBlur={(e) => {
-                                  const n = Math.trunc(Number(e.target.value));
-                                  if (!Number.isFinite(n)) return;
-                                  if (n !== a.sort_order) updateAsset(a.id, { sort_order: n });
-                                }}
-                                className="h-9 w-16 px-2 bg-background border border-border/60 focus:border-primary outline-none text-center text-sm font-bold"
-                              />
-                          </div>
-                        </div>
-                        
-                        <div className="mt-4">
-                          <div className="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/40 mb-2">Image Description (Alt Text)</div>
-                          <input
-                            defaultValue={a.alt ?? ""}
-                            onBlur={(e) => {
-                              const v = e.target.value.trim();
-                              if (v !== (a.alt ?? "")) updateAsset(a.id, { alt: v || null });
-                            }}
-                            placeholder="Describe this image..."
-                            className="h-10 w-full px-3 bg-background border border-border/60 focus:border-primary outline-none transition-colors text-sm font-medium"
+                      <div 
+                        key={a.id} 
+                        draggable
+                        onDragStart={() => handleDragStart(idx)}
+                        onDragOver={handleDragOver}
+                        onDrop={() => handleDrop(idx)}
+                        className={`relative group aspect-video bg-slate-100 border-2 transition-all cursor-move overflow-hidden rounded-lg ${isPrimary ? "border-primary shadow-lg scale-[1.02] z-10" : "border-outline/30 hover:border-primary/50"} ${draggedIndex === idx ? "opacity-30" : "opacity-100"}`}
+                      >
+                        {a.url ? (
+                          <img
+                            src={a.url}
+                            alt=""
+                            className="w-full h-full object-cover"
                           />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <span className="material-symbols-outlined text-slate-400">image</span>
+                          </div>
+                        )}
+
+                        {/* Badges */}
+                        {isPrimary && (
+                          <div className="absolute top-2 left-2 bg-primary text-white text-[8px] font-black uppercase tracking-widest px-2 py-1 shadow-md rounded">
+                            Card Cover
+                          </div>
+                        )}
+
+                        {/* Hover Actions */}
+                        <div className="absolute inset-0 bg-primary/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3 p-4">
+                           {!isPrimary && (
+                              <button
+                                type="button"
+                                onClick={() => setAssetAsPrimary(a.id)}
+                                disabled={saving}
+                                className="w-full py-2 bg-white text-primary font-bold text-[9px] uppercase tracking-widest rounded hover:bg-slate-100 transition-colors disabled:opacity-50"
+                              >
+                                Set as Card Cover
+                              </button>
+                           )}
+                           <button
+                             type="button"
+                             onClick={() => deleteAsset(a.id)}
+                             disabled={saving}
+                             className="w-full py-2 bg-rose-600 text-white font-bold text-[9px] uppercase tracking-widest rounded hover:bg-rose-700 transition-colors disabled:opacity-50"
+                           >
+                             Delete Image
+                           </button>
+                        </div>
+
+                        {/* Order Indicator */}
+                        <div className="absolute bottom-2 right-2 bg-black/40 backdrop-blur-md text-white text-[9px] font-bold px-2 py-0.5 rounded border border-white/10 pointer-events-none group-hover:opacity-0 transition-opacity">
+                           {isPrimary ? "Primary" : `#${idx + 1}`}
                         </div>
                       </div>
                     );

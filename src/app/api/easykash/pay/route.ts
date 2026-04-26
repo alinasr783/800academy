@@ -8,7 +8,7 @@ const EASYKASH_PAY_URL = "https://back.easykash.net/api/directpayv1/pay";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { offer_ids, redirect_url } = body;
+    const { offer_ids, coupon_id, redirect_url } = body;
 
     if (!offer_ids || !Array.isArray(offer_ids) || offer_ids.length === 0) {
       return NextResponse.json({ error: "Missing offer_ids" }, { status: 400 });
@@ -44,7 +44,55 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Offers not found" }, { status: 404 });
     }
 
-    const totalCents = offers.reduce((sum: number, o: any) => sum + o.price_cents, 0);
+    let totalCents = offers.reduce((sum: number, o: any) => sum + o.price_cents, 0);
+    let discountCents = 0;
+    let appliedCouponCode = null;
+
+    if (coupon_id) {
+      // Re-validate coupon
+      const { data: coupon } = await admin
+        .from("coupons")
+        .select("*")
+        .eq("id", coupon_id)
+        .eq("is_active", true)
+        .single();
+
+      if (coupon) {
+        // Check dates
+        const now = new Date();
+        const start = new Date(coupon.start_at);
+        const end = coupon.expires_at ? new Date(coupon.expires_at) : null;
+        
+        if (now >= start && (!end || now <= end)) {
+          // Check limits
+          if (coupon.total_usage_limit === null || coupon.used_count < coupon.total_usage_limit) {
+            // Check per-user limit
+            const { count: userUsage } = await admin
+              .from("coupon_usages")
+              .select("id", { count: "exact", head: true })
+              .eq("coupon_id", coupon.id)
+              .eq("user_id", user.id);
+
+            if (!userUsage || userUsage === 0) {
+              // Calculate discount
+              if (coupon.discount_type === "percentage") {
+                discountCents = Math.floor(totalCents * (Number(coupon.discount_value) / 100));
+                if (coupon.max_discount_cents && discountCents > coupon.max_discount_cents) {
+                  discountCents = coupon.max_discount_cents;
+                }
+              } else {
+                discountCents = Math.floor(Number(coupon.discount_value) * 100);
+              }
+              
+              if (discountCents > totalCents) discountCents = totalCents;
+              totalCents = Math.max(0, totalCents - discountCents);
+              appliedCouponCode = coupon.code;
+            }
+          }
+        }
+      }
+    }
+
     const totalAmount = totalCents / 100;
     const currency = offers[0].currency || "EGP";
 
@@ -64,6 +112,11 @@ export async function POST(req: NextRequest) {
       offers: offerDetails,
       buyer_email: user.email || "",
       buyer_name: user.user_metadata?.full_name || user.email || "800 Academy Student",
+      coupon_id: discountCents > 0 ? coupon_id : null,
+      coupon_code: appliedCouponCode,
+      discount_cents: discountCents,
+      original_total_cents: totalCents + discountCents,
+      ip_address: req.headers.get("x-forwarded-for") || "unknown",
     };
 
     // Create transaction record
