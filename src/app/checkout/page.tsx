@@ -50,6 +50,8 @@ export default function CheckoutPage() {
   const [appliedCoupon, setAppliedCoupon] = useState<{ id: string; discountCents: number; code: string } | null>(null);
   const [validating, setValidating] = useState(false);
   const [couponError, setCouponError] = useState<string | null>(null);
+  const [isCouponModalOpen, setIsCouponModalOpen] = useState(false);
+  const [couponModalMessage, setCouponModalMessage] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -140,7 +142,10 @@ export default function CheckoutPage() {
         });
         setCouponCode("");
       } else {
-        setCouponError(data.error || "Invalid coupon");
+        const errorMsg = data.error || "Invalid coupon";
+        setCouponError(errorMsg);
+        setCouponModalMessage(errorMsg);
+        setIsCouponModalOpen(true);
       }
     } catch {
       setCouponError("Network error. Try again.");
@@ -452,6 +457,30 @@ export default function CheckoutPage() {
             >
               {paying ? "Redirecting..." : "Pay Now Online"}
               {!paying && <span className="material-symbols-outlined text-base">credit_card</span>}
+            </button>
+          </div>
+        </div>
+      )}
+      {/* Coupon Error Modal */}
+      {isCouponModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+          <div 
+            className="absolute inset-0 bg-primary/20 backdrop-blur-md"
+            onClick={() => setIsCouponModalOpen(false)}
+          />
+          <div className="relative bg-white rounded-[2.5rem] shadow-premium max-w-md w-full p-8 sm:p-10 text-center animate-in fade-in zoom-in duration-300">
+            <div className="w-20 h-20 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-6">
+              <span className="material-symbols-outlined text-4xl text-rose-500">error</span>
+            </div>
+            <h3 className="text-2xl font-black text-primary tracking-tight mb-3">Coupon Not Applied</h3>
+            <p className="text-on-surface-variant font-medium leading-relaxed">
+              {couponModalMessage}
+            </p>
+            <button
+              onClick={() => setIsCouponModalOpen(false)}
+              className="mt-8 w-full h-14 bg-primary text-white font-black uppercase tracking-widest rounded-2xl hover:bg-slate-800 transition-all shadow-premium"
+            >
+              Got it
             </button>
           </div>
         </div>

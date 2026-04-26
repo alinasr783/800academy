@@ -251,15 +251,16 @@ export default function PlansSection({ showMoreLink = false }: { showMoreLink?: 
               <div
                 key={subject.id}
                 className={[
-                  "group bg-white border-2 border-outline/40 rounded-2xl overflow-hidden flex flex-col transition-all duration-500 hover:shadow-2xl hover:-translate-y-2 relative",
+                  "group h-[560px] bg-white border border-outline/30 rounded-[2.5rem] overflow-hidden flex flex-col transition-all duration-700 hover:shadow-premium-2xl hover:-translate-y-3 relative",
                   theme.hoverBorder,
                 ].join(" ")}
               >
-                <div className={["h-56 overflow-hidden relative", theme.imageBg].join(" ")}>
+                {/* Full Background Image */}
+                <div className="absolute inset-0 z-0 transition-transform duration-1000 group-hover:scale-110">
                   {assetUrl ? (
                     <Image
                       alt={asset?.alt ?? subject.title}
-                      className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-700 group-hover:scale-110"
+                      className="w-full h-full object-cover transition-all duration-700"
                       src={assetUrl}
                       fill
                       sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
@@ -267,88 +268,60 @@ export default function PlansSection({ showMoreLink = false }: { showMoreLink?: 
                   ) : (
                     <div className="w-full h-full bg-gradient-to-br from-primary to-secondary" />
                   )}
-                  <div
-                    className={[
-                      "absolute inset-0 bg-gradient-to-t to-transparent",
-                      theme.imageGradient,
-                    ].join(" ")}
-                  />
-                  <div
-                    className={[
-                      "absolute top-6 left-6 text-white px-4 py-2 text-xs font-black uppercase tracking-[0.2em] shadow-xl ring-2 ring-white/20 z-20",
-                      theme.tagBg,
-                    ].join(" ")}
-                  >
-                    {subject.track ?? "Subject"}
-                  </div>
+                  {/* Subtle Overlays */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-primary/90 via-primary/40 to-transparent opacity-80 group-hover:opacity-60 transition-opacity duration-700" />
+                  <div className={["absolute inset-0 opacity-20", theme.imageGradient].join(" ")} />
                 </div>
 
-                <div className="p-10 flex flex-col flex-grow">
-                  <h4 className="text-3xl font-extrabold text-primary mb-4 tracking-tight">
-                    {subject.title}
-                  </h4>
-                  <p className="text-on-surface-variant leading-relaxed mb-8 font-medium">
-                    {subject.description ??
-                      "High-fidelity mock exams, timed sessions, and detailed review — built for real test pressure."}
-                  </p>
+                {/* Top Tag */}
+                <div
+                  className={[
+                    "absolute top-8 left-8 text-white px-5 py-2 text-[10px] font-black uppercase tracking-[0.25em] rounded-full shadow-lg ring-1 ring-white/30 z-20 backdrop-blur-md",
+                    theme.tagBg,
+                  ].join(" ")}
+                >
+                  {subject.track ?? "Subject"}
+                </div>
 
-                  <div className="mt-auto space-y-5">
-                    <div className="space-y-2">
-                      <div className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant">
-                        Choose access
+                {/* Content Container (Bottom Glass) */}
+                <div className="mt-auto relative z-10 p-2 sm:p-3">
+                  <div className="bg-white/10 backdrop-blur-2xl border border-white/20 rounded-[2rem] p-6 sm:p-8 shadow-glass group-hover:bg-white/15 transition-all duration-500">
+                    <h4 className="text-3xl font-black text-white mb-3 tracking-tight">
+                      {subject.title}
+                    </h4>
+                    <p className="text-white/80 text-sm leading-relaxed mb-8 font-medium line-clamp-2 group-hover:text-white transition-colors">
+                      {subject.description ??
+                        "High-fidelity mock exams, timed sessions, and detailed review — built for real test pressure."}
+                    </p>
+
+                    <div className="space-y-6">
+                      <div className="flex items-end justify-between gap-4">
+                        <div className="space-y-1">
+                          <div className="text-[9px] uppercase tracking-[0.25em] font-black text-white/50">
+                            Starting from
+                          </div>
+                          <div className="text-3xl font-black text-white tracking-tighter">
+                            {selectedOffer ? formatMoney(selectedOffer.price_cents, selectedOffer.currency) : "—"}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[9px] uppercase tracking-[0.25em] font-black text-white/50">
+                            Best Value
+                          </div>
+                          <div className="text-xs font-bold text-white/90">
+                            {selectedOffer?.label ?? "—"}
+                          </div>
+                        </div>
                       </div>
-                      <select
-                        className="w-full bg-slate-50 border-2 border-outline/50 rounded-lg px-4 py-3 font-bold text-primary focus:border-secondary focus:ring-4 focus:ring-secondary/10 outline-none transition-all cursor-pointer"
-                        value={selectedOfferId}
-                        onChange={(e) =>
-                          setSelectedOfferIdBySubjectId((prev) => ({
-                            ...prev,
-                            [subject.id]: e.target.value,
-                          }))
-                        }
-                        disabled={offers.length === 0}
+
+                      <Link
+                        href={`/subjects/${subject.slug}`}
+                        className="w-full bg-white text-primary h-14 font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 rounded-2xl hover:bg-secondary hover:text-white shadow-soft-xl active:scale-[0.98] text-sm"
                       >
-                        {offers.length === 0 ? (
-                          <option value="">No offers available</option>
-                        ) : (
-                          offers.map((o) => (
-                            <option key={o.id} value={o.id}>
-                              {o.label}
-                            </option>
-                          ))
-                        )}
-                      </select>
+                        Explore Package
+                        <span className="material-symbols-outlined text-lg">arrow_forward</span>
+                      </Link>
                     </div>
-
-                    <div className="flex items-end justify-between gap-6">
-                      <div className="space-y-1">
-                        <div className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant">
-                          Price
-                        </div>
-                        <div className="text-3xl font-extrabold text-primary tracking-tight">
-                          {selectedOffer ? formatMoney(selectedOffer.price_cents, selectedOffer.currency) : "—"}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant">
-                          Expires
-                        </div>
-                        <div className="text-sm font-bold text-primary">
-                          {selectedOffer ? formatExpiryDate(selectedOffer.expires_at) : "—"}
-                        </div>
-                      </div>
-                    </div>
-
-                    <Link
-                      href={`/subjects/${subject.slug}`}
-                      className={[
-                        "w-full border-2 py-4 font-bold text-primary transition-all flex items-center justify-center gap-2 rounded-xl hover:bg-primary hover:text-white hover:border-primary active:scale-[0.98]",
-                        theme.buttonBase,
-                      ].join(" ")}
-                    >
-                      View Details
-                      <span className="material-symbols-outlined text-lg">arrow_forward</span>
-                    </Link>
                   </div>
                 </div>
               </div>

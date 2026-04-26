@@ -74,19 +74,34 @@ export async function POST(req: NextRequest) {
               .eq("user_id", user.id);
 
             if (!userUsage || userUsage === 0) {
-              // Calculate discount
-              if (coupon.discount_type === "percentage") {
-                discountCents = Math.floor(totalCents * (Number(coupon.discount_value) / 100));
-                if (coupon.max_discount_cents && discountCents > coupon.max_discount_cents) {
-                  discountCents = coupon.max_discount_cents;
+              // Check new user only
+              let isEligible = true;
+              if (coupon.is_new_user_only) {
+                const { count: subCount } = await admin
+                  .from("user_subscriptions")
+                  .select("id", { count: "exact", head: true })
+                  .eq("user_id", user.id);
+                
+                if (subCount && subCount > 0) {
+                  isEligible = false;
                 }
-              } else {
-                discountCents = Math.floor(Number(coupon.discount_value) * 100);
               }
-              
-              if (discountCents > totalCents) discountCents = totalCents;
-              totalCents = Math.max(0, totalCents - discountCents);
-              appliedCouponCode = coupon.code;
+
+              if (isEligible) {
+                // Calculate discount
+                if (coupon.discount_type === "percentage") {
+                  discountCents = Math.floor(totalCents * (Number(coupon.discount_value) / 100));
+                  if (coupon.max_discount_cents && discountCents > coupon.max_discount_cents) {
+                    discountCents = coupon.max_discount_cents;
+                  }
+                } else {
+                  discountCents = Math.floor(Number(coupon.discount_value) * 100);
+                }
+                
+                if (discountCents > totalCents) discountCents = totalCents;
+                totalCents = Math.max(0, totalCents - discountCents);
+                appliedCouponCode = coupon.code;
+              }
             }
           }
         }
