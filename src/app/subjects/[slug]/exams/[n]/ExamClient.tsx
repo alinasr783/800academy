@@ -2234,7 +2234,7 @@ export default function ExamClient({
                   })()}
                   </div>
 
-                  <div className="flex items-center gap-3 sm:gap-4 mt-6 sm:mt-10">
+                  <div className="flex items-center gap-3 sm:gap-4 mt-6 sm:mt-10 w-full">
                     <button
                       type="button"
                       onClick={() => {
@@ -2280,7 +2280,7 @@ export default function ExamClient({
                         }, 50);
                       }}
                       disabled={currentIndex === 0}
-                      className="bg-white text-primary border-2 border-outline/40 px-4 sm:px-8 py-3 sm:py-4 font-bold text-sm hover:bg-primary/5 transition-all rounded-xl disabled:opacity-50 active:scale-[0.97]"
+                      className="w-1/4 bg-white text-primary border-2 border-outline/40 px-4 sm:px-8 py-3 sm:py-4 font-bold text-sm hover:bg-primary/5 transition-all rounded-xl disabled:opacity-50 active:scale-[0.97] flex items-center justify-center"
                     >
                       Previous
                     </button>
@@ -2315,7 +2315,7 @@ export default function ExamClient({
                         }
                       }}
                       disabled={submitting || !!result}
-                      className="bg-primary text-white px-4 sm:px-8 py-3 sm:py-4 font-bold text-sm hover:bg-slate-800 transition-all rounded-xl disabled:opacity-50 active:scale-[0.97]"
+                      className="w-3/4 bg-primary text-white px-4 sm:px-8 py-3 sm:py-4 font-bold text-sm hover:bg-slate-800 transition-all rounded-xl disabled:opacity-50 active:scale-[0.97] flex items-center justify-center"
                     >
                       {currentIndex === totalQuestionsCount - 1 ? "Submit" : "Next"}
                     </button>

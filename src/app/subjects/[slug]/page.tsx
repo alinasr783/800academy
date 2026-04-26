@@ -138,6 +138,43 @@ export default async function SubjectPage({ params, searchParams }: PageProps) {
           </div>
         </section>
 
+        {/* What You Get — Benefits Section */}
+        {!shouldHideOffers && (
+          <section className="max-w-[1440px] mx-auto px-6 sm:px-8 lg:px-12 py-12 sm:py-16">
+            <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-3">
+              Included
+            </div>
+            <h2 className="font-headline text-2xl sm:text-3xl font-extrabold text-primary tracking-tight mb-8">
+              What You Get
+            </h2>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+              {[
+                { icon: "assignment", label: "20+ Mock Exams", desc: "Full-length practice tests" },
+                { icon: "help", label: "1,000+ Questions", desc: "Comprehensive question bank" },
+                { icon: "menu_book", label: "Detailed Explanations", desc: "Step-by-step for every question" },
+                { icon: "speed", label: "Score out of 800", desc: "Real EST scoring algorithm" },
+                { icon: "timer", label: "Timed Sessions", desc: "Official time limits enforced" },
+                { icon: "desktop_windows", label: "EST Simulation", desc: "1:1 real exam interface" },
+                { icon: "trending_up", label: "Progress Tracking", desc: "Watch your score improve" },
+                { icon: "auto_awesome", label: "And Much More", desc: "Explore all features now" },
+              ].map((item) => (
+                <div
+                  key={item.icon}
+                  className="bg-white border border-outline/40 rounded-2xl p-4 sm:p-5 flex flex-col gap-3 hover:border-primary/30 hover:shadow-soft-md transition-all"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-primary text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>{item.icon}</span>
+                  </div>
+                  <div>
+                    <div className="text-sm font-black text-primary">{item.label}</div>
+                    <div className="text-[11px] text-on-surface-variant/70 font-medium mt-0.5 leading-snug">{item.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section id="exams-library" className="py-12 sm:py-24 px-6 sm:px-8 lg:px-12 max-w-[1440px] mx-auto">
           <div className="flex items-end justify-between gap-10 mb-12">
             <div>

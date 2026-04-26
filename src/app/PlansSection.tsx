@@ -205,16 +205,16 @@ export default function PlansSection({ showMoreLink = false }: { showMoreLink?: 
       id="plans"
       className="pt-12 pb-32 px-8 lg:px-12 max-w-[1440px] mx-auto overflow-hidden scroll-mt-32"
     >
-      <div className="flex flex-col md:flex-row justify-between items-end mb-24 gap-12">
+      <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-8">
         <div className="max-w-2xl">
           <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
             Discovery
           </div>
-          <h2 className="font-headline text-5xl lg:text-6xl font-extrabold text-primary mb-8 tracking-tighter">
+          <h2 className="font-headline text-5xl lg:text-6xl font-extrabold text-primary mb-4 tracking-tighter">
             Choose Path
           </h2>
-          <p className="text-on-surface-variant text-xl font-medium opacity-70">
-            Bespoke training modules tailored for the Egyptian American Diploma tracks.
+          <p className="text-on-surface-variant text-lg font-medium opacity-70">
+            Your 800 starts here. Pick a track and start training today.
           </p>
         </div>
       </div>
