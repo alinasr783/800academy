@@ -85,6 +85,7 @@ export default async function SubjectPage({ params, searchParams }: PageProps) {
     .from("subject_assets")
     .select("id, url, bucket, storage_path, alt, sort_order")
     .eq("subject_id", subject.id)
+    .gte("sort_order", 0)
     .order("sort_order", { ascending: true })
     .limit(6)
     .returns<

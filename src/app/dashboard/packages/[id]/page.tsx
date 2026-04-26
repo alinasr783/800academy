@@ -323,6 +323,37 @@ export default function DashboardPackageDetails() {
     }
   }
 
+  async function setAssetAsPrimary(assetId: string) {
+    setSaving(true);
+    setError(null);
+    try {
+      const currentPrimary = assets.find(a => a.sort_order === -1);
+      if (currentPrimary) {
+        await adminFetch(`/api/admin/packages/${subjectId}`, {
+          method: "POST",
+          body: JSON.stringify({ action: "update_asset", asset_id: currentPrimary.id, sort_order: 0 }),
+        });
+      }
+      const json = (await adminFetch(`/api/admin/packages/${subjectId}`, {
+        method: "POST",
+        body: JSON.stringify({ action: "update_asset", asset_id: assetId, sort_order: -1 }),
+      })) as { asset: SubjectAssetRow };
+      
+      setAssets((prev) => 
+        prev.map((a) => {
+          if (a.id === assetId) return json.asset;
+          if (currentPrimary && a.id === currentPrimary.id) return { ...a, sort_order: 0 };
+          return a;
+        })
+      );
+      setMessage("Card image updated.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const headerSubtitle = useMemo(() => subject?.title ?? subjectId, [subject?.title, subjectId]);
 
   return (
@@ -370,43 +401,50 @@ export default function DashboardPackageDetails() {
       {loading ? (
         <div className="p-10 text-on-surface-variant font-medium">Loading…</div>
       ) : (
-        <div className="p-8 grid grid-cols-1 lg:grid-cols-12 gap-10">
-          <div className="lg:col-span-7 space-y-6">
-            <div>
-              <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">Slug</div>
-              <input
-                value={slug}
-                onChange={(e) => setSlug(e.target.value)}
-                className="h-12 w-full px-4 bg-background border border-border/60 focus:border-primary outline-none transition-colors"
-              />
-            </div>
-            <div>
-              <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">Title</div>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="h-12 w-full px-4 bg-background border border-border/60 focus:border-primary outline-none transition-colors"
-              />
-            </div>
-            <div>
-              <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">Track</div>
-              <input
-                value={track}
-                onChange={(e) => setTrack(e.target.value)}
-                className="h-12 w-full px-4 bg-background border border-border/60 focus:border-primary outline-none transition-colors"
-              />
-            </div>
-            <div>
-              <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">
-                Marketing Title <span className="text-on-surface-variant font-medium normal-case tracking-normal">(shown on subject page instead of title)</span>
+        <div className="p-8 space-y-10">
+          {/* Main Details */}
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">Slug</div>
+                <input
+                  value={slug}
+                  onChange={(e) => setSlug(e.target.value)}
+                  className="h-12 w-full px-4 bg-background border border-border/60 focus:border-primary outline-none transition-colors"
+                />
               </div>
-              <input
-                value={marketingTitle}
-                onChange={(e) => setMarketingTitle(e.target.value)}
-                placeholder="e.g. Master Math EST 1 — Your Path to 800"
-                className="h-12 w-full px-4 bg-background border border-border/60 focus:border-primary outline-none transition-colors"
-              />
+              <div>
+                <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">Title</div>
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="h-12 w-full px-4 bg-background border border-border/60 focus:border-primary outline-none transition-colors"
+                />
+              </div>
             </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">Track</div>
+                <input
+                  value={track}
+                  onChange={(e) => setTrack(e.target.value)}
+                  className="h-12 w-full px-4 bg-background border border-border/60 focus:border-primary outline-none transition-colors"
+                />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">
+                  Marketing Title <span className="text-on-surface-variant font-medium normal-case tracking-normal">(shown on subject page instead of title)</span>
+                </div>
+                <input
+                  value={marketingTitle}
+                  onChange={(e) => setMarketingTitle(e.target.value)}
+                  placeholder="e.g. Master Math EST 1 — Your Path to 800"
+                  className="h-12 w-full px-4 bg-background border border-border/60 focus:border-primary outline-none transition-colors"
+                />
+              </div>
+            </div>
+
             <div>
               <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">
                 Short description (card)
@@ -417,6 +455,7 @@ export default function DashboardPackageDetails() {
                 className="h-12 w-full px-4 bg-background border border-border/60 focus:border-primary outline-none transition-colors"
               />
             </div>
+            
             <div>
               <div className="text-xs font-bold text-primary uppercase tracking-widest mb-2">
                 Long description (details page)
@@ -428,212 +467,222 @@ export default function DashboardPackageDetails() {
                 className="w-full px-4 py-3 bg-background border border-border/60 focus:border-primary outline-none transition-colors resize-none"
               />
             </div>
-
-            <div className="bg-surface-variant border border-outline/40 p-6">
-              <div className="text-xs font-bold text-primary uppercase tracking-widest mb-4">
-                Gallery upload
-              </div>
-              <input
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={(e) => setAssetFiles(Array.from(e.target.files ?? []))}
-                className="h-12 w-full px-4 bg-white border border-outline/60 focus:border-primary outline-none transition-colors"
-              />
-              <button
-                type="button"
-                onClick={() => uploadAssets(assetFiles)}
-                disabled={saving || assetFiles.length === 0}
-                className="mt-3 h-12 w-full bg-primary text-white font-bold text-sm hover:bg-slate-800 transition-colors disabled:opacity-60"
-              >
-                Upload images
-              </button>
-              <div className="text-xs text-on-surface-variant font-medium mt-2">
-                Bucket: {storageBucket}
-              </div>
-            </div>
           </div>
 
-          <div className="lg:col-span-5 space-y-6">
-            <div className="bg-white border border-outline/60 shadow-soft-xl overflow-hidden">
-              <div className="p-5 border-b border-outline/40 flex items-center justify-between gap-4">
-                <div className="text-xs font-bold text-primary uppercase tracking-widest">Offers</div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOfferLabel("");
-                    setOfferExpires("");
-                    setOfferPrice("");
-                    setOfferCurrency("EGP");
-                    setOfferOpen(true);
-                  }}
-                  className="h-10 px-4 bg-secondary text-white font-bold text-xs hover:bg-primary transition-colors"
-                >
-                  Add offer
-                </button>
-              </div>
-              {offers.length === 0 ? (
-                <div className="p-6 text-on-surface-variant font-medium">No offers yet.</div>
-              ) : (
-                <div className="overflow-auto">
-                  <table className="w-full text-left">
-                    <thead className="bg-surface-variant">
-                      <tr className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">
-                        <th className="px-5 py-3">Label</th>
-                        <th className="px-5 py-3">Expires</th>
-                        <th className="px-5 py-3">Price</th>
-                        <th className="px-5 py-3" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {offers.map((o) => (
-                        <tr key={o.id} className="border-t border-outline/40">
-                          <td className="px-5 py-4">
-                            <input
-                              defaultValue={o.label}
-                              onBlur={(e) => {
-                                const v = e.target.value.trim();
-                                if (v !== o.label) updateOffer(o.id, { label: v });
-                              }}
-                              className="h-10 w-full px-3 bg-background border border-border/60 focus:border-primary outline-none transition-colors text-sm"
-                            />
-                          </td>
-                          <td className="px-5 py-4">
-                            <input
-                              type="date"
-                              defaultValue={o.expires_at.slice(0, 10)}
-                              onBlur={(e) => {
-                                const v = e.target.value.trim();
-                                if (!v) return;
-                                const d = new Date(v);
-                                if (Number.isNaN(d.getTime())) return;
-                                const iso = d.toISOString();
-                                if (iso !== o.expires_at) updateOffer(o.id, { expires_at: iso });
-                              }}
-                              className="h-10 w-full px-3 bg-background border border-border/60 focus:border-primary outline-none transition-colors text-sm"
-                            />
-                          </td>
-                          <td className="px-5 py-4">
-                            <div className="flex gap-2">
-                              <input
-                                defaultValue={(o.price_cents / 100).toFixed(2)}
-                                onBlur={(e) => {
-                                  const n = Number(e.target.value);
-                                  if (!Number.isFinite(n)) return;
-                                  const cents = Math.round(n * 100);
-                                  if (cents !== o.price_cents) updateOffer(o.id, { price_cents: cents });
-                                }}
-                                className="h-10 w-full px-3 bg-background border border-border/60 focus:border-primary outline-none transition-colors text-sm"
-                              />
-                              <input
-                                defaultValue={o.currency}
-                                onBlur={(e) => {
-                                  const v = e.target.value.trim();
-                                  if (v && v !== o.currency) updateOffer(o.id, { currency: v });
-                                }}
-                                className="h-10 w-20 px-3 bg-background border border-border/60 focus:border-primary outline-none transition-colors text-sm"
-                              />
-                            </div>
-                          </td>
-                          <td className="px-5 py-4 text-right">
-                            <button
-                              type="button"
-                              onClick={() => deleteOffer(o.id)}
-                              disabled={saving}
-                              className="text-sm font-bold text-rose-700 hover:text-rose-900 transition-colors disabled:opacity-60"
-                            >
-                              Delete
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+          {/* Offers Section */}
+          <div className="bg-white border border-outline/60 shadow-soft-xl overflow-hidden">
+            <div className="p-5 border-b border-outline/40 flex items-center justify-between gap-4">
+              <div className="text-xs font-bold text-primary uppercase tracking-widest">Offers</div>
+              <button
+                type="button"
+                onClick={() => {
+                  setOfferLabel("");
+                  setOfferExpires("");
+                  setOfferPrice("");
+                  setOfferCurrency("EGP");
+                  setOfferOpen(true);
+                }}
+                className="h-10 px-4 bg-secondary text-white font-bold text-xs hover:bg-primary transition-colors"
+              >
+                Add offer
+              </button>
             </div>
-
-            <div className="bg-white border border-outline/60 shadow-soft-xl overflow-hidden">
-              <div className="p-5 border-b border-outline/40">
-                <div className="text-xs font-bold text-primary uppercase tracking-widest">
-                  Promo images
-                </div>
-              </div>
-              {assets.length === 0 ? (
-                <div className="p-6 text-on-surface-variant font-medium">No images yet.</div>
-              ) : (
-                <div className="divide-y divide-outline/40">
-                  {assets
-                    .slice()
-                    .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at))
-                    .map((a) => (
-                      <div key={a.id} className="p-5">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0">
-                            {a.url ? (
-                              <img
-                                src={a.url}
-                                alt={a.alt || a.storage_path || "Promo image"}
-                                className="h-24 w-full max-w-[360px] object-cover border border-outline/40"
-                              />
-                            ) : null}
-                            <div className="text-sm font-extrabold text-primary break-all">
-                              {a.url || a.storage_path || a.id}
-                            </div>
-                            <div className="text-xs text-on-surface-variant font-medium mt-1">
-                              Sort: {a.sort_order} • Bucket: {a.bucket}
-                            </div>
+            {offers.length === 0 ? (
+              <div className="p-12 text-center text-on-surface-variant font-medium text-sm">No offers created yet.</div>
+            ) : (
+              <div className="overflow-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-surface-variant border-b border-outline/40">
+                    <tr className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">
+                      <th className="px-5 py-4">Label</th>
+                      <th className="px-5 py-4">Expires</th>
+                      <th className="px-5 py-4">Price</th>
+                      <th className="px-5 py-4" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {offers.map((o) => (
+                      <tr key={o.id} className="border-t border-outline/40 hover:bg-slate-50 transition-colors">
+                        <td className="px-5 py-4">
+                          <input
+                            defaultValue={o.label}
+                            onBlur={(e) => {
+                              const v = e.target.value.trim();
+                              if (v !== o.label) updateOffer(o.id, { label: v });
+                            }}
+                            className="h-10 w-full px-3 bg-white border border-border/60 focus:border-primary outline-none transition-colors text-sm font-bold"
+                          />
+                        </td>
+                        <td className="px-5 py-4">
+                          <input
+                            type="date"
+                            defaultValue={o.expires_at.slice(0, 10)}
+                            onBlur={(e) => {
+                              const v = e.target.value.trim();
+                              if (!v) return;
+                              const d = new Date(v);
+                              if (Number.isNaN(d.getTime())) return;
+                              const iso = d.toISOString();
+                              if (iso !== o.expires_at) updateOffer(o.id, { expires_at: iso });
+                            }}
+                            className="h-10 w-full px-3 bg-white border border-border/60 focus:border-primary outline-none transition-colors text-sm"
+                          />
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex gap-2">
+                            <input
+                              defaultValue={(o.price_cents / 100).toFixed(2)}
+                              onBlur={(e) => {
+                                const n = Number(e.target.value);
+                                if (!Number.isFinite(n)) return;
+                                const cents = Math.round(n * 100);
+                                if (cents !== o.price_cents) updateOffer(o.id, { price_cents: cents });
+                              }}
+                              className="h-10 w-full px-3 bg-white border border-border/60 focus:border-primary outline-none transition-colors text-sm font-bold"
+                            />
+                            <input
+                              defaultValue={o.currency}
+                              onBlur={(e) => {
+                                const v = e.target.value.trim();
+                                if (v && v !== o.currency) updateOffer(o.id, { currency: v });
+                              }}
+                              className="h-10 w-20 px-3 bg-white border border-border/60 focus:border-primary outline-none transition-colors text-sm"
+                            />
                           </div>
+                        </td>
+                        <td className="px-5 py-4 text-right">
                           <button
                             type="button"
-                            onClick={() => deleteAsset(a.id)}
+                            onClick={() => deleteOffer(o.id)}
                             disabled={saving}
                             className="text-sm font-bold text-rose-700 hover:text-rose-900 transition-colors disabled:opacity-60"
                           >
                             Delete
                           </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Package Images Section */}
+          <div className="bg-white border border-outline/60 shadow-soft-xl overflow-hidden">
+            <div className="p-5 border-b border-outline/40 flex items-center justify-between">
+              <div className="text-xs font-bold text-primary uppercase tracking-widest">
+                Package Images
+              </div>
+              <div className="flex items-center gap-3">
+                 <label className="h-8 px-4 bg-primary text-white font-bold text-[10px] uppercase tracking-widest rounded flex items-center justify-center cursor-pointer hover:bg-slate-800 transition-all">
+                    + Upload
+                    <input 
+                      type="file" 
+                      multiple 
+                      accept="image/*" 
+                      className="hidden" 
+                      onChange={(e) => {
+                        if (e.target.files) uploadAssets(Array.from(e.target.files));
+                      }}
+                    />
+                 </label>
+              </div>
+            </div>
+            {assets.length === 0 ? (
+              <div className="p-12 text-center text-on-surface-variant font-medium text-sm">
+                No images uploaded for this package.
+              </div>
+            ) : (
+              <div className="divide-y divide-outline/40">
+                {assets
+                  .slice()
+                  .sort((a, b) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at))
+                  .map((a) => {
+                    const isPrimary = a.sort_order === -1;
+                    return (
+                      <div key={a.id} className={`p-5 transition-colors ${isPrimary ? "bg-primary/[0.02]" : ""}`}>
+                        <div className="flex items-start justify-between gap-6">
+                          <div className="flex gap-5 min-w-0">
+                            <div className="relative group flex-shrink-0">
+                              {a.url ? (
+                                <img
+                                  src={a.url}
+                                  alt={a.alt || "Asset"}
+                                  className={`h-24 w-40 object-cover border transition-all ${isPrimary ? "border-primary border-2 shadow-md" : "border-outline/40"}`}
+                                />
+                              ) : (
+                                <div className="h-24 w-40 bg-slate-100 flex items-center justify-center border border-outline/40">
+                                  <span className="material-symbols-outlined text-slate-400">image</span>
+                                </div>
+                              )}
+                              {isPrimary && (
+                                <div className="absolute top-0 left-0 bg-primary text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 shadow-md">
+                                  Main Card Image
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0 py-1">
+                              <div className="text-sm font-black text-primary truncate">
+                                {a.alt || a.storage_path?.split('/').pop() || "Untitled Image"}
+                              </div>
+                              <div className="text-[10px] text-on-surface-variant/60 font-bold uppercase tracking-wider mt-1.5 break-all">
+                                {a.url}
+                              </div>
+                              <div className="flex items-center gap-3 mt-4">
+                                {!isPrimary && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setAssetAsPrimary(a.id)}
+                                    disabled={saving}
+                                    className="h-7 px-3 bg-white border border-primary text-primary font-bold text-[9px] uppercase tracking-widest hover:bg-primary hover:text-white transition-all disabled:opacity-50"
+                                  >
+                                    Set as Card Image
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => deleteAsset(a.id)}
+                                  disabled={saving}
+                                  className="h-7 px-3 bg-white border border-rose-300 text-rose-700 font-bold text-[9px] uppercase tracking-widest hover:bg-rose-50 transition-all disabled:opacity-50"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex flex-col gap-3">
+                             <div className="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/40 mb-1 text-center">Display Order</div>
+                             <input
+                                defaultValue={String(a.sort_order)}
+                                onBlur={(e) => {
+                                  const n = Math.trunc(Number(e.target.value));
+                                  if (!Number.isFinite(n)) return;
+                                  if (n !== a.sort_order) updateAsset(a.id, { sort_order: n });
+                                }}
+                                className="h-9 w-16 px-2 bg-background border border-border/60 focus:border-primary outline-none text-center text-sm font-bold"
+                              />
+                          </div>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mt-4">
-                          <div className="md:col-span-7">
-                            <input
-                              defaultValue={a.url ?? ""}
-                              onBlur={(e) => {
-                                const v = e.target.value.trim();
-                                if (v !== (a.url ?? "")) updateAsset(a.id, { url: v || null });
-                              }}
-                              placeholder="URL"
-                              className="h-10 w-full px-3 bg-background border border-border/60 focus:border-primary outline-none transition-colors text-sm"
-                            />
-                          </div>
-                          <div className="md:col-span-3">
-                            <input
-                              defaultValue={a.alt ?? ""}
-                              onBlur={(e) => {
-                                const v = e.target.value.trim();
-                                if (v !== (a.alt ?? "")) updateAsset(a.id, { alt: v || null });
-                              }}
-                              placeholder="Alt"
-                              className="h-10 w-full px-3 bg-background border border-border/60 focus:border-primary outline-none transition-colors text-sm"
-                            />
-                          </div>
-                          <div className="md:col-span-2">
-                            <input
-                              defaultValue={String(a.sort_order)}
-                              onBlur={(e) => {
-                                const n = Math.trunc(Number(e.target.value));
-                                if (!Number.isFinite(n)) return;
-                                if (n !== a.sort_order) updateAsset(a.id, { sort_order: n });
-                              }}
-                              placeholder="Sort"
-                              className="h-10 w-full px-3 bg-background border border-border/60 focus:border-primary outline-none transition-colors text-sm"
-                            />
-                          </div>
+                        
+                        <div className="mt-4">
+                          <div className="text-[9px] font-black uppercase tracking-widest text-on-surface-variant/40 mb-2">Image Description (Alt Text)</div>
+                          <input
+                            defaultValue={a.alt ?? ""}
+                            onBlur={(e) => {
+                              const v = e.target.value.trim();
+                              if (v !== (a.alt ?? "")) updateAsset(a.id, { alt: v || null });
+                            }}
+                            placeholder="Describe this image..."
+                            className="h-10 w-full px-3 bg-background border border-border/60 focus:border-primary outline-none transition-colors text-sm font-medium"
+                          />
                         </div>
                       </div>
-                    ))}
-                </div>
-              )}
-            </div>
+                    );
+                  })}
+              </div>
+            )}
           </div>
         </div>
       )}

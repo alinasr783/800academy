@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import Image from "next/image";
 
 type Asset = {
@@ -24,6 +24,7 @@ export default function SubjectCarousel({
   const scrollRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const prev = useCallback(() => {
     setCurrent((c) => (c === 0 ? count - 1 : c - 1));
@@ -32,6 +33,18 @@ export default function SubjectCarousel({
   const next = useCallback(() => {
     setCurrent((c) => (c === count - 1 ? 0 : c + 1));
   }, [count]);
+
+  // Keyboard navigation for lightbox
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setLightboxOpen(false);
+      else if (e.key === "ArrowLeft") prev();
+      else if (e.key === "ArrowRight") next();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightboxOpen, prev, next]);
 
   // Swipe / scroll handling
   function onTouchStart(e: React.TouchEvent) {
@@ -86,71 +99,122 @@ export default function SubjectCarousel({
   if (count === 0) return null;
 
   return (
-    <div
-      ref={scrollRef}
-      className="relative w-full aspect-square md:aspect-[4/3] lg:aspect-square rounded-[2rem] overflow-hidden shadow-soft-2xl border border-outline/30 group cursor-grab active:cursor-grabbing select-none"
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
-      onMouseDown={onMouseDown}
-      onMouseMove={onMouseMove}
-      onMouseUp={onMouseUp}
-      onMouseLeave={onMouseLeave}
-    >
-      {/* Slides */}
-      {assets.map((asset, idx) => (
-        <div
-          key={asset.id}
-          className="absolute inset-0 transition-opacity duration-500 ease-in-out"
-          style={{ opacity: idx === current ? 1 : 0, zIndex: idx === current ? 1 : 0 }}
-        >
-          <Image
-            src={asset.url ?? ""}
-            alt={asset.alt ?? `${title} - ${idx + 1}`}
-            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-            draggable={false}
-            fill
-            sizes="(max-width: 768px) 100vw, 50vw"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-primary/80 via-primary/20 to-transparent mix-blend-multiply" />
-        </div>
-      ))}
-
-      {/* Navigation arrows — only show if more than 1 */}
-      {count > 1 && (
-        <>
-          <button
-            onClick={(e) => { e.stopPropagation(); prev(); }}
-            className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-white"
-            aria-label="Previous image"
+    <>
+      <div
+        ref={scrollRef}
+        className="relative w-full aspect-square md:aspect-[4/3] lg:aspect-square rounded-[2rem] overflow-hidden shadow-soft-2xl border border-outline/30 group cursor-grab active:cursor-grabbing select-none"
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseLeave}
+      >
+        {/* Slides */}
+        {assets.map((asset, idx) => (
+          <div
+            key={asset.id}
+            className="absolute inset-0 transition-opacity duration-500 ease-in-out cursor-zoom-in"
+            style={{ opacity: idx === current ? 1 : 0, zIndex: idx === current ? 1 : 0 }}
+            onClick={() => setLightboxOpen(true)}
           >
-            <span className="material-symbols-outlined text-primary text-xl">chevron_left</span>
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); next(); }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-300 hover:bg-white"
-            aria-label="Next image"
-          >
-            <span className="material-symbols-outlined text-primary text-xl">chevron_right</span>
-          </button>
+            <Image
+              src={asset.url ?? ""}
+              alt={asset.alt ?? `${title} - ${idx + 1}`}
+              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+              draggable={false}
+              fill
+              sizes="(max-width: 768px) 100vw, 50vw"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-primary/80 via-primary/20 to-transparent mix-blend-multiply opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            
+            {/* View Icon Overlay */}
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+              <div className="bg-white/20 backdrop-blur-md p-4 rounded-full border border-white/30 transform scale-90 group-hover:scale-100 transition-transform duration-500">
+                <span className="material-symbols-outlined text-white text-3xl">zoom_in</span>
+              </div>
+            </div>
+          </div>
+        ))}
 
-          {/* Dots */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
+        {/* Navigation Dots */}
+        {count > 1 && (
+          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex gap-2">
             {assets.map((_, idx) => (
               <button
                 key={idx}
                 onClick={(e) => { e.stopPropagation(); setCurrent(idx); }}
                 className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                  idx === current
-                    ? "bg-white w-6"
-                    : "bg-white/50 hover:bg-white/80"
+                  idx === current ? "bg-white w-6" : "bg-white/40 hover:bg-white/60"
                 }`}
                 aria-label={`Go to image ${idx + 1}`}
               />
             ))}
           </div>
-        </>
+        )}
+
+        {/* Arrow Navigation (Desktop) */}
+        {count > 1 && (
+          <>
+            <button
+              onClick={(e) => { e.stopPropagation(); prev(); }}
+              className="absolute left-6 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-white/20"
+            >
+              <span className="material-symbols-outlined">chevron_left</span>
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); next(); }}
+              className="absolute right-6 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-white/20"
+            >
+              <span className="material-symbols-outlined">chevron_right</span>
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Lightbox Modal */}
+      {lightboxOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm animate-in fade-in duration-300">
+          <button
+            onClick={() => setLightboxOpen(false)}
+            className="absolute top-8 right-8 z-[110] text-white/70 hover:text-white transition-colors"
+          >
+            <span className="material-symbols-outlined text-4xl">close</span>
+          </button>
+
+          {/* Lightbox Controls */}
+          <button
+            onClick={prev}
+            className="absolute left-4 sm:left-8 top-1/2 -translate-y-1/2 z-[110] text-white/50 hover:text-white transition-colors"
+          >
+            <span className="material-symbols-outlined text-5xl sm:text-6xl">chevron_left</span>
+          </button>
+          <button
+            onClick={next}
+            className="absolute right-4 sm:right-8 top-1/2 -translate-y-1/2 z-[110] text-white/50 hover:text-white transition-colors"
+          >
+            <span className="material-symbols-outlined text-5xl sm:text-6xl">chevron_right</span>
+          </button>
+
+          <div className="relative w-full h-full p-4 sm:p-20 flex items-center justify-center select-none" onClick={() => setLightboxOpen(false)}>
+            <div className="relative w-full h-full max-w-6xl max-h-[80vh] animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
+              <Image
+                src={assets[current].url ?? ""}
+                alt={assets[current].alt ?? title}
+                className="object-contain w-full h-full"
+                fill
+                priority
+              />
+            </div>
+            
+            {/* Caption */}
+            <div className="absolute bottom-10 left-1/2 -translate-x-1/2 text-white/80 font-medium text-sm sm:text-base bg-white/10 backdrop-blur-md px-6 py-3 rounded-full border border-white/10">
+              {current + 1} / {count} • {assets[current].alt || title}
+            </div>
+          </div>
+        </div>
       )}
-    </div>
+    </>
   );
 }
