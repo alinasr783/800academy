@@ -5,6 +5,7 @@ import Link from "next/link";
 import logo from "./logo.png";
 import HeroSection from "./HeroSection";
 import FAQSection from "./FAQSection";
+import SupportSection from "./SupportSection";
 
 export default function Home() {
   const whatsappHref =
@@ -134,6 +135,7 @@ export default function Home() {
           </div>
         </section>
         <FAQSection />
+        <SupportSection />
         <section
           id="contact"
           className="py-40 px-8 relative overflow-hidden bg-[#020617] section-curve scroll-mt-32"
