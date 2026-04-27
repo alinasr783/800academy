@@ -1,11 +1,13 @@
-import PlansSection from "./PlansSection";
+import dynamic from "next/dynamic";
 import SiteHeader from "@/components/SiteHeader";
 import Image from "next/image";
 import Link from "next/link";
 import logo from "./logo.png";
 import HeroSection from "./HeroSection";
-import FAQSection from "./FAQSection";
-import SupportSection from "./SupportSection";
+
+const PlansSection = dynamic(() => import("./PlansSection"));
+const FAQSection = dynamic(() => import("./FAQSection"));
+const SupportSection = dynamic(() => import("./SupportSection"));
 
 export default function Home() {
   const whatsappHref =

@@ -90,6 +90,7 @@ export default function HeroSection() {
               width={628}
               height={328}
               className="object-contain opacity-90 group-hover:opacity-100 transition-opacity drop-shadow-sm"
+              priority={true}
             />
           </div>
         </div>
