@@ -286,9 +286,9 @@ export default function PlansSection({ showMoreLink = false }: { showMoreLink?: 
                 {/* Content Container (Bottom Glass) */}
                 <div className="mt-auto relative z-10 p-2 sm:p-3">
                   <div className="bg-white/10 backdrop-blur-2xl border border-white/20 rounded-[2rem] p-6 sm:p-8 shadow-glass group-hover:bg-white/15 transition-all duration-500">
-                    <h4 className="text-3xl font-black text-white mb-3 tracking-tight">
+                    <h3 className="text-3xl font-black text-white mb-3 tracking-tight">
                       {subject.title}
-                    </h4>
+                    </h3>
                     <p className="text-white/80 text-sm leading-relaxed mb-8 font-medium line-clamp-2 group-hover:text-white transition-colors">
                       {subject.description ??
                         "High-fidelity mock exams, timed sessions, and detailed review — built for real test pressure."}

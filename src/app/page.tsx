@@ -36,7 +36,7 @@ export default function Home() {
               <h2 className="font-headline text-5xl lg:text-7xl font-extrabold text-primary tracking-tighter leading-tight">
                 Why 800 Academy
               </h2>
-              <p className="mt-6 text-on-surface-variant text-xl font-medium opacity-70 leading-relaxed">
+              <p className="mt-6 text-on-surface-variant text-xl font-medium leading-relaxed">
                 The most advanced platform designed specifically for EST excellence.
                 Everything you need to master the test in one place.
               </p>

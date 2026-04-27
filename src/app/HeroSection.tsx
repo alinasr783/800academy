@@ -101,7 +101,7 @@ export default function HeroSection() {
           <span className="gradient-text">ace the EST exam</span>
         </h1>
 
-        <p className="text-on-surface-variant text-[14px] md:text-lg lg:text-xl max-w-2xl mb-10 lg:mb-12 font-medium opacity-80 leading-relaxed px-2">
+        <p className="text-on-surface-variant text-[14px] md:text-lg lg:text-xl max-w-2xl mb-10 lg:mb-12 font-medium leading-relaxed px-2">
           Full EST simulation, Mistake Bank, Comprehensive explanations. <br className="hidden md:block" />
           Subscribe now and watch your score skyrocket.
         </p>
