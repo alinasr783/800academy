@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import logo from "./logo.png";
 
 const benefits = [
   { text: "EST Simulation", icon: "desktop_windows", delay: "0s" },
@@ -85,10 +86,8 @@ export default function HeroSection() {
         <div className="mb-8 w-64 h-28 md:w-60 md:h-28 relative group">
           <div className="relative w-full h-full p-0 bg-transparent overflow-hidden flex items-center justify-center">
             <Image
-              src="/logo.png"
+              src={logo}
               alt="800 Academy Logo"
-              width={628}
-              height={328}
               className="object-contain opacity-90 group-hover:opacity-100 transition-opacity drop-shadow-sm"
               priority={true}
             />

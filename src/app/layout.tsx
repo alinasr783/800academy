@@ -12,6 +12,11 @@ export const metadata: Metadata = {
   title: "800 Academy | The Ultimate EST Preparation Platform | أكاديمية 800",
   description: "Join 800 Academy for the best online preparation for the Egyptian American Diploma (EST). Access mock exams, detailed explanations, and personalized practice. انضم لأكاديمية 800 لأفضل تحضير لاختبار EST.",
   keywords: "800 Academy, EST preparation, SAT, ACT, Egyptian American Diploma, Math, English, Online courses, أكاديمية 800, التحضير لاختبار EST, الدبلومة الأمريكية, امتحانات تجريبية, كورسات أونلاين",
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
   openGraph: {
     title: "800 Academy | The Ultimate EST Preparation Platform",
     description: "Your ultimate platform for EST, SAT, and ACT preparation in Egypt. Practice with thousands of questions and real exam simulations.",
@@ -19,9 +24,9 @@ export const metadata: Metadata = {
     siteName: "800 Academy",
     images: [
       {
-        url: "/logo.png",
-        width: 628,
-        height: 328,
+        url: "/full-logo.png",
+        width: 1200,
+        height: 630,
         alt: "800 Academy Logo",
       },
     ],
@@ -32,7 +37,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "800 Academy | EST Preparation",
     description: "The most advanced platform designed specifically for EST excellence.",
-    images: ["/logo.png"],
+    images: ["/full-logo.png"],
   },
   robots: {
     index: true,
