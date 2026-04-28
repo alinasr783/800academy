@@ -419,6 +419,8 @@ function processSingleCellMath(cell: string): string {
   for (let pass = 0; pass < 5; pass++) {
     const prev = r;
     r = processBracketedFunc(r, 'sqrt', '\\sqrt');
+    r = processBracketedFunc(r, 'bar', '\\bar');
+    r = processBracketedFunc(r, 'overline', '\\overline');
     r = processBracketedOps(r);
     r = processBracketedFractions(r);
     r = processMixedFractions(r);
@@ -529,6 +531,8 @@ function processText(text: string): string {
   for (let pass = 0; pass < 5; pass++) {
     const prev = res;
     res = processBracketedFunc(res, 'sqrt', '\\sqrt');
+    res = processBracketedFunc(res, 'bar', '\\bar');
+    res = processBracketedFunc(res, 'overline', '\\overline');
     res = processBracketedOps(res);          // ^[...] → ^{...}, _[...] → _{...}
     res = processBracketedFractions(res);    // [a]/[b] → \frac{a}{b}
     res = processMixedFractions(res);        // simple/[b] or [a]/simple → \frac{}{}
