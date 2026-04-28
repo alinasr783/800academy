@@ -280,7 +280,6 @@ function processSymbols(str: string): string {
   r = r.replace(/\bdeg\b/g, '^{\\circ}');
   r = r.replace(/\bangle\b/gi, '\\angle ');
   r = r.replace(/\bperp\b/gi, '\\perp ');
-  r = r.replace(/\bparallel\b/gi, '\\parallel ');
   // Dots
   r = r.replace(/\.\.\./g, '\\ldots ');
   return r;
@@ -412,6 +411,15 @@ const TABLE_STYLE = 'border-collapse:collapse;margin:10px 0;width:auto;font-size
 
 function processSingleCellMath(cell: string): string {
   let r = cell;
+
+  // Phase 0: Protection of <...> escapes
+  const escapes: string[] = [];
+  r = r.replace(/<([^>]+)>/g, (match, content) => {
+    if (match === '<->') return match; 
+    escapes.push(content);
+    return `:::ESC${escapes.length - 1}:::`;
+  });
+
   r = r.replace(/\s+اس\s+/g, " ^ ");
   r = r.replace(/جذر/g, "sqrt");
   r = processNthRoot(r);
@@ -430,6 +438,12 @@ function processSingleCellMath(cell: string): string {
   }
   r = processSymbols(r);
   r = wrapLatexDelimiters(r);
+
+  // Restore escapes
+  escapes.forEach((content, idx) => {
+    r = r.split(`:::ESC${idx}:::`).join(content);
+  });
+
   return r;
 }
 
@@ -479,6 +493,15 @@ function processTables(str: string): string {
 
 function processEquationLine(line: string): string {
   let r = line;
+
+  // Phase 0: Protection of <...> escapes
+  const escapes: string[] = [];
+  r = r.replace(/<([^>]+)>/g, (match, content) => {
+    if (match === '<->') return match; 
+    escapes.push(content);
+    return `:::ESC${escapes.length - 1}:::`;
+  });
+
   r = r.replace(/\s+اس\s+/g, " ^ ");
   r = r.replace(/جذر/g, "sqrt");
   r = processNthRoot(r);
@@ -486,6 +509,8 @@ function processEquationLine(line: string): string {
   for (let pass = 0; pass < 5; pass++) {
     const prev = r;
     r = processBracketedFunc(r, 'sqrt', '\\sqrt');
+    r = processBracketedFunc(r, 'bar', '\\bar');
+    r = processBracketedFunc(r, 'overline', '\\overline');
     r = processBracketedOps(r);
     r = processBracketedFractions(r);
     r = processMixedFractions(r);
@@ -494,6 +519,12 @@ function processEquationLine(line: string): string {
     if (r === prev) break;
   }
   r = processSymbols(r);
+
+  // Restore escapes
+  escapes.forEach((content, idx) => {
+    r = r.split(`:::ESC${idx}:::`).join(content);
+  });
+
   return r;
 }
 
@@ -513,6 +544,14 @@ function processSystems(str: string): string {
 function processText(text: string): string {
   if (!text) return "";
   let res = text;
+
+  // Phase 0: Protection of <...> escapes
+  const escapes: string[] = [];
+  res = res.replace(/<([^>]+)>/g, (match, content) => {
+    if (match === '<->') return match; 
+    escapes.push(content);
+    return `:::ESC${escapes.length - 1}:::`;
+  });
 
   // Step 1: Extract & process block-level structures first
   res = processTables(res);
@@ -543,6 +582,12 @@ function processText(text: string): string {
 
   res = processSymbols(res);
   res = wrapLatexDelimiters(res);
+
+  // Restore escapes
+  escapes.forEach((content, idx) => {
+    res = res.split(`:::ESC${idx}:::`).join(content);
+  });
+
   return res;
 }
 
