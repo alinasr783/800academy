@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import SiteHeader from "@/components/SiteHeader";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -7,6 +9,7 @@ import DashboardGuard from "./DashboardGuard";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Determine if we should use full-width mode (hide sidebar)
   // Builder routes like /dashboard/exams/[id] or /dashboard/exams/questions/[id]
@@ -34,13 +37,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <main className="pt-24 min-h-screen bg-slate-50">
         <div className="max-w-[1440px] mx-auto px-8 lg:px-12 py-12">
           <DashboardGuard>
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-              <aside className="lg:col-span-3">
+            <div className="flex flex-col lg:flex-row gap-6 lg:gap-10">
+              <aside className={`transition-all duration-300 flex-shrink-0 ${isCollapsed ? "w-[88px]" : "w-full lg:w-72"}`}>
                 <div className="bg-white border border-outline/60 shadow-soft-xl overflow-hidden rounded-2xl sticky top-32">
-                  <div className="p-6 border-b border-outline/40 bg-slate-50/50">
-                    <div className="text-xs font-black text-primary uppercase tracking-[0.2em]">
-                      Admin Dashboard
-                    </div>
+                  <div className="p-4 sm:p-6 border-b border-outline/40 bg-slate-50/50 flex items-center justify-between">
+                    {!isCollapsed && (
+                      <div className="text-xs font-black text-primary uppercase tracking-[0.2em]">
+                        Admin
+                      </div>
+                    )}
+                    <button 
+                      onClick={() => setIsCollapsed(!isCollapsed)}
+                      className="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-variant transition-colors mx-auto lg:mx-0"
+                      title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                    >
+                      <span className="material-symbols-outlined text-[20px]">
+                        {isCollapsed ? "menu_open" : "menu_open"}
+                      </span>
+                    </button>
                   </div>
                   <div className="p-2 flex flex-col">
                     {[
@@ -58,21 +72,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         <Link
                           key={item.href}
                           href={item.href}
+                          title={isCollapsed ? item.label : undefined}
                           className={`flex items-center gap-3 px-4 py-3 font-bold text-sm transition-all rounded-xl ${
+                            isCollapsed ? "justify-center px-0 mx-2" : ""
+                          } ${
                             isActive
                               ? "bg-primary text-white shadow-md shadow-primary/20"
                               : "text-on-surface hover:bg-surface-variant"
                           }`}
                         >
                           <span className="material-symbols-outlined text-[20px]">{item.icon}</span>
-                          {item.label}
+                          {!isCollapsed && <span>{item.label}</span>}
                         </Link>
                       );
                     })}
                   </div>
                 </div>
               </aside>
-              <section className="lg:col-span-9">{children}</section>
+              <section className="flex-1 min-w-0 transition-all duration-300">{children}</section>
             </div>
           </DashboardGuard>
         </div>

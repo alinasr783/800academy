@@ -412,10 +412,9 @@ const TABLE_STYLE = 'border-collapse:collapse;margin:10px 0;width:auto;font-size
 function processSingleCellMath(cell: string): string {
   let r = cell;
 
-  // Phase 0: Protection of <...> escapes
+  // Phase 0: Protection of <...> escapes (refined to tag-like only)
   const escapes: string[] = [];
-  r = r.replace(/<([^>]+)>/g, (match, content) => {
-    if (match === '<->') return match; 
+  r = r.replace(/<([a-zA-Z\/][^>]*?)>/g, (match, content) => {
     escapes.push(content);
     return `:::ESC${escapes.length - 1}:::`;
   });
@@ -494,13 +493,10 @@ function processTables(str: string): string {
 function processEquationLine(line: string): string {
   let r = line;
 
-  // Phase 0: Protection of <...> escapes
-  const escapes: string[] = [];
-  r = r.replace(/<([^>]+)>/g, (match, content) => {
-    if (match === '<->') return match; 
-    escapes.push(content);
-    return `:::ESC${escapes.length - 1}:::`;
-  });
+  // Equations inside {sys} are purely math, we skip the <...> escape phase 
+  // to avoid mangling inequalities like x < 5 and y > 10.
+  // Inequality signs are handled naturally by KaTeX.
+
 
   r = r.replace(/\s+اس\s+/g, " ^ ");
   r = r.replace(/جذر/g, "sqrt");
@@ -520,10 +516,8 @@ function processEquationLine(line: string): string {
   }
   r = processSymbols(r);
 
-  // Restore escapes
-  escapes.forEach((content, idx) => {
-    r = r.split(`:::ESC${idx}:::`).join(content);
-  });
+  // Restoration skipped as Phase 0 was removed for {sys}
+
 
   return r;
 }
@@ -545,12 +539,24 @@ function processText(text: string): string {
   if (!text) return "";
   let res = text;
 
-  // Phase 0: Protection of <...> escapes
+  // Phase -1: Protect {sys} and {table} blocks from the global <...> escape phase
+  // This ensures math inequalities inside blocks are preserved and newlines are not swallowed.
+  const blockEscapes: string[] = [];
+  res = res.replace(/\{(sys|table)\}([\s\S]*?)\{\/\1\}/gi, (match) => {
+    blockEscapes.push(match);
+    return `:::MATHBLOCK${blockEscapes.length - 1}:::`;
+  });
+
+  // Phase 0: Protection of <...> escapes (Refined to tag-like only)
   const escapes: string[] = [];
-  res = res.replace(/<([^>]+)>/g, (match, content) => {
-    if (match === '<->') return match; 
+  res = res.replace(/<([a-zA-Z\/][^>]*?)>/g, (match, content) => {
     escapes.push(content);
     return `:::ESC${escapes.length - 1}:::`;
+  });
+
+  // Restore math blocks immediately after the escape phase
+  blockEscapes.forEach((block, idx) => {
+    res = res.split(`:::MATHBLOCK${idx}:::`).join(block);
   });
 
   // Step 1: Extract & process block-level structures first

@@ -3,6 +3,7 @@ import { CartProvider } from "@/components/cart/CartProvider";
 import { Manrope, Plus_Jakarta_Sans, Inter } from "next/font/google";
 import { Metadata } from "next";
 import ClarityTracker from "@/components/ClarityTracker";
+import AnalyticsTracker from "@/components/AnalyticsTracker";
 
 const manrope = Manrope({ subsets: ["latin"], weight: ["300", "400", "500", "600", "700", "800"], variable: "--font-manrope", display: "swap" });
 const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], weight: ["700", "800"], variable: "--font-jakarta", display: "swap" });
@@ -66,6 +67,7 @@ export default function RootLayout({
         className="bg-white text-on-surface font-body antialiased selection:bg-secondary/20"
       >
         <ClarityTracker />
+        <AnalyticsTracker />
         <CartProvider>{children}</CartProvider>
       </body>
     </html>
