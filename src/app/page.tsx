@@ -16,8 +16,7 @@ export default function Home() {
 
   return (
     <>
-      <SiteHeader active="home" />
-      <main className="pt-[90px]">
+      <main>
         <HeroSection />
         <PlansSection showMoreLink />
         <section

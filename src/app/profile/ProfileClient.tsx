@@ -439,60 +439,6 @@ export default function ProfileClient() {
 
   return (
     <section className="max-w-[1440px] mx-auto px-8 lg:px-12 py-8 md:py-10">
-      <div className="flex items-center justify-between gap-6 mb-6">
-        <BackButton fallbackHref="/" />
-        <Breadcrumbs items={[{ label: "Home", href: "/" }, { label: "My Account" }]} />
-      </div>
-
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mb-8 bg-surface-variant/30 p-2 rounded-2xl w-full sm:w-fit">
-        <button
-          onClick={() => {
-            setCurrentTab("overview");
-            if (window.innerWidth < 1024) {
-              document.getElementById('profile-content-main')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-          }}
-          className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-extrabold transition-all outline-none ${currentTab === "overview"
-            ? "bg-primary text-white shadow-md"
-            : "text-on-surface-variant hover:bg-surface-variant hover:text-primary"
-            }`}
-        >
-          Overview
-        </button>
-        <button
-          onClick={() => {
-            setCurrentTab("mistakes");
-            if (window.innerWidth < 1024) {
-              document.getElementById('profile-content-main')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-          }}
-          className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-extrabold transition-all outline-none flex items-center justify-center gap-2 ${currentTab === "mistakes"
-            ? "bg-rose-500 text-white shadow-md"
-            : "text-on-surface-variant hover:bg-surface-variant hover:text-rose-500"
-            }`}
-        >
-          Mistake Bank
-          <span className={`px-2 py-0.5 rounded-full text-[10px] ${currentTab === 'mistakes' ? 'bg-white/20' : 'bg-surface-variant text-on-surface-variant border border-outline/40'}`}>
-            {mistakes.length}
-          </span>
-        </button>
-
-        <button
-          onClick={() => {
-            setCurrentTab("braingym");
-            if (window.innerWidth < 1024) {
-              document.getElementById('profile-content-main')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-          }}
-          className={`flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-extrabold outline-none flex items-center justify-center gap-2 ${currentTab === "braingym"
-            ? "bg-primary text-white shadow-md"
-            : "text-on-surface-variant hover:bg-surface-variant hover:text-primary transition-all"
-            }`}
-        >
-          <span className="material-symbols-outlined text-[20px]">fitness_center</span>
-          Question Bank
-        </button>
-      </div>
 
       {/* ── No Active Plan Banner ── */}
       {activeEntitlements.length === 0 && (

@@ -16,6 +16,8 @@ type StreakData = {
   weekStatus: WeekDay[];
 };
 
+import { Drawer } from "vaul";
+
 export default function StreakPanel() {
   const [open, setOpen] = useState(false);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
@@ -112,7 +114,7 @@ export default function StreakPanel() {
       </div>
 
       {/* FAQ Accordion */}
-      <div className="p-2 border-t border-outline/30">
+      <div className="p-2 border-t border-outline/30 pb-6">
         <button
           onClick={() => setShowHowItWorks(!showHowItWorks)}
           className="w-full flex items-center justify-between p-3 rounded-2xl hover:bg-surface-variant/50 transition-colors group"
@@ -170,20 +172,24 @@ export default function StreakPanel() {
           </div>
         </div>
       )}
-      {/* ─── Mobile Dropdown (<md) ─── */}
-      {open && isMobile && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-[340px] bg-white rounded-[32px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-            {/* Mobile Header with Close */}
-            <div className="absolute top-4 right-4 z-10">
-              <button onClick={() => setOpen(false)} className="w-10 h-10 bg-white/80 backdrop-blur-md rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-all">
-                <span className="material-symbols-outlined text-primary">close</span>
-              </button>
-            </div>
-            
-            {renderDropdownContent()}
-          </div>
-        </div>
+      
+      {/* ─── Mobile Bottom Sheet (vaul) ─── */}
+      {isMobile && (
+        <Drawer.Root open={open} onOpenChange={setOpen}>
+          <Drawer.Portal>
+            <Drawer.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100]" />
+            <Drawer.Content className="bg-white flex flex-col rounded-t-[32px] mt-24 max-h-[96vh] fixed bottom-0 left-0 right-0 z-[101] focus:outline-none">
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="w-12 h-1.5 bg-outline/60 rounded-full" />
+              </div>
+              
+              <div className="overflow-y-auto">
+                <Drawer.Title className="sr-only">Daily Streak Status</Drawer.Title>
+                {renderDropdownContent()}
+              </div>
+            </Drawer.Content>
+          </Drawer.Portal>
+        </Drawer.Root>
       )}
     </div>
   );

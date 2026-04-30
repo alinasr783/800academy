@@ -13,11 +13,42 @@ type Props = {
   active?: "home" | "plans" | "benefits" | "contact";
 };
 
-export default function SiteHeader({ active }: Props) {
+import { useRouter, usePathname } from "next/navigation";
+
+export default function SiteHeader({ active: activeProp }: Props) {
+  const router = useRouter();
+  const pathname = usePathname();
+  
+  // Determine active tab automatically if not passed
+  const active = activeProp || (() => {
+    if (pathname === "/") return "home";
+    if (pathname.includes("/plans")) return "plans";
+    if (pathname.includes("/mistake-bank")) return "mistakes";
+    if (pathname.includes("/brain-gym")) return "questions";
+    if (pathname.includes("/simulation")) return "simulation";
+    return undefined;
+  })();
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isAppMode, setIsAppMode] = useState(false);
+
+  useEffect(() => {
+    const checkAppMode = () => {
+      setIsAppMode(localStorage.getItem("isAppMode") === "true");
+    };
+    checkAppMode();
+    window.addEventListener("appModeChange", checkAppMode);
+    return () => window.removeEventListener("appModeChange", checkAppMode);
+  }, []);
+
+  const toggleAppMode = () => {
+    localStorage.setItem("isAppMode", "true");
+    window.dispatchEvent(new Event("appModeChange"));
+    setIsAppMode(true);
+    router.push("/profile");
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -109,49 +140,73 @@ export default function SiteHeader({ active }: Props) {
 
   return (
     <>
-      <nav className="fixed top-0 w-full z-50 nav-blur shadow-sm">
-        <div className="flex justify-between items-center px-5 md:px-8 py-4 md:py-5 max-w-7xl mx-auto">
+      <nav className={`fixed top-0 w-full z-50 transition-all duration-500 ${isAppMode ? 'liquid-glass border-b-0 py-2' : 'nav-blur shadow-sm py-4 md:py-5'}`}>
+        <div className={`flex justify-between items-center px-5 md:px-8 max-w-7xl mx-auto transition-all duration-500 ${isAppMode ? 'h-10' : ''}`}>
           {/* Left side */}
           <div className="flex items-center gap-4">
-            {/* Hamburger — Mobile only */}
-            <button
-              onClick={() => setMobileOpen(true)}
-              className="md:hidden flex items-center justify-center w-9 h-9 rounded-full hover:bg-surface-variant/60 transition-colors"
-              aria-label="Open menu"
-            >
-              <span className="material-symbols-outlined text-[22px] text-on-surface">menu</span>
-            </button>
+            {/* Logo / Mobile Hamburger in App Mode */}
+            {isAppMode ? (
+              <>
+                {/* Hamburger for mobile to open App Sidebar */}
+                <button
+                  onClick={() => window.dispatchEvent(new Event("toggleAppSidebar"))}
+                  className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-surface-variant/60 transition-colors lg:hidden"
+                >
+                  <span className="material-symbols-outlined text-[24px] text-primary font-bold">menu</span>
+                </button>
+                {/* Compact Logo for desktop in App Mode */}
+                <Link className="hidden lg:flex items-center gap-4" href="/">
+                  <Image 
+                    src={logo} 
+                    alt="800 Academy" 
+                    className="h-7 w-auto transition-all duration-500" 
+                    priority 
+                  />
+                </Link>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => setMobileOpen(true)}
+                  className="md:hidden flex items-center justify-center w-9 h-9 rounded-full hover:bg-surface-variant/60 transition-colors"
+                  aria-label="Open menu"
+                >
+                  <span className="material-symbols-outlined text-[22px] text-on-surface">menu</span>
+                </button>
 
-            {/* Logo — Desktop only (on mobile the hamburger replaces it) */}
-            <Link className="hidden md:flex items-center gap-4" href="/">
-              <Image src={logo} alt="800 Academy" className="h-10 w-auto" priority />
-            </Link>
+                <Link className="hidden md:flex items-center gap-4" href="/">
+                  <Image src={logo} alt="800 Academy" className="h-10 w-auto" priority />
+                </Link>
+              </>
+            )}
           </div>
 
-          {/* Desktop Navigation Links */}
-          <div className="hidden md:flex items-center gap-6">
-            {navLinks.map((link) => (
-              <Link
-                key={link.id}
-                href={link.href}
-                className={`text-sm font-bold transition-all hover:text-primary ${
-                  active === link.id ? "text-primary" : "text-on-surface"
-                }`}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </div>
+          {/* Desktop Navigation Links — Hidden in App Mode */}
+          {!isAppMode && (
+            <div className="hidden md:flex items-center gap-6">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.id}
+                  href={link.href}
+                  className={`text-sm font-bold transition-all hover:text-primary ${
+                    active === link.id ? "text-primary" : "text-on-surface"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </div>
+          )}
 
           {/* Right side — action icons */}
           <div className="flex items-center gap-1 sm:gap-2">
-            {/* Theme Toggle — always visible */}
+            {/* Theme Toggle */}
             <ThemeToggle />
 
-            {/* Notification Panel — signed in only */}
+            {/* Notification Panel */}
             {signedIn && <NotificationPanel />}
 
-            {/* Day Streak Panel — signed in only */}
+            {/* Day Streak Panel */}
             {signedIn && <StreakPanel />}
 
             {/* Avatar */}
@@ -174,6 +229,16 @@ export default function SiteHeader({ active }: Props) {
                 <span className="material-symbols-outlined text-[20px] text-on-surface-variant">account_circle</span>
               )}
             </Link>
+
+            {/* Open App Button — Moved to far right */}
+            {signedIn && !isAppMode && (
+              <button
+                onClick={toggleAppMode}
+                className="hidden md:flex items-center gap-2 px-6 py-2 bg-primary text-white text-xs font-black uppercase tracking-widest rounded-full hover:bg-slate-800 transition-all shadow-lg shadow-primary/20 ml-2 active:scale-95 border-2 border-primary"
+              >
+                Open App
+              </button>
+            )}
           </div>
         </div>
       </nav>

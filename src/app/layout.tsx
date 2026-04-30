@@ -49,6 +49,12 @@ export const metadata: Metadata = {
 
 import QueryProvider from "@/providers/QueryProvider";
 
+import AppSidebar from "@/components/AppSidebar";
+
+import SiteHeader from "@/components/SiteHeader";
+
+import LayoutContentWrapper from "@/components/LayoutContentWrapper";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -71,7 +77,13 @@ export default function RootLayout({
         <ClarityTracker />
         <AnalyticsTracker />
         <QueryProvider>
-          <CartProvider>{children}</CartProvider>
+          <CartProvider>
+            <SiteHeader />
+            <LayoutContentWrapper>
+              {children}
+            </LayoutContentWrapper>
+            <AppSidebar />
+          </CartProvider>
         </QueryProvider>
       </body>
     </html>

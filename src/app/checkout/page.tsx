@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import SiteHeader from "@/components/SiteHeader";
 import { supabase } from "@/lib/supabaseClient";
 import { useCart } from "@/components/cart/CartProvider";
 import AuthRequiredModal from "@/components/AuthRequiredModal";
@@ -198,7 +197,6 @@ export default function CheckoutPage() {
   if (isAuthenticated === false) {
     return (
       <>
-        <SiteHeader />
         <main className="min-h-screen bg-surface-variant/50" />
         <AuthRequiredModal 
           isOpen={isAuthModalOpen} 
@@ -213,7 +211,6 @@ export default function CheckoutPage() {
 
   return (
     <>
-      <SiteHeader />
       <main className="pt-24 pb-40 min-h-screen bg-gradient-to-b from-surface-variant/50 to-white">
         <section className="max-w-[1440px] mx-auto px-6 sm:px-8 lg:px-12 py-12 sm:py-20">
           {/* Header */}

@@ -1,4 +1,3 @@
-import SiteHeader from "@/components/SiteHeader";
 import { supabase } from "@/lib/supabaseClient";
 import SubjectOfferActions from "./SubjectOfferActions";
 import SubjectCarousel from "./SubjectCarousel";
@@ -54,8 +53,7 @@ export default async function SubjectPage({ params, searchParams }: PageProps) {
   if (subjectError || !subject) {
     return (
       <>
-        <SiteHeader />
-        <main className="pt-24">
+        <main>
           <section className="max-w-[1440px] mx-auto px-8 lg:px-12 py-20">
             <h1 className="font-headline text-4xl font-extrabold text-primary">
               Subject not found
@@ -101,8 +99,7 @@ export default async function SubjectPage({ params, searchParams }: PageProps) {
 
   return (
     <>
-      <SiteHeader />
-      <main className="pt-24">
+      <main>
         <SubjectScrollToExams enabled={shouldScroll} />
         <div className="max-w-[1440px] mx-auto px-8 lg:px-12 pt-8">
           <div className="flex items-center justify-between gap-6">

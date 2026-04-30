@@ -1,4 +1,3 @@
-import SiteHeader from "@/components/SiteHeader";
 import BackButton from "@/components/BackButton";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import PlansSection from "../PlansSection";
@@ -11,16 +10,13 @@ export const metadata = {
 export default function PlansPage() {
   return (
     <>
-      <SiteHeader />
-      <main className="pt-24">
-        <div className="max-w-[1440px] mx-auto px-8 lg:px-12 pt-8">
-          <div className="flex items-center justify-between gap-6">
-            <BackButton fallbackHref="/" />
-            <Breadcrumbs items={[{ label: "Home", href: "/" }, { label: "Plans" }]} />
-          </div>
+      <div className="max-w-[1440px] mx-auto px-8 lg:px-12 pt-8">
+        <div className="flex items-center justify-between gap-6">
+          <BackButton fallbackHref="/" />
+          <Breadcrumbs items={[{ label: "Home", href: "/" }, { label: "Plans" }]} />
         </div>
-        <PlansSection />
-      </main>
+      </div>
+      <PlansSection />
     </>
   );
 }

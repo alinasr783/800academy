@@ -1,4 +1,3 @@
-import SiteHeader from "@/components/SiteHeader";
 import ProfileClient from "./ProfileClient";
 
 export const metadata = {
@@ -8,10 +7,7 @@ export const metadata = {
 export default function ProfilePage() {
   return (
     <>
-      <SiteHeader />
-      <main className="pt-20">
-        <ProfileClient />
-      </main>
+      <ProfileClient />
     </>
   );
 }

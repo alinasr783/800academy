@@ -1,4 +1,3 @@
-import SiteHeader from "@/components/SiteHeader";
 import SimulationClient from "./SimulationClient";
 
 export const metadata = {
@@ -8,11 +7,8 @@ export const metadata = {
 
 export default function SimulationPage() {
   return (
-    <>
-      <SiteHeader />
-      <main className="pt-24 min-h-screen bg-slate-50">
-        <SimulationClient />
-      </main>
-    </>
+    <div className="min-h-screen bg-slate-50">
+      <SimulationClient />
+    </div>
   );
 }

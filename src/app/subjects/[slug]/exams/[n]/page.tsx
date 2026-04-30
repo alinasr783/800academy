@@ -1,4 +1,3 @@
-import SiteHeader from "@/components/SiteHeader";
 import { supabase } from "@/lib/supabaseClient";
 import ExamClient from "./ExamClient";
 
@@ -39,16 +38,13 @@ export default async function ExamPage({ params }: PageProps) {
   const examNumber = Number(n);
   if (!Number.isFinite(examNumber) || examNumber < 1) {
     return (
-      <>
-        <SiteHeader />
-        <main className="pt-24">
+      <main>
           <section className="max-w-[1440px] mx-auto px-8 lg:px-12 py-20">
             <h1 className="font-headline text-4xl font-extrabold text-primary">
               Invalid exam
             </h1>
           </section>
         </main>
-      </>
     );
   }
 
@@ -60,16 +56,13 @@ export default async function ExamPage({ params }: PageProps) {
 
   if (!subject) {
     return (
-      <>
-        <SiteHeader />
-        <main className="pt-24">
+      <main>
           <section className="max-w-[1440px] mx-auto px-8 lg:px-12 py-20">
             <h1 className="font-headline text-4xl font-extrabold text-primary">
               Subject not found
             </h1>
           </section>
         </main>
-      </>
     );
   }
 
@@ -84,16 +77,13 @@ export default async function ExamPage({ params }: PageProps) {
 
   if (!exam) {
     return (
-      <>
-        <SiteHeader />
-        <main className="pt-24">
+      <main>
           <section className="max-w-[1440px] mx-auto px-8 lg:px-12 py-20">
             <h1 className="font-headline text-4xl font-extrabold text-primary">
               Exam not found
             </h1>
           </section>
         </main>
-      </>
     );
   }
 
@@ -113,8 +103,7 @@ export default async function ExamPage({ params }: PageProps) {
 
   return (
     <>
-      <SiteHeader />
-      <main className="pt-24">
+      <main>
         <section className="max-w-[1440px] mx-auto px-3 sm:px-6 md:px-8 lg:px-12 py-6 sm:py-10 md:py-16">
           <ExamClient
             subjectId={subject.id}
