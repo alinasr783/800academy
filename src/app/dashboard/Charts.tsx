@@ -79,7 +79,7 @@ export function RevenueChart({ data }: { data: ChartDataPoint[] }) {
           <Tooltip 
             cursor={{fill: '#F3F4F6'}}
             contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-            formatter={(value: number) => [`EGP ${value}`, "Revenue"]}
+            formatter={(value: any) => [`EGP ${value}`, "Revenue"]}
           />
           <Bar dataKey="revenue" name="Revenue" fill="#0A2540" radius={[4, 4, 0, 0]} />
         </BarChart>
