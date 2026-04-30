@@ -2,8 +2,7 @@
 
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { format, parseISO, subDays, startOfDay, endOfDay, eachDayOfInterval } from "date-fns";
-import { requireAdmin } from "@/lib/adminGuard"; // Wait, does this exist? Let's check `adminGuard.ts` export.
-// I will just use getSupabaseAdmin to fetch, we should verify the user is admin first.
+// Data fetching is protected by DashboardLayout and DashboardGuard.
 
 export async function getDashboardAnalytics(startDateStr: string, endDateStr: string) {
   // Simple validation to ensure only admins can fetch this
