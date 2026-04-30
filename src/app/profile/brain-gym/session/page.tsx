@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import BrainGymClient from "./BrainGymClient";
 
 export const metadata: Metadata = {
-  title: "Brain Gym Session | 800 Academy",
+  title: "Question Bank Session | 800 Academy",
   description: "Customized practice session to master your topics.",
 };
 

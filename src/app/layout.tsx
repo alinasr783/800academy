@@ -47,6 +47,8 @@ export const metadata: Metadata = {
   },
 };
 
+import QueryProvider from "@/providers/QueryProvider";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -68,7 +70,9 @@ export default function RootLayout({
       >
         <ClarityTracker />
         <AnalyticsTracker />
-        <CartProvider>{children}</CartProvider>
+        <QueryProvider>
+          <CartProvider>{children}</CartProvider>
+        </QueryProvider>
       </body>
     </html>
   );

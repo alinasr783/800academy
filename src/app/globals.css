@@ -84,6 +84,10 @@ html {
   background-color: rgba(250, 249, 254, 0.8);
 }
 
+.dark .nav-blur {
+  background-color: rgba(26, 27, 31, 0.85);
+}
+
 .gradient-text {
   background: linear-gradient(135deg, #002d62 0%, #3e5e95 100%);
   -webkit-background-clip: text;

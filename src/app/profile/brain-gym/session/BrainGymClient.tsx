@@ -95,6 +95,8 @@ function assetUrl(a: Asset) {
   return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${a.bucket}/${a.storage_path}`;
 }
 
+import { recordStreakActivity } from "@/lib/streak";
+
 export default function BrainGymClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -465,7 +467,7 @@ export default function BrainGymClient() {
   }
 
   const breadcrumbs = useMemo(() => [
-    { label: "Home", href: "/" }, { label: "Profile", href: "/profile" }, { label: "Brain Gym" },
+    { label: "Home", href: "/" }, { label: "Profile", href: "/profile" }, { label: "Question Bank" },
   ], []);
 
   const timerWarn = timeLeft < 300;
@@ -499,7 +501,7 @@ export default function BrainGymClient() {
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 sm:gap-6">
             <div className="min-w-0">
               <div className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant">
-                Brain Gym Workout
+                Question Bank Workout
               </div>
               <div className="text-xl sm:text-2xl font-extrabold text-primary mt-1 sm:mt-2 tracking-tight truncate uppercase">Practice Session</div>
               
@@ -874,7 +876,7 @@ export default function BrainGymClient() {
 
                     <div className="mt-12 flex items-center justify-between gap-6 pb-20">
                       <button onClick={() => { setCurrentIndex(v => Math.max(0,v-1)); setTimeout(() => questionTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 10); }} disabled={currentIndex === 0} className="bg-white text-primary border-2 border-outline/40 px-8 py-4 font-black uppercase tracking-widest text-xs rounded-2xl disabled:opacity-20 transition-all hover:bg-slate-50">Previous</button>
-                      <button onClick={() => { if(currentIndex === questions.length-1) onSubmit(); else { setCurrentIndex(v => Math.min(questions.length-1, v+1)); setTimeout(() => questionTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 10); } }} disabled={submitting} className="bg-primary text-white px-10 py-4 font-black uppercase tracking-widest text-xs rounded-2xl transition-all hover:bg-slate-800 shadow-lg">{currentIndex === questions.length - 1 ? "Submit Workout" : "Next Question"}</button>
+                      <button onClick={() => { recordStreakActivity(); if(currentIndex === questions.length-1) onSubmit(); else { setCurrentIndex(v => Math.min(questions.length-1, v+1)); setTimeout(() => questionTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 10); } }} disabled={submitting} className="bg-primary text-white px-10 py-4 font-black uppercase tracking-widest text-xs rounded-2xl transition-all hover:bg-slate-800 shadow-lg">{currentIndex === questions.length - 1 ? "Submit Workout" : "Next Question"}</button>
                     </div>
                   </>
                 )

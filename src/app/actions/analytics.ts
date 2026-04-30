@@ -14,8 +14,9 @@ export async function trackVisit(path: string) {
     // Get IP address (varies by hosting provider, Vercel uses x-real-ip or x-forwarded-for)
     const ip = headersList.get("x-real-ip") || headersList.get("x-forwarded-for") || "unknown";
     
-    // Get country from Vercel headers if available
+    // Get country and city from Vercel headers if available
     const country = headersList.get("x-vercel-ip-country") || "Unknown";
+    const city = headersList.get("x-vercel-ip-city") || "Unknown";
     
     // Hash the IP with the user agent to create a privacy-preserving session hash
     const userAgent = headersList.get("user-agent") || "unknown";
@@ -26,8 +27,10 @@ export async function trackVisit(path: string) {
 
     await supabaseAdmin.from("page_visits").insert({
       session_hash: sessionHash,
+      ip_address: ip,
       path: path,
       country: country,
+      city: decodeURIComponent(city), // City names can be URL encoded
     });
     
     return { success: true };

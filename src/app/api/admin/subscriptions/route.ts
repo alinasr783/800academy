@@ -77,6 +77,20 @@ export async function GET(req: Request) {
     });
   }
 
+  if (kind === "offers") {
+    const subjectId = url.searchParams.get("subject_id");
+    if (!subjectId) return NextResponse.json({ items: [] });
+    
+    const { data, error } = await admin
+      .from("subject_offers")
+      .select("id, label, price_cents, currency, expires_at")
+      .eq("subject_id", subjectId)
+      .eq("is_active", true);
+      
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ items: data ?? [] });
+  }
+
   const q = url.searchParams.get("q")?.trim() ?? "";
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? 100), 1), 200);
   const offset = Math.max(Number(url.searchParams.get("offset") ?? 0), 0);
@@ -168,15 +182,14 @@ export async function POST(req: Request) {
   const guard = await requireAdminFromBearer(auth);
   if (!guard.ok) return new NextResponse(null, { status: guard.status });
 
-  const body = (await req.json().catch(() => null)) as
-    | { action: "manual_add"; user_id: string; subject_id: string; access_expires_at: string }
-    | null;
+  const body = (await req.json().catch(() => null)) as any;
   if (!body?.action) return NextResponse.json({ error: "Invalid body." }, { status: 400 });
 
   const { admin, error: adminErr } = getAdminOrFail();
   if (!admin) return NextResponse.json({ error: adminErr }, { status: 500 });
 
   if (body.action === "manual_add") {
+    // Add Entitlement only
     if (!body.user_id || !body.subject_id || !body.access_expires_at) {
       return NextResponse.json({ error: "Missing fields." }, { status: 400 });
     }
@@ -196,6 +209,83 @@ export async function POST(req: Request) {
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json({ entitlement: data });
+  }
+
+  if (body.action === "manual_subscribe") {
+    // Add full Subscription + Transaction + Entitlement
+    if (!body.user_id || !body.subject_id || !body.offer_id) {
+      return NextResponse.json({ error: "Missing fields." }, { status: 400 });
+    }
+    
+    // Fetch offer details
+    const { data: offer, error: offerErr } = await admin
+      .from("subject_offers")
+      .select("price_cents, expires_at, currency, label")
+      .eq("id", body.offer_id)
+      .single();
+      
+    if (offerErr || !offer) return NextResponse.json({ error: "Offer not found." }, { status: 404 });
+    
+    // Create transaction
+    const { data: tx, error: txError } = await admin
+      .from("transactions")
+      .insert({
+        amount: offer.price_cents / 100,
+        currency: offer.currency || "EGP",
+        status: "completed",
+        type: "subscription",
+        user_id: body.user_id,
+        metadata: {
+          type: "subscription",
+          manual: true,
+          method: "whatsapp",
+          offers: [{
+            offer_id: body.offer_id,
+            subject_id: body.subject_id,
+            price_cents: offer.price_cents,
+            expires_at: offer.expires_at,
+            label: offer.label
+          }]
+        },
+      })
+      .select("id")
+      .single();
+      
+    if (txError) return NextResponse.json({ error: txError.message }, { status: 400 });
+    
+    // Create User Subscription
+    await admin.from("user_subscriptions").insert({
+      user_id: body.user_id,
+      subject_id: body.subject_id,
+      subject_offer_id: body.offer_id,
+      transaction_id: tx.id,
+      payment_method: "whatsapp_manual",
+      status: "active",
+      expires_at: offer.expires_at,
+    });
+    
+    // Create Entitlement
+    const { data: ent, error: entError } = await admin.from("entitlements").insert({
+      user_id: body.user_id,
+      subject_id: body.subject_id,
+      access_expires_at: offer.expires_at,
+      order_item_id: null,
+    }).select().single();
+    
+    if (entError) return NextResponse.json({ error: entError.message }, { status: 400 });
+    return NextResponse.json({ entitlement: ent });
+  }
+
+  if (body.action === "cancel_entitlement") {
+    if (!body.id) return NextResponse.json({ error: "Missing entitlement id." }, { status: 400 });
+    
+    const { error } = await admin
+      .from("entitlements")
+      .update({ access_expires_at: new Date().toISOString() })
+      .eq("id", body.id);
+      
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ success: true });
   }
 
   return NextResponse.json({ error: "Unsupported action." }, { status: 400 });

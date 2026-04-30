@@ -95,6 +95,14 @@ async function fulfillSubscription(admin: any, referenceNumber: number, easykash
       status: "active",
       expires_at: offer.expires_at,
     });
+
+    // CRITICAL: Grant the actual entitlement so the user gets access
+    await admin.from("entitlements").insert({
+      user_id: userId,
+      subject_id: offer.subject_id,
+      access_expires_at: offer.expires_at,
+      order_item_id: null,
+    });
   }
 
   // Record Coupon Usage if applicable

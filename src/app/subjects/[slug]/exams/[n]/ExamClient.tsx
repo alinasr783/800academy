@@ -221,6 +221,8 @@ function buildInitialQState(questions: Question[]) {
   return map;
 }
 
+import { recordStreakActivity } from "@/lib/streak";
+
 export default function ExamClient({
   subjectId,
   subjectSlug,
@@ -2305,6 +2307,7 @@ export default function ExamClient({
                           }
                         }
                         const nextIndex = lastOfCurrentUnit + 1;
+                        recordStreakActivity(); // Record streak activity
                         if (nextIndex >= totalQuestionsCount) {
                           onSubmit(false);
                         } else {

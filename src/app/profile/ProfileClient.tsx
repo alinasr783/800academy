@@ -157,7 +157,7 @@ export default function ProfileClient() {
   const [phone, setPhone] = useState("");
   const [bio, setBio] = useState("");
 
-  // Brain Gym Wizard State
+  // Question Bank Wizard State
   const [gymTopics, setGymTopics] = useState<string[]>([]);
   const [gymSubtopics, setGymSubtopics] = useState<string[]>([]);
   const [gymLimit, setGymLimit] = useState(20);
@@ -490,7 +490,7 @@ export default function ProfileClient() {
             }`}
         >
           <span className="material-symbols-outlined text-[20px]">fitness_center</span>
-          Brain Gym
+          Question Bank
         </button>
       </div>
 
@@ -1051,7 +1051,7 @@ export default function ProfileClient() {
                   </div>
                   <h3 className="text-2xl font-black text-primary mb-3 tracking-tight">Premium Practice Tool</h3>
                   <p className="max-w-md mx-auto text-on-surface-variant font-medium leading-relaxed">
-                    Brain Gym is a premium feature for subscribed students. Unlock a subject to start building custom practice sets.
+                    Question Bank is a premium feature for subscribed students. Unlock a subject to start building custom practice sets.
                   </p>
                   <button
                     onClick={() => router.push('/')}

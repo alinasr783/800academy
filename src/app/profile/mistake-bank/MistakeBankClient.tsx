@@ -122,6 +122,8 @@ function buildInitialQState(questions: Question[]) {
   return map;
 }
 
+import { recordStreakActivity } from "@/lib/streak";
+
 export default function MistakeBankClient() {
   const router = useRouter();
   const [tab, setTab] = useState<"test" | "reference">("test");
@@ -1032,6 +1034,7 @@ export default function MistakeBankClient() {
                         </button>
                         <button 
                           onClick={() => { 
+                            recordStreakActivity(); // Record streak activity
                             if(currentIndex === questions.length-1) onSubmit(); 
                             else { 
                               setCurrentIndex(v => Math.min(questions.length-1, v+1)); 
