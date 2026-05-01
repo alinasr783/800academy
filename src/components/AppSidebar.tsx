@@ -9,7 +9,8 @@ const navLinks = [
   { id: "plans", label: "Plans", href: "/#plans", icon: "payments" },
   { id: "mistakes", label: "Mistakes Bank", href: "/profile/mistake-bank", icon: "history_edu" },
   { id: "questions", label: "Question Bank", href: "/profile/brain-gym", icon: "quiz" },
-  { id: "simulation", label: "Simulation EST", href: "/simulation", icon: "assignment" },
+  { id: "lessons", label: "Lessons", href: "/lessons", icon: "school" },
+  { id: "simulation", label: "Simulations", href: "/simulation", icon: "assignment" },
 ];
 
 export default function AppSidebar() {

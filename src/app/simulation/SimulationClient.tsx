@@ -19,14 +19,15 @@ type Exam = {
   subject_id: string;
   title: string;
   exam_number: number;
+  is_free: boolean;
 };
 
 export default function SimulationClient() {
   const [loading, setLoading] = useState(true);
   const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [examsBySubject, setExamsBySubject] = useState<Map<string, Exam[]>>(new Map());
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
   const [subscribedSubjectIds, setSubscribedSubjectIds] = useState<Set<string>>(new Set());
-  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
     async function init() {
@@ -34,7 +35,6 @@ export default function SimulationClient() {
       try {
         const { data: sess } = await supabase.auth.getSession();
         const currentUser = sess.session?.user ?? null;
-        setUser(currentUser);
 
         const { data: subjectRows } = await supabase
           .from("subjects")
@@ -43,7 +43,7 @@ export default function SimulationClient() {
 
         const { data: examRows } = await supabase
           .from("exams")
-          .select("id, subject_id, title, exam_number")
+          .select("id, subject_id, title, exam_number, is_free")
           .order("exam_number");
 
         if (currentUser) {
@@ -59,14 +59,11 @@ export default function SimulationClient() {
         }
 
         setSubjects(subjectRows ?? []);
+        setExams(examRows ?? []);
         
-        const eMap = new Map<string, Exam[]>();
-        (examRows ?? []).forEach((e) => {
-          const list = eMap.get(e.subject_id) ?? [];
-          list.push(e);
-          eMap.set(e.subject_id, list);
-        });
-        setExamsBySubject(eMap);
+        if (subjectRows && subjectRows.length > 0) {
+          setSelectedSubjectId(subjectRows[0].id);
+        }
       } catch (err) {
         console.error("Failed to load simulation data:", err);
       } finally {
@@ -76,11 +73,14 @@ export default function SimulationClient() {
     init();
   }, []);
 
+  const currentSubject = subjects.find(s => s.id === selectedSubjectId);
+  const filteredExams = exams.filter(e => e.subject_id === selectedSubjectId);
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-40">
         <LoadingAnimation />
-        <p className="text-on-surface-variant font-medium mt-4">Loading simulation portal...</p>
+        <p className="text-on-surface-variant font-medium mt-4">Opening simulation portal...</p>
       </div>
     );
   }
@@ -95,92 +95,140 @@ export default function SimulationClient() {
           EST Simulation Exams
         </h1>
         <p className="text-on-surface-variant font-medium mt-4 max-w-2xl leading-relaxed">
-          Access full-length simulations for your subscribed subjects. Experience the real exam interface and get instant results.
+          Experience full-length simulations in the official EST environment. Real scoring, real timers, real results.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {subjects.map((subject) => {
-          const isSubscribed = subscribedSubjectIds.has(subject.id);
-          const subjectExams = examsBySubject.get(subject.id) ?? [];
-
-          return (
-            <div
-              key={subject.id}
-              className={`bg-white border-2 rounded-3xl overflow-hidden transition-all duration-300 flex flex-col ${
-                isSubscribed 
-                  ? "border-slate-200 hover:border-primary hover:shadow-soft-2xl" 
-                  : "border-slate-100 opacity-80"
-              }`}
-            >
-              <div className="p-6 sm:p-8 border-b border-slate-100 bg-slate-50/50">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant bg-white px-3 py-1 rounded-full border border-slate-200">
-                    {subject.track ?? "EST"}
-                  </span>
-                  {isSubscribed ? (
-                    <span className="flex items-center gap-1 text-emerald-600">
-                      <span className="material-symbols-outlined text-[18px]">check_circle</span>
-                      <span className="text-[10px] font-black tracking-widest uppercase">Subscribed</span>
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1 text-on-surface-variant/60">
-                      <span className="material-symbols-outlined text-[18px]">lock</span>
-                      <span className="text-[10px] font-black tracking-widest uppercase">Locked</span>
-                    </span>
-                  )}
-                </div>
-                <h3 className="text-xl sm:text-2xl font-extrabold text-primary tracking-tight">
-                  {subject.title}
-                </h3>
-                <p className="text-xs text-on-surface-variant mt-2 font-medium line-clamp-2">
-                  {subject.description || "Comprehensive practice for the real EST exam."}
-                </p>
-              </div>
-
-              <div className="p-6 flex flex-col gap-4 flex-1">
-                <div className="text-xs font-bold text-on-surface-variant mb-2">
-                  {subjectExams.length} Exams Available
-                </div>
-                
-                {isSubscribed ? (
-                  <div className="space-y-2">
-                    {subjectExams.slice(0, 3).map((exam) => (
-                      <Link
-                        key={exam.id}
-                        href={`/subjects/${subject.slug}/exams/${exam.exam_number}`}
-                        className="flex items-center justify-between p-3 rounded-xl border border-outline/40 hover:border-primary hover:bg-primary/5 transition-all group"
-                      >
-                        <span className="text-sm font-bold text-primary">Exam {exam.exam_number}</span>
-                        <span className="material-symbols-outlined text-sm text-on-surface-variant group-hover:text-primary transition-all">arrow_forward</span>
-                      </Link>
-                    ))}
-                    {subjectExams.length > 3 && (
-                      <Link
-                        href={`/subjects/${subject.slug}#exams-library`}
-                        className="block text-center text-[11px] font-bold text-secondary hover:text-primary transition-all mt-2"
-                      >
-                        View all {subjectExams.length} exams
-                      </Link>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+        {/* Left Sidebar: Package Selection */}
+        <div className="lg:col-span-4 space-y-6 sticky top-24">
+          <div className="bg-white rounded-3xl border border-outline/40 p-6 shadow-soft-xl">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-secondary mb-4 px-2">Select Package</h3>
+            <div className="space-y-2">
+              {subjects.map(subject => {
+                const isSubscribed = subscribedSubjectIds.has(subject.id);
+                return (
+                  <button
+                    key={subject.id}
+                    onClick={() => setSelectedSubjectId(subject.id)}
+                    className={`w-full text-left px-4 py-3 rounded-2xl font-bold text-sm transition-all flex items-center justify-between ${
+                      selectedSubjectId === subject.id 
+                        ? "bg-primary text-white shadow-lg" 
+                        : "text-on-surface hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span>{subject.title}</span>
+                    </div>
+                    {!isSubscribed && (
+                      <span className="material-symbols-outlined text-[16px] opacity-50">lock</span>
                     )}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-6 px-4 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-300">
-                    <p className="text-xs text-on-surface-variant font-medium mb-4">
-                      Unlock this subject to access simulation exams.
-                    </p>
-                    <Link
-                      href={`/subjects/${subject.slug}`}
-                      className="px-6 py-2 bg-primary text-white text-xs font-bold rounded-full hover:bg-slate-800 transition-all"
-                    >
-                      View Plans
-                    </Link>
-                  </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          
+          {currentSubject && (
+            <div className="p-6 bg-slate-100 rounded-3xl border border-slate-200">
+               <div className="text-[10px] font-black uppercase text-slate-400 mb-2">Subject Info</div>
+               <p className="text-xs font-bold text-primary leading-relaxed">
+                  {currentSubject.description || "Start practicing with real EST simulation exams today."}
+               </p>
+            </div>
+          )}
+        </div>
+
+        {/* Right Content: Exams List */}
+        <div className="lg:col-span-8">
+          {selectedSubjectId ? (
+            <div className="space-y-8">
+              <div className="flex items-center justify-between px-2">
+                <div>
+                  <h2 className="text-2xl font-black text-primary tracking-tight">
+                    {currentSubject?.title} Exams
+                  </h2>
+                  <p className="text-sm text-on-surface-variant font-medium mt-1">
+                    {filteredExams.length} Full-length simulations
+                  </p>
+                </div>
+                {!subscribedSubjectIds.has(selectedSubjectId) && (
+                   <Link href={`/subjects/${currentSubject?.slug}`} className="px-5 py-2 bg-secondary text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-primary transition-all">
+                      Unlock Full Access
+                   </Link>
                 )}
               </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {filteredExams.map((exam) => {
+                  const isSubscribed = subscribedSubjectIds.has(selectedSubjectId);
+                  const canAccess = isSubscribed || exam.is_free;
+
+                  return (
+                    <div
+                      key={exam.id}
+                      className="group bg-white rounded-3xl border-2 border-slate-200 p-8 flex flex-col transition-all duration-300 hover:shadow-soft-2xl hover:border-primary/30"
+                    >
+                      <div className="flex items-start justify-between gap-4 mb-6">
+                        <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-primary font-black text-lg border border-slate-100">
+                          {exam.exam_number}
+                        </div>
+                        <div className={`px-3 py-1 rounded-full text-[9px] font-black tracking-widest uppercase ${exam.is_free ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}>
+                          {exam.is_free ? 'Free Sample' : 'Premium'}
+                        </div>
+                      </div>
+                      
+                      <h3 className="text-xl font-extrabold text-primary mb-2">
+                        {exam.title}
+                      </h3>
+                      <p className="text-xs text-on-surface-variant font-medium mb-8 leading-relaxed">
+                        Official EST simulation format. {canAccess ? 'Access is available for your account.' : 'Please subscribe to unlock this simulation.'}
+                      </p>
+
+                      <div className="mt-auto pt-6 border-t border-slate-100">
+                        {canAccess ? (
+                          <Link
+                            href={`/subjects/${currentSubject?.slug}/exams/${exam.exam_number}`}
+                            className="w-full bg-primary text-white py-4 font-black text-[11px] uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 hover:bg-slate-800 transition-all shadow-lg shadow-primary/20 active:scale-[0.98]"
+                          >
+                            Open Simulation
+                            <span className="material-symbols-outlined text-lg">arrow_forward</span>
+                          </Link>
+                        ) : (
+                          <div className="flex flex-col gap-3">
+                             <div className="flex items-center gap-2 text-rose-500 font-bold text-[10px] uppercase tracking-widest justify-center">
+                              <span className="material-symbols-outlined text-sm">lock</span>
+                              Locked Simulation
+                            </div>
+                            <Link
+                              href={`/subjects/${currentSubject?.slug}`}
+                              className="w-full py-4 bg-slate-100 text-on-surface-variant font-black text-[11px] uppercase tracking-widest hover:bg-slate-200 transition-all rounded-2xl text-center"
+                            >
+                              View Plans
+                            </Link>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {filteredExams.length === 0 && (
+                <div className="p-20 bg-white rounded-3xl border-2 border-dashed border-slate-200 text-center">
+                  <span className="material-symbols-outlined text-5xl text-slate-300 mb-4">assignment_late</span>
+                  <p className="font-bold text-on-surface-variant">Coming soon: New simulations are being prepared.</p>
+                </div>
+              )}
             </div>
-          );
-        })}
+          ) : (
+             <div className="p-20 bg-white rounded-3xl border border-outline/40 shadow-soft-xl text-center">
+                <span className="material-symbols-outlined text-6xl text-primary/20 mb-6">rocket_launch</span>
+                <h2 className="text-2xl font-black text-primary tracking-tight mb-2">Simulation Portal</h2>
+                <p className="text-on-surface-variant font-medium">Select a package from the sidebar to begin your mock exam.</p>
+             </div>
+          )}
+        </div>
       </div>
     </section>
   );

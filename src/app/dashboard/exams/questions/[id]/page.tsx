@@ -484,10 +484,21 @@ export default function DashboardQuestionDetails() {
   const [assetSort, setAssetSort] = useState("0");
   const [assetKind, setAssetKind] = useState<"prompt" | "explanation">("prompt");
   const [assetFiles, setAssetFiles] = useState<File[]>([]);
+  const [promptFiles, setPromptFiles] = useState<File[]>([]);
+  const [explanationFiles, setExplanationFiles] = useState<File[]>([]);
 
   const [optText, setOptText] = useState("");
   const [optUrl, setOptUrl] = useState("");
   const [optCorrect, setOptCorrect] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDrop = (e: React.DragEvent, target: 'prompt' | 'explanation') => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (target === 'prompt') setPromptFiles(prev => [...prev, ...files]);
+    else setExplanationFiles(prev => [...prev, ...files]);
+  };
 
   const dragFromIdx = useRef<number | null>(null);
 
@@ -647,6 +658,31 @@ export default function DashboardQuestionDetails() {
       })) as { question: QuestionRow };
       
       setQuestion(res.question);
+
+      // --- New Asset Upload Logic ---
+      const uploadAndGetAsset = async (qId: string, file: File, kind: "prompt" | "explanation", i: number) => {
+          const safeName = file.name.replaceAll(" ", "-");
+          const path = `questions/${qId}/${kind === 'explanation' ? 'explanations/' : ''}${Date.now()}-${i}-${safeName}`;
+          const { error: upErr } = await supabase.storage.from(storageBucket).upload(path, file, { upsert: false });
+          if (upErr) throw new Error(upErr.message);
+          const publicUrl = supabase.storage.from(storageBucket).getPublicUrl(path).data.publicUrl;
+          return { bucket: storageBucket, storage_path: path, url: publicUrl, alt: file.name, kind, sort_order: i };
+      };
+
+      const newMainAssets = [
+         ...promptFiles.map((f, i) => uploadAndGetAsset(questionId, f, "prompt", i + assets.filter(a => a.kind === 'prompt').length)),
+         ...explanationFiles.map((f, i) => uploadAndGetAsset(questionId, f, "explanation", i + assets.filter(a => a.kind === 'explanation').length))
+      ];
+      const uploadedMainAssets = await Promise.all(newMainAssets);
+      if (uploadedMainAssets.length > 0) {
+         await adminFetch(`/api/admin/questions/${questionId}`, {
+            method: "POST",
+            body: JSON.stringify({ action: "batch_assets", assets: uploadedMainAssets })
+         });
+         setPromptFiles([]);
+         setExplanationFiles([]);
+      }
+      // -------------------------------
 
           // 2. If it's a reference block, save/create sub-questions
           if (type === 'reference_block') {
@@ -1091,53 +1127,103 @@ export default function DashboardQuestionDetails() {
                          {type === 'reference_block' ? 'Block Images' : 'Attached Assets (Images)'}
                       </div>
                       
-                      <div className="flex flex-wrap gap-4 mb-8">
-                        {assets.map((a) => (
-                           <div key={a.id} className="group relative w-24 h-24 rounded-2xl overflow-hidden border border-outline/40 shadow-sm hover:shadow-md transition-all">
-                              {a.url ? (
-                                <img src={a.url} alt="asset" className="w-full h-full object-cover" />
-                              ) : (
-                                <div className="w-full h-full bg-slate-50 flex items-center justify-center">
-                                   <span className="material-symbols-outlined text-slate-300">image</span>
-                                </div>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => deleteAsset(a.id)}
-                                className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                <span className="material-symbols-outlined text-[14px]">close</span>
-                              </button>
-                           </div>
-                        ))}
-                      </div>
+                      <div 
+                         className={`flex flex-wrap gap-4 mb-8 p-6 rounded-3xl border-2 border-dashed transition-all ${isDragging ? 'border-primary bg-primary/5' : 'border-slate-100 bg-slate-50/50'}`}
+                         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                         onDragLeave={() => setIsDragging(false)}
+                         onDrop={(e) => handleDrop(e, assetKind)}
+                       >
+                         {assets.map((a) => (
+                            <div key={a.id} className="group relative w-24 h-24 rounded-2xl overflow-hidden border border-outline/40 shadow-sm hover:shadow-md transition-all bg-white">
+                               {a.url ? (
+                                 <img src={a.url} alt="asset" className="w-full h-full object-cover" />
+                               ) : (
+                                 <div className="w-full h-full bg-slate-50 flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-slate-300">image</span>
+                                 </div>
+                               )}
+                               <button
+                                 type="button"
+                                 onClick={() => deleteAsset(a.id)}
+                                 className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                               >
+                                 <span className="material-symbols-outlined text-[14px]">close</span>
+                               </button>
+                               <div className="absolute bottom-0 inset-x-0 bg-black/40 text-[7px] font-black text-white text-center py-0.5 uppercase">{a.kind}</div>
+                            </div>
+                         ))}
 
-                      <div className="bg-slate-50 p-6 rounded-2xl space-y-4 border border-slate-100">
+                         {/* Local Files Preview */}
+                         {[...promptFiles.map(f => ({ f, k: 'prompt' })), ...explanationFiles.map(f => ({ f, k: 'explanation' }))].map((item, i) => (
+                            <div key={i} className="group relative w-24 h-24 rounded-2xl overflow-hidden border-2 border-primary/20 shadow-md transition-all bg-white animate-in zoom-in-50">
+                               <img src={URL.createObjectURL(item.f)} alt="new asset" className="w-full h-full object-cover" />
+                               <button
+                                 type="button"
+                                 onClick={() => {
+                                    if (item.k === 'prompt') setPromptFiles(prev => prev.filter(f => f !== item.f));
+                                    else setExplanationFiles(prev => prev.filter(f => f !== item.f));
+                                 }}
+                                 className="absolute top-1 right-1 w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                               >
+                                 <span className="material-symbols-outlined text-[14px]">close</span>
+                               </button>
+                               <div className="absolute bottom-0 inset-x-0 bg-primary/80 text-[7px] font-black text-white text-center py-0.5 uppercase">NEW {item.k}</div>
+                            </div>
+                         ))}
+
+                         {assets.length === 0 && promptFiles.length === 0 && explanationFiles.length === 0 && (
+                            <div className="w-full py-10 flex flex-col items-center justify-center text-slate-300">
+                               <span className="material-symbols-outlined text-4xl mb-2">add_photo_alternate</span>
+                               <span className="text-[10px] font-black uppercase tracking-widest">Drag & Drop images here</span>
+                            </div>
+                         )}
+                       </div>
+                       <div className="bg-slate-50 p-6 rounded-2xl space-y-4 border border-slate-100">
                         <div className="flex flex-col sm:flex-row gap-4">
-                          <input
-                            value={assetUrl}
-                            onChange={(e) => setAssetUrl(e.target.value)}
-                            placeholder="Direct image URL..."
-                            className="flex-1 h-12 px-5 bg-white border border-slate-200 rounded-xl focus:border-primary outline-none transition-all text-sm font-bold"
-                          />
-                          <select
-                             value={assetKind}
-                             onChange={(e) => setAssetKind(e.target.value as "prompt" | "explanation")}
-                             className="h-12 px-4 bg-white border border-slate-200 rounded-xl focus:border-primary outline-none transition-all text-xs font-black uppercase tracking-widest"
-                          >
-                             <option value="prompt">For Prompt</option>
-                             <option value="explanation">For Explanation</option>
-                          </select>
-                          <button
-                            type="button"
-                            onClick={addAsset}
-                            disabled={saving || !assetUrl.trim()}
-                            className="h-12 px-6 bg-slate-800 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all active:scale-[0.98]"
-                          >
-                            Add Asset
-                          </button>
+                           <div className="flex-1 relative">
+                              <input 
+                                 type="file" 
+                                 multiple 
+                                 accept="image/*" 
+                                 onChange={(e) => {
+                                    const files = Array.from(e.target.files || []);
+                                    if (assetKind === 'prompt') setPromptFiles(prev => [...prev, ...files]);
+                                    else setExplanationFiles(prev => [...prev, ...files]);
+                                 }}
+                                 className="absolute inset-0 opacity-0 cursor-pointer"
+                              />
+                              <div className="h-12 px-5 bg-white border border-slate-200 rounded-xl flex items-center gap-3 text-slate-400 text-xs font-bold transition-all hover:border-primary">
+                                 <span className="material-symbols-outlined">upload_file</span>
+                                 <span>Upload images for {assetKind}...</span>
+                              </div>
+                           </div>
+                           <select
+                              value={assetKind}
+                              onChange={(e) => setAssetKind(e.target.value as "prompt" | "explanation")}
+                              className="h-12 px-4 bg-white border border-slate-200 rounded-xl focus:border-primary outline-none transition-all text-xs font-black uppercase tracking-widest"
+                           >
+                              <option value="prompt">For Prompt</option>
+                              <option value="explanation">For Explanation</option>
+                           </select>
+                        </div>
+                        <div className="flex items-center gap-3">
+                           <input
+                             value={assetUrl}
+                             onChange={(e) => setAssetUrl(e.target.value)}
+                             placeholder="...or paste direct image URL"
+                             className="flex-1 h-12 px-5 bg-white border border-slate-200 rounded-xl focus:border-primary outline-none transition-all text-sm font-bold"
+                           />
+                           <button
+                             type="button"
+                             onClick={addAsset}
+                             disabled={saving || !assetUrl.trim()}
+                             className="h-12 px-6 bg-slate-800 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all active:scale-[0.98]"
+                           >
+                             Add
+                           </button>
                         </div>
                       </div>
+
                   </div>
                </div>
             </div>

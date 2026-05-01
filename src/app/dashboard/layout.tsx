@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
-import SiteHeader from "@/components/SiteHeader";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import DashboardGuard from "./DashboardGuard";
@@ -10,6 +9,14 @@ import DashboardGuard from "./DashboardGuard";
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  // Disable App Mode automatically when entering dashboard
+  useEffect(() => {
+    if (typeof window !== "undefined" && localStorage.getItem("isAppMode") === "true") {
+      localStorage.setItem("isAppMode", "false");
+      window.dispatchEvent(new Event("appModeChange"));
+    }
+  }, []);
 
   // Determine if we should use full-width mode (hide sidebar)
   // Builder routes like /dashboard/exams/[id] or /dashboard/exams/questions/[id]
@@ -20,22 +27,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (isBuilder) {
     return (
-      <>
-        <SiteHeader />
-        <main className="pt-24 min-h-screen bg-slate-50">
-          <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
-            <DashboardGuard>{children}</DashboardGuard>
-          </div>
-        </main>
-      </>
+      <main className="min-h-screen bg-slate-50">
+        <div className="w-full px-4 sm:px-6 lg:px-8 py-8">
+          <DashboardGuard>{children}</DashboardGuard>
+        </div>
+      </main>
     );
   }
 
   return (
-    <>
-      <SiteHeader />
-      <main className="pt-24 min-h-screen bg-slate-50">
-        <div className="max-w-[1440px] mx-auto px-8 lg:px-12 py-12">
+    <main className="min-h-screen bg-slate-50">
+      <div className="max-w-[1440px] mx-auto px-8 lg:px-12 py-12">
           <DashboardGuard>
             <div className="flex flex-col lg:flex-row gap-6 lg:gap-10">
               <aside className={`transition-all duration-300 flex-shrink-0 ${isCollapsed ? "w-[88px]" : "w-full lg:w-72"}`}>
@@ -63,7 +65,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       { href: "/dashboard/subscriptions", label: "Subscriptions", icon: "payments" },
                       { href: "/dashboard/packages", label: "Packages", icon: "inventory_2" },
                       { href: "/dashboard/exams", label: "Exams", icon: "quiz" },
+                      { href: "/dashboard/questions", label: "Questions Bank", icon: "database" },
                       { href: "/dashboard/topics", label: "Topics", icon: "category" },
+                      { href: "/dashboard/topics-management", label: "Lessons", icon: "school" },
                       { href: "/dashboard/coupons", label: "Coupons", icon: "local_offer" },
                       { href: "/dashboard/notifications", label: "Notifications", icon: "notifications" },
                       { href: "/dashboard/notification-types", label: "Notif. Types", icon: "category" },
@@ -94,8 +98,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <section className="flex-1 min-w-0 transition-all duration-300">{children}</section>
             </div>
           </DashboardGuard>
-        </div>
-      </main>
-    </>
+      </div>
+    </main>
   );
 }

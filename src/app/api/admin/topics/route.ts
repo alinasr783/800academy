@@ -7,6 +7,9 @@ type TopicRow = {
   title: string;
   description: string | null;
   subject_id: string | null;
+  image_url: string | null;
+  category: string | null;
+  is_free: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -52,7 +55,14 @@ export async function POST(req: Request) {
   const guard = await requireAdminFromBearer(auth);
   if (!guard.ok) return new NextResponse(null, { status: guard.status });
 
-  const body = (await req.json().catch(() => null)) as { title: string; description?: string; subject_id: string } | null;
+  const body = (await req.json().catch(() => null)) as { 
+    title: string; 
+    description?: string; 
+    subject_id: string;
+    image_url?: string;
+    category?: string;
+    is_free?: boolean;
+  } | null;
   if (!body?.title) return NextResponse.json({ error: "Title is required." }, { status: 400 });
 
   const { admin, error: adminErr } = getAdminOrFail();
@@ -64,6 +74,9 @@ export async function POST(req: Request) {
       title: body.title.trim(),
       description: body.description?.trim() || null,
       subject_id: body.subject_id || null,
+      image_url: body.image_url || null,
+      category: body.category || null,
+      is_free: body.is_free || false,
     })
     .select("*")
     .single();
@@ -86,6 +99,9 @@ export async function PATCH(req: Request) {
     title: string;
     description: string | null;
     subject_id: string | null;
+    image_url: string | null;
+    category: string | null;
+    is_free: boolean;
   }> | null;
 
   if (!body) return NextResponse.json({ error: "Invalid body." }, { status: 400 });
@@ -97,6 +113,9 @@ export async function PATCH(req: Request) {
   if ("title" in body) patch.title = body.title?.trim();
   if ("description" in body) patch.description = body.description?.trim() || null;
   if ("subject_id" in body) patch.subject_id = body.subject_id || null;
+  if ("image_url" in body) patch.image_url = body.image_url;
+  if ("category" in body) patch.category = body.category;
+  if ("is_free" in body) patch.is_free = body.is_free;
 
   const { data, error } = await admin
     .from("topics")

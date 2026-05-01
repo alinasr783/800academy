@@ -411,5 +411,143 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ ok: true });
   }
 
+  if (body.action === "import_from_bank") {
+    const { bank_question_ids } = body as { bank_question_ids: string[] };
+    if (!Array.isArray(bank_question_ids) || bank_question_ids.length === 0) {
+      return NextResponse.json({ error: "Missing bank_question_ids." }, { status: 400 });
+    }
+
+    try {
+      // Get current max question number
+      const { data: maxRows } = await admin
+        .from("exam_questions")
+        .select("question_number")
+        .eq("exam_id", examId)
+        .order("question_number", { ascending: false })
+        .limit(1);
+      let nextNum = ((maxRows?.[0]?.question_number as number | undefined) ?? 0) + 1;
+
+      for (const bId of bank_question_ids) {
+        // 1. Fetch bank question
+        const { data: bq } = await admin
+          .from("question_bank")
+          .select("*, question_bank_options(*), question_bank_assets(*)")
+          .eq("id", bId)
+          .single();
+
+        if (!bq) continue;
+
+        // 2. Insert into exam_questions
+        const { data: newQ, error: qErr } = await admin
+          .from("exam_questions")
+          .insert({
+            exam_id: examId,
+            question_number: nextNum++,
+            type: bq.type,
+            prompt_text: bq.prompt_text,
+            explanation_text: bq.explanation_text,
+            points: bq.points,
+            allow_multiple: bq.allow_multiple,
+            correct_text: bq.correct_text,
+            topic_id: bq.topic_id,
+            subtopic_id: bq.subtopic_id
+          })
+          .select()
+          .single();
+
+        if (qErr || !newQ) continue;
+
+        // 3. Clone options
+        if (bq.question_bank_options?.length > 0) {
+          const opts = bq.question_bank_options.map((o: any) => ({
+            question_id: newQ.id,
+            option_number: o.option_number,
+            text: o.text,
+            bucket: o.bucket,
+            storage_path: o.storage_path,
+            url: o.url,
+            is_correct: o.is_correct
+          }));
+          await admin.from("exam_question_options").insert(opts);
+        }
+
+        // 4. Clone assets
+        if (bq.question_bank_assets?.length > 0) {
+          const assets = bq.question_bank_assets.map((a: any) => ({
+            question_id: newQ.id,
+            bucket: a.bucket,
+            storage_path: a.storage_path,
+            url: a.url,
+            alt: a.alt,
+            kind: a.kind,
+            sort_order: a.sort_order
+          }));
+          await admin.from("exam_question_assets").insert(assets);
+        }
+
+        // 5. Handle Sub-questions if any
+        const { data: subBankQs } = await admin
+          .from("question_bank")
+          .select("*, question_bank_options(*), question_bank_assets(*)")
+          .eq("parent_id", bId);
+
+        if (subBankQs && subBankQs.length > 0) {
+          for (const sbq of subBankQs) {
+             const { data: newSubQ } = await admin
+               .from("exam_questions")
+               .insert({
+                 exam_id: examId,
+                 question_number: 0, // Subs usually have 0 or specific order
+                 type: sbq.type,
+                 parent_id: newQ.id,
+                 prompt_text: sbq.prompt_text,
+                 explanation_text: sbq.explanation_text,
+                 points: sbq.points,
+                 correct_text: sbq.correct_text,
+                 topic_id: sbq.topic_id,
+                 subtopic_id: sbq.subtopic_id
+               })
+               .select()
+               .single();
+
+             if (newSubQ) {
+                // Clone sub options
+                if (sbq.question_bank_options?.length > 0) {
+                   await admin.from("exam_question_options").insert(
+                     sbq.question_bank_options.map((o: any) => ({
+                       question_id: newSubQ.id,
+                       option_number: o.option_number,
+                       text: o.text,
+                       bucket: o.bucket,
+                       storage_path: o.storage_path,
+                       url: o.url,
+                       is_correct: o.is_correct
+                     }))
+                   );
+                }
+                // Clone sub assets
+                if (sbq.question_bank_assets?.length > 0) {
+                   await admin.from("exam_question_assets").insert(
+                     sbq.question_bank_assets.map((a: any) => ({
+                       question_id: newSubQ.id,
+                       bucket: a.bucket,
+                       storage_path: a.storage_path,
+                       url: a.url,
+                       alt: a.alt,
+                       kind: a.kind,
+                       sort_order: a.sort_order
+                     }))
+                   );
+                }
+             }
+          }
+        }
+      }
+      return NextResponse.json({ ok: true });
+    } catch (err: any) {
+      return NextResponse.json({ error: err.message }, { status: 500 });
+    }
+  }
+
   return NextResponse.json({ error: "Unsupported action." }, { status: 400 });
 }

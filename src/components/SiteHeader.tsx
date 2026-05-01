@@ -26,6 +26,7 @@ export default function SiteHeader({ active: activeProp }: Props) {
     if (pathname.includes("/mistake-bank")) return "mistakes";
     if (pathname.includes("/brain-gym")) return "questions";
     if (pathname.includes("/simulation")) return "simulation";
+    if (pathname.includes("/lessons")) return "lessons";
     return undefined;
   })();
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
@@ -33,6 +34,7 @@ export default function SiteHeader({ active: activeProp }: Props) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isAppMode, setIsAppMode] = useState(false);
+  const [lessonProgress, setLessonProgress] = useState<{ title: string; current: number; total: number } | null>(null);
 
   useEffect(() => {
     const checkAppMode = () => {
@@ -40,7 +42,16 @@ export default function SiteHeader({ active: activeProp }: Props) {
     };
     checkAppMode();
     window.addEventListener("appModeChange", checkAppMode);
-    return () => window.removeEventListener("appModeChange", checkAppMode);
+    
+    const handleLessonUpdate = (e: any) => {
+       setLessonProgress(e.detail);
+    };
+    window.addEventListener("lessonProgressUpdate", handleLessonUpdate);
+
+    return () => {
+      window.removeEventListener("appModeChange", checkAppMode);
+      window.removeEventListener("lessonProgressUpdate", handleLessonUpdate);
+    };
   }, []);
 
   const toggleAppMode = () => {
@@ -135,7 +146,8 @@ export default function SiteHeader({ active: activeProp }: Props) {
     { id: "plans", label: "Plans", href: "/#plans", icon: "payments" },
     { id: "mistakes", label: "Mistakes Bank", href: "/profile/mistake-bank", icon: "history_edu" },
     { id: "questions", label: "Question Bank", href: "/profile/brain-gym", icon: "quiz" },
-    { id: "simulation", label: "Simulation EST", href: "/simulation", icon: "assignment" },
+    { id: "lessons", label: "Lessons", href: "/lessons", icon: "school" },
+    { id: "simulation", label: "Simulations", href: "/simulation", icon: "assignment" },
   ];
 
   return (
@@ -181,8 +193,8 @@ export default function SiteHeader({ active: activeProp }: Props) {
             )}
           </div>
 
-          {/* Desktop Navigation Links — Hidden in App Mode */}
-          {!isAppMode && (
+          {/* Desktop Navigation Links — Hidden in App Mode or Lesson Mode */}
+          {!isAppMode && !lessonProgress && (
             <div className="hidden md:flex items-center gap-6">
               {navLinks.map((link) => (
                 <Link
@@ -195,6 +207,26 @@ export default function SiteHeader({ active: activeProp }: Props) {
                   {link.label}
                 </Link>
               ))}
+            </div>
+          )}
+
+          {/* Lesson Mode Progress Bar (Integrated) */}
+          {lessonProgress && (
+            <div className="flex-1 flex items-center gap-3 sm:gap-6 px-2 sm:mx-8 animate-in slide-in-from-top-4 duration-500 overflow-hidden">
+               <div className="hidden sm:block flex-shrink-0">
+                  <div className="text-[9px] font-black uppercase tracking-widest text-primary leading-none">Lesson</div>
+                  <div className="text-[11px] font-bold text-slate-700 truncate max-w-[120px] mt-0.5">{lessonProgress.title}</div>
+               </div>
+               <div className="flex-1 flex items-center gap-3">
+                  <span className="text-[10px] font-black text-primary min-w-[12px]">{lessonProgress.current}</span>
+                  <div className="flex-1 h-1.5 sm:h-2 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                     <div 
+                        className="h-full bg-primary rounded-full transition-all duration-700 ease-out shadow-[0_0_8px_rgba(0,45,98,0.3)]" 
+                        style={{ width: `${(lessonProgress.current / lessonProgress.total) * 100}%` }}
+                     ></div>
+                  </div>
+                  <span className="text-[10px] font-black text-slate-400 min-w-[12px]">{lessonProgress.total}</span>
+               </div>
             </div>
           )}
 

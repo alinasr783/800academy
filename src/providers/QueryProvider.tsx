@@ -1,6 +1,6 @@
 "use client";
 
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { useState, useEffect } from "react";
@@ -36,6 +36,14 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
   // But for SSR and first client hit, we need to be careful.
   // PersistQueryClientProvider handles null persister by just not persisting.
   
+  if (!persister) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        {children}
+      </QueryClientProvider>
+    );
+  }
+
   return (
     <PersistQueryClientProvider
       client={queryClient}

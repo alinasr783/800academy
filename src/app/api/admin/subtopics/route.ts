@@ -8,6 +8,9 @@ type SubtopicRow = {
   subject_id: string;
   title: string;
   description: string | null;
+  image_url: string | null;
+  category: string | null;
+  is_free: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -61,6 +64,9 @@ export async function POST(req: Request) {
     subject_id: string;
     title: string;
     description?: string;
+    image_url?: string;
+    category?: string;
+    is_free?: boolean;
   } | null;
 
   if (!body?.topic_id || !body?.subject_id || !body?.title) {
@@ -77,6 +83,9 @@ export async function POST(req: Request) {
       subject_id: body.subject_id,
       title: body.title.trim(),
       description: body.description?.trim() || null,
+      image_url: body.image_url || null,
+      category: body.category || null,
+      is_free: body.is_free || false,
     })
     .select("*")
     .single();
@@ -98,6 +107,9 @@ export async function PATCH(req: Request) {
   const body = (await req.json().catch(() => null)) as Partial<{
     title: string;
     description: string | null;
+    image_url: string | null;
+    category: string | null;
+    is_free: boolean;
   }> | null;
 
   if (!body) return NextResponse.json({ error: "Invalid body." }, { status: 400 });
@@ -108,6 +120,9 @@ export async function PATCH(req: Request) {
   const patch: Record<string, any> = {};
   if ("title" in body) patch.title = body.title?.trim();
   if ("description" in body) patch.description = body.description?.trim() || null;
+  if ("image_url" in body) patch.image_url = body.image_url;
+  if ("category" in body) patch.category = body.category;
+  if ("is_free" in body) patch.is_free = body.is_free;
 
   const { data, error } = await admin
     .from("subtopics")

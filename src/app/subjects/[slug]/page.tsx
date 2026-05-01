@@ -36,6 +36,14 @@ type Exam = {
   is_free: boolean | null;
 };
 
+type TopicLesson = {
+  id: string;
+  title: string;
+  category: string | null;
+  image_url: string | null;
+  is_free: boolean;
+};
+
 export default async function SubjectPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
   const sp = await searchParams;
@@ -97,6 +105,13 @@ export default async function SubjectPage({ params, searchParams }: PageProps) {
       }[]
     >();
 
+  const { data: subtopics } = await supabase
+    .from("subtopics")
+    .select("id, title, category, image_url, is_free")
+    .eq("subject_id", subject.id)
+    .order("created_at", { ascending: true })
+    .returns<TopicLesson[]>();
+
   return (
     <>
       <main>
@@ -121,7 +136,24 @@ export default async function SubjectPage({ params, searchParams }: PageProps) {
                   "A premium exam-prep track with high-fidelity practice and structured progression."}
               </p>
 
-              {shouldHideOffers ? null : (
+              {shouldHideOffers ? (
+                <div className="mt-10 flex flex-col sm:flex-row gap-4">
+                  <Link
+                    href="/lessons"
+                    className="flex-1 px-8 py-5 bg-primary text-white text-sm font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-primary/20 hover:bg-slate-800 transition-all flex items-center justify-center gap-3 active:scale-95 border-2 border-primary"
+                  >
+                    <span className="material-symbols-outlined">school</span>
+                    Go to Lessons
+                  </Link>
+                  <Link
+                    href="/simulation"
+                    className="flex-1 px-8 py-5 bg-white border-2 border-outline/60 text-primary text-sm font-black uppercase tracking-widest rounded-2xl hover:border-primary transition-all flex items-center justify-center gap-3 active:scale-95"
+                  >
+                    <span className="material-symbols-outlined">assignment</span>
+                    Start Simulation
+                  </Link>
+                </div>
+              ) : (
                 <div className="mt-10">
                   <SubjectOfferActions subjectId={subject.id} offers={offers ?? []} examsCount={exams?.length ?? 0} />
                 </div>
@@ -173,57 +205,61 @@ export default async function SubjectPage({ params, searchParams }: PageProps) {
           </section>
         )}
 
-        <section id="exams-library" className="py-12 sm:py-24 px-6 sm:px-8 lg:px-12 max-w-[1440px] mx-auto">
-          <div className="flex items-end justify-between gap-10 mb-12">
-            <div>
-              <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
-                Content
-              </div>
-              <h2 className="font-headline text-2xl sm:text-3xl lg:text-5xl font-extrabold text-primary tracking-tighter">
-                Exams Library
-              </h2>
+        {/* Course Portals Selection */}
+        <section className="py-20 px-6 sm:px-8 lg:px-12 max-w-[1440px] mx-auto">
+          <div className="text-center mb-16">
+            <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-4">
+              Curriculum Hub
             </div>
-            <div className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">
-              20 Exams Target
-            </div>
+            <h2 className="font-headline text-3xl sm:text-4xl lg:text-5xl font-extrabold text-primary tracking-tighter">
+              Choose Your Learning Path
+            </h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {(exams ?? []).map((exam) => (
-              <div
-                key={exam.id}
-                className="bg-white rounded-3xl border-2 border-slate-200 overflow-hidden flex flex-col transition-all duration-500 hover:shadow-soft-2xl hover:-translate-y-1 hover:border-blue-300 micro-interaction"
-              >
-                <div className="p-6 sm:p-8 border-b border-slate-200">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="text-[10px] uppercase tracking-[0.2em] font-black text-on-surface-variant bg-surface-variant px-3 py-1 rounded-full">
-                      Exam {exam.exam_number}
-                    </div>
-                    <div
-                      className={
-                        exam.is_free
-                          ? "px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black tracking-[0.2em] uppercase"
-                          : "px-3 py-1 rounded-full bg-slate-100 text-on-surface-variant text-[10px] font-black tracking-[0.2em] uppercase"
-                      }
-                    >
-                      {exam.is_free ? "Free" : "Paid"}
-                    </div>
-                  </div>
-                  <div className="text-lg sm:text-2xl font-extrabold text-primary mt-5 tracking-tight">
-                    {exam.title}
-                  </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+            {/* Lessons Portal Card */}
+            <Link 
+              href="/lessons"
+              className="group relative bg-white rounded-[40px] border-2 border-outline/40 p-10 shadow-soft-xl overflow-hidden transition-all duration-500 hover:shadow-soft-2xl hover:-translate-y-2 hover:border-primary/30"
+            >
+              <div className="relative z-10">
+                <div className="w-16 h-16 rounded-3xl bg-primary/10 flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-500">
+                  <span className="material-symbols-outlined text-primary text-3xl">school</span>
                 </div>
-                <div className="p-6 flex flex-col gap-4 mt-auto">
-                  <Link
-                    href={`/subjects/${subject.slug}/exams/${exam.exam_number}`}
-                    className="w-full bg-white border-2 border-outline/40 py-4 font-bold text-primary hover:border-primary hover:bg-primary hover:text-white transition-all duration-300 flex items-center justify-center gap-2 rounded-full"
-                  >
-                    Open Exam
-                    <span className="material-symbols-outlined text-lg">arrow_forward</span>
-                  </Link>
+                <h3 className="text-3xl font-black text-primary mb-4 tracking-tight">Interactive Lessons</h3>
+                <p className="text-on-surface-variant font-medium leading-relaxed mb-8 opacity-80">
+                  Master each topic with structured explanations, visual examples, and integrated practice questions.
+                </p>
+                <div className="flex items-center gap-2 text-primary font-black text-xs uppercase tracking-widest">
+                  Browse Lessons <span className="material-symbols-outlined text-sm transition-transform group-hover:translate-x-1">arrow_forward</span>
                 </div>
               </div>
-            ))}
+              <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity">
+                <span className="material-symbols-outlined text-[120px]">menu_book</span>
+              </div>
+            </Link>
+
+            {/* Simulation Portal Card */}
+            <Link 
+              href="/simulation"
+              className="group relative bg-white rounded-[40px] border-2 border-outline/40 p-10 shadow-soft-xl overflow-hidden transition-all duration-500 hover:shadow-soft-2xl hover:-translate-y-2 hover:border-secondary/30"
+            >
+              <div className="relative z-10">
+                <div className="w-16 h-16 rounded-3xl bg-secondary/10 flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-500">
+                  <span className="material-symbols-outlined text-secondary text-3xl">assignment</span>
+                </div>
+                <h3 className="text-3xl font-black text-primary mb-4 tracking-tight">Exam Simulations</h3>
+                <p className="text-on-surface-variant font-medium leading-relaxed mb-8 opacity-80">
+                  Test your skills with full-length timed exams in the official EST format with instant scoring.
+                </p>
+                <div className="flex items-center gap-2 text-secondary font-black text-xs uppercase tracking-widest">
+                  Start Simulation <span className="material-symbols-outlined text-sm transition-transform group-hover:translate-x-1">arrow_forward</span>
+                </div>
+              </div>
+              <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.06] transition-opacity">
+                <span className="material-symbols-outlined text-[120px]">timer</span>
+              </div>
+            </Link>
           </div>
         </section>
       </main>

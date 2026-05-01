@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import MathText from "@/components/MathText";
 import LoadingAnimation from "@/components/LoadingAnimation";
+import QuestionBankPicker from "../QuestionBankPicker";
 
 type ExamRow = {
   id: string;
@@ -75,6 +76,7 @@ export default function DashboardExamDetails() {
   const [passages, setPassages] = useState<PassageRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [showBankPicker, setShowBankPicker] = useState(false);
 
   const [title, setTitle] = useState("");
   const [examNumber, setExamNumber] = useState("");
@@ -780,8 +782,37 @@ export default function DashboardExamDetails() {
                   >
                     + Create New Question
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowBankPicker(true)}
+                    className="w-full h-14 bg-white/10 text-white border-2 border-white/20 border-dashed rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-white/20 transition-all active:scale-95"
+                  >
+                    <span className="material-symbols-outlined text-[20px] mr-2 align-middle">database</span>
+                    Add from Bank
+                  </button>
                </div>
             </div>
+
+            <QuestionBankPicker 
+              isOpen={showBankPicker} 
+              onClose={() => setShowBankPicker(false)}
+              onImport={async (bankIds) => {
+                setSaving(true);
+                try {
+                  await adminFetch(`/api/admin/exams/${examId}`, {
+                    method: "POST",
+                    body: JSON.stringify({ action: "import_from_bank", bank_question_ids: bankIds })
+                  });
+                  setShowBankPicker(false);
+                  load();
+                  setMessage(`Successfully imported ${bankIds.length} questions.`);
+                } catch (err: any) {
+                  setError(err.message);
+                } finally {
+                  setSaving(false);
+                }
+              }}
+            />
 
             {/* Questions List */}
             <div className="bg-white border border-outline/60 shadow-soft-xl rounded-2xl overflow-hidden">

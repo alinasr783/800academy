@@ -65,7 +65,7 @@ export default function NotificationPanel() {
   useEffect(() => {
     if (!userId) return;
     const channel = supabase
-      .channel(`notifs-${userId}`)
+      .channel(`notifs-${userId}-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () => {
         queryClient.invalidateQueries({ queryKey: ["notifications", userId] });
       })
