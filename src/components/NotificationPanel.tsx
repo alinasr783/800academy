@@ -114,18 +114,6 @@ export default function NotificationPanel() {
     },
   });
 
-  // Close on outside click (desktop)
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
-
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -134,6 +122,18 @@ export default function NotificationPanel() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  // Close on outside click (desktop)
+  useEffect(() => {
+    if (!open || isMobile) return;
+    function handleClick(e: MouseEvent) {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open, isMobile]);
 
   async function markRead(notificationId: string) {
     markReadMutation.mutate(notificationId);
