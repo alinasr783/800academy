@@ -19,11 +19,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       throw qErr;
     }
     if (!question) {
-      console.error("[QuestionBank GET ID Error] Question not found for ID:", params.id);
+      console.error("[QuestionBank GET ID Error] Question not found for ID:", id);
       return NextResponse.json({ error: "Question not found" }, { status: 404 });
     }
 
-    console.log("[QuestionBank GET ID Success] Loaded ID:", params.id);
+    console.log("[QuestionBank GET ID Success] Loaded ID:", id);
     return NextResponse.json({ question });
   } catch (err: any) {
     console.error("[QuestionBank GET ID Crash]:", err);

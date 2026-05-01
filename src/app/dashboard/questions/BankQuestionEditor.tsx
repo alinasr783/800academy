@@ -759,7 +759,7 @@ export default function BankQuestionEditor() {
                                     <div className="w-10 h-10 rounded-2xl bg-white border border-outline/20 flex items-center justify-center font-black text-sm text-slate-400 shrink-0">{String.fromCharCode(65 + i)}</div>
                                     <div className="flex-1">
                                        <div className="text-sm font-bold text-slate-700 leading-snug"><MathText text={opt.text} /></div>
-                                       {(opt.file || opt.url) && <img src={opt.file ? URL.createObjectURL(opt.file) : opt.url} className="mt-4 max-w-full h-32 object-contain rounded-2xl border border-outline/20 bg-white p-2" alt="Opt" />}
+                                       {(opt.file || opt.url) && <img src={opt.file ? URL.createObjectURL(opt.file!) : opt.url!} className="mt-4 max-w-full h-32 object-contain rounded-2xl border border-outline/20 bg-white p-2" alt="Opt" />}
                                     </div>
                                  </div>
                               ))}

@@ -244,6 +244,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             sort_order?: number;
           }
         | { action: "delete_passage"; passage_id: string }
+        | { action: "import_from_bank"; bank_question_ids: string[] }
       )
     | null;
 
