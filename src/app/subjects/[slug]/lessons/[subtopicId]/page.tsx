@@ -28,14 +28,32 @@ export default function TopicLessonViewer() {
 
   const [isAppMode, setIsAppMode] = useState(false);
 
-  // Practice State
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  const [score, setScore] = useState<{ correct: number; total: number } | null>(null);
+  // Practice State - per point index
+  const [answersByPoint, setAnswersByPoint] = useState<Record<number, Record<string, string>>>({});
+  const [submittedPoints, setSubmittedPoints] = useState<Set<number>>(new Set());
+  const [scoresByPoint, setScoresByPoint] = useState<Record<number, { correct: number; total: number }>>({});
 
-  // Guest user detection and signup popup
-  const [isGuest, setIsGuest] = useState(false);
-  const [showSignupPopup, setShowSignupPopup] = useState(false);
+  // Derived state for current point
+  const answers = answersByPoint[currentIndex] || {};
+  const isSubmitted = submittedPoints.has(currentIndex);
+  const score = scoresByPoint[currentIndex] || null;
+
+  // updateAnswers merges new answers into the current point's store
+  const updateAnswers = (newAnswers: Record<string, string>) => {
+    setAnswersByPoint(prev => ({ ...prev, [currentIndex]: { ...(prev[currentIndex] || {}), ...newAnswers } }));
+  };
+  // setAnswersByCallback supports the callback pattern used in JSX
+  const setAnswers = (cb: ((prev: Record<string, string>) => Record<string, string>) | Record<string, string>) => {
+    if (typeof cb === 'function') {
+      const prev = answersByPoint[currentIndex] || {};
+      const updated = cb(prev);
+      setAnswersByPoint(p => ({ ...p, [currentIndex]: updated }));
+    } else {
+      setAnswersByPoint(p => ({ ...p, [currentIndex]: cb }));
+    }
+  };
+
+  // Guest user detection
 
   useEffect(() => {
     // Scroll to top on point change
@@ -55,50 +73,45 @@ export default function TopicLessonViewer() {
 
 useEffect(() => {
        async function load() {
-          setLoading(true);
-          const { data: sessionData } = await supabase.auth.getSession();
-          
-          // Check if user is guest (not logged in)
-          setIsGuest(!sessionData?.session);
-
-          // Load Subtopic metadata
-          const { data: tData, error: tErr } = await supabase.from("subtopics").select("*").eq("id", params.subtopicId).single();
-          if (tErr) {
-             console.error("[TopicLessonViewer] Fetch subtopic error:", tErr);
-          }
-          setSubtopic(tData);
-
-          // Load subtopic points with better error handling
-          let pData: any[] = [];
-          let pErr: any = null;
-          
           try {
-             const result = await supabase
-                .from("subtopic_points")
-                .select(`
-              *,
-              subtopic_point_assets(*),
-              subtopic_point_questions(
-                id, point_id, question_id, sort_order,
-                question_bank(*, question_bank_options(*))
-              )
-            `)
-                .eq("subtopic_id", params.subtopicId)
-                .order("sort_order", { ascending: true });
+             setLoading(true);
+             const { data: sessionData } = await supabase.auth.getSession();
              
-             pData = result.data || [];
-             pErr = result.error;
-          } catch (e) {
-             console.error("[TopicLessonViewer] Fetch points exception:", e);
-          }
+             // Check if user is guest (not logged in)
+             setIsGuest(!sessionData?.session);
 
-          if (pErr) {
-             console.error("[TopicLessonViewer] Fetch points error:", pErr);
+             // Load Subtopic metadata
+             const { data: tData, error: tErr } = await supabase.from("subtopics").select("*").eq("id", params.subtopicId).single();
+             if (tErr) {
+                console.error("[TopicLessonViewer] Fetch subtopic error:", tErr);
+             }
+             setSubtopic(tData);
+
+             // Load subtopic points via public API
+             let pData: any[] = [];
+             let pErr: any = null;
+             
+             try {
+                const res = await fetch(`/api/lesson/points?subtopic_id=${params.subtopicId}`);
+                const json = await res.json();
+                if (!res.ok) throw new Error(json.error);
+                pData = json.points || [];
+             } catch (e) {
+                console.error("[TopicLessonViewer] Fetch points exception:", e);
+                pErr = e;
+             }
+
+             if (pErr) {
+                console.error("[TopicLessonViewer] Fetch points error:", pErr);
+             }
+             
+             console.log("[TopicLessonViewer] Loaded points:", pData.length, "for subtopic:", params.subtopicId);
+             setPoints(pData);
+          } catch (error) {
+             console.error("[TopicLessonViewer] General error:", error);
+          } finally {
+             setLoading(false);
           }
-          
-          console.log("[TopicLessonViewer] Loaded points:", pData.length, "for subtopic:", params.subtopicId);
-          setPoints(pData);
-          setLoading(false);
        }
        load();
     }, [params.subtopicId]);
@@ -124,55 +137,44 @@ const handleNext = useCallback(async () => {
        }
    }, [currentIndex, points.length, router, params.slug]);
 
-  const handleSubmitPractice = useCallback(() => {
-    const currentPoint = points[currentIndex];
-    if (!currentPoint?.subtopic_point_questions) return;
+const handleSubmitPractice = useCallback(() => {
+     const currentPoint = points[currentIndex];
+     if (!currentPoint?.subtopic_point_questions) return;
 
-    let correctCount = 0;
-    const total = currentPoint.subtopic_point_questions.length;
+     let correctCount = 0;
+     const total = currentPoint.subtopic_point_questions.length;
 
-    currentPoint.subtopic_point_questions.forEach((qData: any) => {
-      const q = qData.question_bank;
-      if (!q) return;
+     currentPoint.subtopic_point_questions.forEach((qData: any) => {
+       const q = qData.question_bank;
+       if (!q) return;
 
-      const userAnswer = (answers[q.id] || "").trim().toLowerCase();
-      
-      if (q.type === 'mcq') {
-         const correctOpt = q.question_bank_options?.find((o: any) => o.is_correct);
-         if (correctOpt && answers[q.id] === correctOpt.id) {
-            correctCount++;
-         }
-      } else if (q.type === 'fill') {
-         const correctVal = (q.correct_text || "").trim().toLowerCase();
-         if (userAnswer === correctVal) {
-            correctCount++;
-         }
-      }
-    });
+       const userAnswer = (answers[q.id] || "").trim().toLowerCase();
+       
+       if (q.type === 'mcq') {
+          const correctOpt = q.question_bank_options?.find((o: any) => o.is_correct);
+          if (correctOpt && answers[q.id] === correctOpt.id) {
+             correctCount++;
+          }
+       } else if (q.type === 'fill') {
+          const correctVal = (q.correct_text || "").trim().toLowerCase();
+          if (userAnswer === correctVal) {
+             correctCount++;
+          }
+       }
+     });
 
-    setScore({ correct: correctCount, total });
-    setIsSubmitted(true);
-    
-    // Scroll to results after submission
-    setTimeout(() => {
-      const resultEl = document.getElementById('practice-result');
-      if (resultEl) {
-        resultEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }, 100);
-    
-    // Show signup popup for guests after completing practice
-    if (isGuest && total > 0) {
-       setTimeout(() => {
-          setShowSignupPopup(true);
-       }, 2000);
-    }
-    
-    // Scroll to the score card
-    setTimeout(() => {
-       document.getElementById('practice-result')?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
-  }, [currentIndex, points, answers, isGuest]);
+     setScoresByPoint(prev => ({ ...prev, [currentIndex]: { correct: correctCount, total } }));
+     setSubmittedPoints(prev => new Set(prev).add(currentIndex));
+     
+     // Scroll to results after submission
+     setTimeout(() => {
+       const resultEl = document.getElementById('practice-result');
+       if (resultEl) {
+         resultEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+       }
+     }, 100);
+     
+   }, [currentIndex, points, answers, isGuest]);
 
    const handlePrev = useCallback(() => {
       if (currentIndex > 0) {
@@ -203,30 +205,50 @@ const handleNext = useCallback(async () => {
       );
    }
 
-if (!subtopic || (points.length === 0 && !loading)) {
-       return (
-          <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-8 text-center">
-             <span className="material-symbols-outlined text-6xl text-slate-300 mb-4">construction</span>
-             <h1 className="text-2xl font-black text-primary mb-2">Lesson Under Construction</h1>
-             <p className="text-slate-500 mb-8">This subtopic doesn't have any content yet. Check back later.</p>
-             <Link href={`/subjects/${params.slug}`} className="px-8 py-4 bg-primary text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all">Go Back</Link>
-          </div>
-       );
-    }
+   if (!subtopic) {
+      return (
+         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-8 text-center">
+            <span className="material-symbols-outlined text-6xl text-slate-300 mb-4">construction</span>
+            <h1 className="text-2xl font-black text-primary mb-2">Lesson Under Construction</h1>
+            <p className="text-slate-500 mb-8">This subtopic doesn't exist or hasn't been created yet.</p>
+            <Link href={`/subjects/${params.slug}`} className="px-8 py-4 bg-primary text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all">Go Back</Link>
+         </div>
+      );
+   }
 
-   const currentPoint = points[currentIndex];
+   // Check if subtopic is free for guest access
+   const canGuestAccess = subtopic?.is_free === true;
+   const showAccessDenied = isGuest && !canGuestAccess;
+
+   if (showAccessDenied) {
+      return (
+         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-8 text-center">
+            <span className="material-symbols-outlined text-6xl text-slate-300 mb-4">lock</span>
+            <h1 className="text-2xl font-black text-primary mb-2">Login Required</h1>
+            <p className="text-slate-500 mb-8">This lesson is for subscribers only. Please login to access.</p>
+            <div className="flex gap-4">
+               <Link href="/join" className="px-8 py-4 bg-primary text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all">Create Free Account</Link>
+               <Link href={`/subjects/${params.slug}`} className="px-8 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 transition-all">Go Back</Link>
+            </div>
+         </div>
+      );
+   }
+
+   // If we have points, compute current point and related state
+   const currentPoint = points.length > 0 ? points[currentIndex] : null;
    const progress = points.length > 0 ? ((currentIndex + 1) / points.length) * 100 : 0;
-   const allAnswered = currentPoint.subtopic_point_questions.every((q: any) => answers[q.question_bank.id]);
+   const allAnswered = currentPoint?.subtopic_point_questions?.every((q: any) => answers[q.question_bank.id]) ?? false;
 
    return (
       <div className="min-h-screen bg-slate-50 flex flex-col">
 
          {/* Main Content Area */}
-         <main className={`flex-1 pt-4 pb-40 px-6 md:px-12 w-full mx-auto transition-all duration-300 ${isAppMode ? 'lg:pl-[72px]' : ''}`}>
-            <div key={currentPoint.id} className="animate-in fade-in slide-in-from-bottom-8 duration-500">
+         <main className={`flex-1 pt-4 pb-40 px-4 md:px-12 w-full max-w-none mx-auto transition-all duration-300 ${isAppMode ? 'lg:pl-[72px]' : ''}`}>
+            {currentPoint ? (
+               <div key={currentPoint.id} className="animate-in fade-in slide-in-from-bottom-8 duration-500">
 
-               {/* Visuals Carousel */}
-               {currentPoint.subtopic_point_assets?.length > 0 && (
+                  {/* Visuals Carousel */}
+                  {currentPoint.subtopic_point_assets?.length > 0 && (
                   <div className="mb-8 group/carousel relative">
                      <div className="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar gap-4 pb-2" id={`carousel-${currentPoint.id}`}>
                         {currentPoint.subtopic_point_assets.sort((a, b) => a.sort_order - b.sort_order).map((asset, i) => (
@@ -466,14 +488,19 @@ if (!subtopic || (points.length === 0 && !loading)) {
                         })
                      )}
                   </div>
-               )}
-            </div>
+                  )}
+               </div>
+            ) : (
+               <div className="p-8 text-center">
+                  <h1 className="text-2xl font-bold text-slate-800 mb-4">{subtopic?.title}</h1>
+                  <p className="text-slate-500">This lesson has no practice questions yet. Enjoy the content!</p>
+               </div>
+            )}
          </main>
 
-         {/* Mobile Navigation Progress Removed - Integrated into SiteHeader now */}
-
-         {/* Navigation Footer (Smaller Buttons + Sidebar Aware) */}
-         <footer className={`fixed bottom-0 inset-x-0 h-16 md:h-18 bg-white border-t border-outline/20 z-50 flex p-2 md:p-3 gap-2 md:gap-4 shadow-[0_-10px_30px_-10px_rgba(0,0,0,0.05)] transition-all duration-300 ${isAppMode ? 'lg:left-[72px]' : ''}`}>
+         {/* Navigation Footer - only show if we have points */}
+         {points.length > 0 && currentPoint && (
+            <footer className={`fixed bottom-0 inset-x-0 h-16 md:h-18 bg-white border-t border-outline/20 z-50 flex p-2 md:p-3 gap-2 md:gap-4 shadow-[0_-10px_30px_-10px_rgba(0,0,0,0.05)] transition-all duration-300 ${isAppMode ? 'lg:left-[72px]' : ''}`}>
             <button
                onClick={handlePrev}
                disabled={currentIndex === 0}
@@ -502,35 +529,10 @@ if (!subtopic || (points.length === 0 && !loading)) {
 ) : (
                    <>Next Step <span className="material-symbols-outlined text-sm">arrow_forward</span></>
                 )}
-             </button>
-          </footer>
+              </button>
+           </footer>
+           )}
 
-          {showSignupPopup && (
-             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onClick={() => setShowSignupPopup(false)} />
-                <div className="relative bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300">
-                   <button onClick={() => setShowSignupPopup(false)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 transition-all">
-                      <span className="material-symbols-outlined text-sm">close</span>
-                   </button>
-                   <div className="text-center">
-                      <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                         <span className="material-symbols-outlined text-3xl text-primary">school</span>
-                      </div>
-                      <h2 className="text-2xl font-black text-primary mb-2">Create Your Free Account</h2>
-                      <p className="text-slate-500 mb-6">Sign up now to track your progress, access all lessons, and get personalized learning recommendations!</p>
-                      <div className="space-y-3">
-                         <Link href="/join" className="w-full py-4 bg-primary text-white font-black text-sm uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 hover:bg-slate-800 transition-all">
-                            Create Free Account
-                            <span className="material-symbols-outlined text-lg">arrow_forward</span>
-                         </Link>
-                         <button onClick={() => setShowSignupPopup(false)} className="w-full py-3 text-slate-400 font-bold text-sm hover:text-slate-600 transition-all">
-                            Maybe Later
-                         </button>
-                      </div>
-                   </div>
-                </div>
-             </div>
-          )}
-       </div>
-    );
- }
+        </div>
+     );
+  }
