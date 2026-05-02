@@ -39,6 +39,7 @@ type Exam = {
 type TopicLesson = {
   id: string;
   title: string;
+  description: string | null;
   category: string | null;
   image_url: string | null;
   is_free: boolean;
@@ -107,8 +108,9 @@ export default async function SubjectPage({ params, searchParams }: PageProps) {
 
   const { data: subtopics } = await supabase
     .from("subtopics")
-    .select("id, title, category, image_url, is_free")
+    .select("id, title, description, category, image_url, is_free, sort_order")
     .eq("subject_id", subject.id)
+    .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true })
     .returns<TopicLesson[]>();
 
@@ -200,6 +202,100 @@ export default async function SubjectPage({ params, searchParams }: PageProps) {
                     <div className="text-[11px] text-on-surface-variant/70 font-medium mt-0.5 leading-snug">{item.desc}</div>
                   </div>
                 </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Exams Stimulation Section */}
+        {exams && exams.length > 0 && (
+          <section className="max-w-[1440px] mx-auto px-6 sm:px-8 lg:px-12 py-12 sm:py-16">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-2">
+                  Practice Tests
+                </div>
+                <h2 className="font-headline text-2xl sm:text-3xl font-extrabold text-primary tracking-tight">
+                  Exams Stimulation
+                </h2>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {exams.map((exam) => (
+                <Link
+                  key={exam.id}
+                  href={`/subjects/${slug}/exams/${exam.exam_number}`}
+                  className="group bg-white rounded-2xl border-2 border-slate-200 p-6 flex flex-col transition-all duration-300 hover:shadow-lg hover:-translate-y-1 hover:border-primary/30"
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center font-black text-primary text-lg">
+                      {exam.exam_number}
+                    </div>
+                    {exam.is_free && (
+                      <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-[9px] font-black uppercase tracking-widest rounded-full">
+                        Free
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="text-base font-black text-slate-800 leading-tight mb-4">
+                    {exam.title}
+                  </h3>
+                  <div className="mt-auto pt-4">
+                    <div className="w-full py-3 bg-primary text-white font-black text-[10px] uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 group-hover:bg-slate-800 transition-all">
+                      Start Practice
+                      <span className="material-symbols-outlined text-sm">play_arrow</span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Interactive Lessons Section */}
+        {subtopics && subtopics.length > 0 && (
+          <section className="max-w-[1440px] mx-auto px-6 sm:px-8 lg:px-12 py-12 sm:py-16">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <div className="text-secondary font-extrabold text-[11px] uppercase tracking-[0.3em] mb-2">
+                  Learning
+                </div>
+                <h2 className="font-headline text-2xl sm:text-3xl font-extrabold text-primary tracking-tight">
+                  Interactive Lessons
+                </h2>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {subtopics.map((subtopic) => (
+                <Link
+                  key={subtopic.id}
+                  href={`/subjects/${slug}/lessons/${subtopic.id}`}
+                  className="group relative h-[340px] bg-white rounded-[2rem] border border-white/20 overflow-hidden flex flex-col transition-all duration-700 hover:shadow-premium-2xl hover:-translate-y-2"
+                >
+                  <div className="absolute inset-0 z-0 transition-transform duration-1000 group-hover:scale-110">
+                    {subtopic.image_url ? (
+                      <img src={subtopic.image_url} alt={subtopic.title} className="w-full h-full object-cover transition-all duration-700" />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-primary to-secondary" />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/40 to-transparent opacity-90 group-hover:opacity-70 transition-opacity duration-700" />
+                    <div className="absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-transparent opacity-60" />
+                  </div>
+                  <div className="mt-auto relative z-10 p-2">
+                    <div className="bg-white/10 backdrop-blur-2xl border border-white/20 rounded-[2rem] p-5 group-hover:bg-white/15 transition-all duration-500">
+                      <h3 className="text-lg font-black text-white leading-tight mb-2">
+                        {subtopic.title}
+                      </h3>
+                      <p className="text-xs text-white/70 line-clamp-2 mb-4 font-medium">
+                        {subtopic.description || "Master this topic with structured explanations and practice."}
+                      </p>
+                      <div className="w-full py-3 font-black text-[10px] uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 rounded-2xl bg-white text-primary hover:bg-secondary hover:text-white shadow-lg active:scale-[0.98]">
+                        Start Lesson
+                        <span className="material-symbols-outlined text-lg">school</span>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
               ))}
             </div>
           </section>

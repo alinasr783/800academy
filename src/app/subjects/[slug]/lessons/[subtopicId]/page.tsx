@@ -6,6 +6,10 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import MathText from "@/components/MathText";
 
+function isHtmlContent(text: string): boolean {
+  return /<[a-z][\s\S]*>/i.test(text);
+}
+
 type Point = {
    id: string;
    content_html: string;
@@ -29,13 +33,15 @@ export default function TopicLessonViewer() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [score, setScore] = useState<{ correct: number; total: number } | null>(null);
 
+  // Guest user detection and signup popup
+  const [isGuest, setIsGuest] = useState(false);
+  const [showSignupPopup, setShowSignupPopup] = useState(false);
+
   useEffect(() => {
     // Scroll to top on point change
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    // Reset practice state for new point
-    setAnswers({});
-    setIsSubmitted(false);
-    setScore(null);
+    // Reset practice state for new point ONLY if we haven't submitted it yet
+    // This preserves answers when going back to previous points
   }, [currentIndex]);
 
   useEffect(() => {
@@ -47,54 +53,76 @@ export default function TopicLessonViewer() {
     setIsAppMode(true);
   }, []);
 
-   useEffect(() => {
-      async function load() {
-         setLoading(true);
-         const { data: sessionData } = await supabase.auth.getSession();
+useEffect(() => {
+       async function load() {
+          setLoading(true);
+          const { data: sessionData } = await supabase.auth.getSession();
+          
+          // Check if user is guest (not logged in)
+          setIsGuest(!sessionData?.session);
 
-         // Load Subtopic metadata
-         const { data: tData } = await supabase.from("subtopics").select("*").eq("id", params.subtopicId).single();
-         setSubtopic(tData);
+          // Load Subtopic metadata
+          const { data: tData, error: tErr } = await supabase.from("subtopics").select("*").eq("id", params.subtopicId).single();
+          if (tErr) {
+             console.error("[TopicLessonViewer] Fetch subtopic error:", tErr);
+          }
+          setSubtopic(tData);
 
-         const { data: pData, error: pErr } = await supabase
-            .from("subtopic_points")
-            .select(`
-          *,
-          subtopic_point_assets(*),
-          subtopic_point_questions(
-            id, point_id, question_id, sort_order,
-            question_bank(*, question_bank_options(*))
-          )
-        `)
-            .eq("subtopic_id", params.subtopicId)
-            .order("sort_order", { ascending: true });
+          // Load subtopic points with better error handling
+          let pData: any[] = [];
+          let pErr: any = null;
+          
+          try {
+             const result = await supabase
+                .from("subtopic_points")
+                .select(`
+              *,
+              subtopic_point_assets(*),
+              subtopic_point_questions(
+                id, point_id, question_id, sort_order,
+                question_bank(*, question_bank_options(*))
+              )
+            `)
+                .eq("subtopic_id", params.subtopicId)
+                .order("sort_order", { ascending: true });
+             
+             pData = result.data || [];
+             pErr = result.error;
+          } catch (e) {
+             console.error("[TopicLessonViewer] Fetch points exception:", e);
+          }
 
-         if (pErr) {
-            console.error("[TopicLessonViewer] Fetch points error:", pErr);
-         }
-         setPoints(pData || []);
-         setLoading(false);
-      }
-      load();
-   }, [params.subtopicId]);
+          if (pErr) {
+             console.error("[TopicLessonViewer] Fetch points error:", pErr);
+          }
+          
+          console.log("[TopicLessonViewer] Loaded points:", pData.length, "for subtopic:", params.subtopicId);
+          setPoints(pData);
+          setLoading(false);
+       }
+       load();
+    }, [params.subtopicId]);
 
-   const handleNext = useCallback(async () => {
-      // Record streak activity when progressing
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
-         fetch("/api/user/streak", {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${session.access_token}` }
-         }).catch(() => { });
-      }
+const handleNext = useCallback(async () => {
+       // Scroll to top before moving to next step
+       window.scrollTo({ top: 0, behavior: 'smooth' });
+       
+       // Record streak activity when progressing
+       const { data: { session } } = await supabase.auth.getSession();
+       if (session?.access_token) {
+          fetch("/api/user/streak", {
+             method: "POST",
+             headers: { "Authorization": `Bearer ${session.access_token}` }
+          }).catch(() => { });
+       }
 
-      if (currentIndex < points.length - 1) {
-      setCurrentIndex(prev => prev + 1);
-    } else {
-      // Finished - Redirect to Lessons Portal
-      router.push('/lessons');
-    }
-  }, [currentIndex, points.length, router, params.slug]);
+       if (currentIndex < points.length - 1) {
+          setCurrentIndex(prev => prev + 1);
+       } else {
+          // Finished - Redirect to Lessons Portal
+          router.push('/lessons');
+       }
+   }, [currentIndex, points.length, router, params.slug]);
 
   const handleSubmitPractice = useCallback(() => {
     const currentPoint = points[currentIndex];
@@ -125,11 +153,26 @@ export default function TopicLessonViewer() {
     setScore({ correct: correctCount, total });
     setIsSubmitted(true);
     
+    // Scroll to results after submission
+    setTimeout(() => {
+      const resultEl = document.getElementById('practice-result');
+      if (resultEl) {
+        resultEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
+    
+    // Show signup popup for guests after completing practice
+    if (isGuest && total > 0) {
+       setTimeout(() => {
+          setShowSignupPopup(true);
+       }, 2000);
+    }
+    
     // Scroll to the score card
     setTimeout(() => {
        document.getElementById('practice-result')?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
-  }, [currentIndex, points, answers]);
+  }, [currentIndex, points, answers, isGuest]);
 
    const handlePrev = useCallback(() => {
       if (currentIndex > 0) {
@@ -160,16 +203,16 @@ export default function TopicLessonViewer() {
       );
    }
 
-   if (points.length === 0) {
-      return (
-         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-8 text-center">
-            <span className="material-symbols-outlined text-6xl text-slate-300 mb-4">construction</span>
-            <h1 className="text-2xl font-black text-primary mb-2">Lesson Under Construction</h1>
-            <p className="text-slate-500 mb-8">This subtopic doesn't have any content yet. Check back later.</p>
-            <Link href={`/subjects/${params.slug}`} className="px-8 py-4 bg-primary text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all">Go Back</Link>
-         </div>
-      );
-   }
+if (!subtopic || (points.length === 0 && !loading)) {
+       return (
+          <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-8 text-center">
+             <span className="material-symbols-outlined text-6xl text-slate-300 mb-4">construction</span>
+             <h1 className="text-2xl font-black text-primary mb-2">Lesson Under Construction</h1>
+             <p className="text-slate-500 mb-8">This subtopic doesn't have any content yet. Check back later.</p>
+             <Link href={`/subjects/${params.slug}`} className="px-8 py-4 bg-primary text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-800 transition-all">Go Back</Link>
+          </div>
+       );
+    }
 
    const currentPoint = points[currentIndex];
    const progress = points.length > 0 ? ((currentIndex + 1) / points.length) * 100 : 0;
@@ -217,12 +260,21 @@ export default function TopicLessonViewer() {
                   </div>
                )}
 
-               {/* Explanation */}
-               {currentPoint.content_html && (
-                  <div className="prose prose-lg prose-slate max-w-none text-slate-700 leading-loose bg-white p-6 md:p-12 rounded-3xl border border-outline/20 shadow-soft-md mb-12">
-                     <MathText text={currentPoint.content_html} />
+{/* Explanation */}
+                {currentPoint.content_html && (
+                  <div className="mb-12">
+                    {isHtmlContent(currentPoint.content_html) ? (
+                      <div 
+                        className="bg-white p-6 md:p-12 rounded-3xl border border-outline/20 shadow-soft-md"
+                        dangerouslySetInnerHTML={{ __html: currentPoint.content_html }}
+                      />
+                    ) : (
+                      <div className="prose prose-lg prose-slate max-w-none text-slate-700 leading-loose bg-white p-6 md:p-12 rounded-3xl border border-outline/20 shadow-soft-md">
+                        <MathText text={currentPoint.content_html} />
+                      </div>
+                    )}
                   </div>
-               )}
+                )}
 
                {/* Practice Questions / Result Section */}
                {currentPoint.subtopic_point_questions?.length > 0 && (
@@ -237,25 +289,134 @@ export default function TopicLessonViewer() {
                         </div>
                      </div>
                      
-                     {isSubmitted && score ? (
-                        <div id="practice-result" className="animate-in zoom-in-95 duration-500 bg-white rounded-2xl p-8 text-center border-2 border-indigo-100 shadow-soft-xl">
-                           <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                              <span className="material-symbols-outlined text-3xl">emoji_events</span>
-                           </div>
-                           <h2 className="text-xl font-black text-indigo-900 mb-1">Practice Complete!</h2>
-                           <p className="text-sm text-slate-500 mb-6">Review your score below before continuing.</p>
-                           <div className="flex items-center justify-center gap-6">
-                              <div className="bg-emerald-50 px-6 py-3 rounded-xl border border-emerald-100">
-                                 <div className="text-2xl font-black text-emerald-600">{score.correct}</div>
-                                 <div className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Correct</div>
-                              </div>
-                              <div className="bg-slate-50 px-6 py-3 rounded-xl border border-slate-100">
-                                 <div className="text-2xl font-black text-slate-600">{score.total}</div>
-                                 <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Questions</div>
-                              </div>
-                           </div>
-                        </div>
-                     ) : (
+{isSubmitted && score ? (
+                         <div id="practice-result" className="animate-in zoom-in-95 duration-500 space-y-4">
+                            <div className="bg-white rounded-2xl p-8 text-center border-2 border-indigo-100 shadow-soft-xl">
+                               <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                                  <span className="material-symbols-outlined text-3xl">emoji_events</span>
+                               </div>
+                               <h2 className="text-xl font-black text-indigo-900 mb-1">Practice Complete!</h2>
+                               <p className="text-sm text-slate-500 mb-6">Review your answers below before continuing.</p>
+                               <div className="flex items-center justify-center gap-6">
+                                  <div className="bg-emerald-50 px-6 py-3 rounded-xl border border-emerald-100">
+                                     <div className="text-2xl font-black text-emerald-600">{score.correct}</div>
+                                     <div className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">Correct</div>
+                                  </div>
+                                  <div className="bg-rose-50 px-6 py-3 rounded-xl border border-rose-100">
+                                     <div className="text-2xl font-black text-rose-600">{score.total - score.correct}</div>
+                                     <div className="text-[9px] font-black text-rose-400 uppercase tracking-widest">Wrong</div>
+                                  </div>
+                                  <div className="bg-slate-50 px-6 py-3 rounded-xl border border-slate-100">
+                                     <div className="text-2xl font-black text-slate-600">{score.total}</div>
+                                     <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total</div>
+                                  </div>
+                               </div>
+                            </div>
+
+                            {/* Detailed Question Analysis */}
+                            <div className="space-y-6">
+                               <h3 className="text-lg font-black text-slate-800 px-2">Question Analysis</h3>
+                               {currentPoint.subtopic_point_questions.sort((a, b) => a.sort_order - b.sort_order).map((qData, qIdx) => {
+                                  const q = qData.question_bank;
+                                  if (!q) return null;
+                                  
+                                  let isCorrect = false;
+
+                                  if (q.type === 'mcq') {
+                                     const correctOpt = q.question_bank_options?.find((o: any) => o.is_correct);
+                                     isCorrect = answers[q.id] === correctOpt?.id;
+                                  } else if (q.type === 'fill') {
+                                     isCorrect = (answers[q.id] || "").trim().toLowerCase() === (q.correct_text || "").trim().toLowerCase();
+                                  }
+
+                                  return (
+                                     <div key={q.id} className={`bg-white rounded-2xl border-2 shadow-soft-xl overflow-hidden ${isCorrect ? 'border-emerald-200' : 'border-rose-200'}`}>
+                                        {/* Question Header */}
+                                        <div className="p-6 border-b border-slate-100">
+                                           <div className="flex items-center gap-4">
+                                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm ${isCorrect ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                                                 {isCorrect ? (
+                                                    <span className="material-symbols-outlined text-lg">check</span>
+                                                 ) : (
+                                                    <span className="material-symbols-outlined text-lg">close</span>
+                                                 )}
+                                              </div>
+                                              <div>
+                                                 <div className="text-xs font-black uppercase tracking-widest text-slate-400">Question {qIdx + 1}</div>
+                                                 <div className={`text-xs font-bold uppercase tracking-widest ${isCorrect ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                    {isCorrect ? 'Correct Answer' : 'Wrong Answer'}
+                                                 </div>
+                                              </div>
+                                           </div>
+                                        </div>
+
+                                        {/* Question Content */}
+                                        <div className="p-6">
+                                           <div className="text-base font-medium text-slate-800 mb-6">
+                                              <MathText text={q.prompt_text || ""} />
+                                           </div>
+
+                                           {/* Options */}
+                                           {q.type === 'mcq' && (
+                                              <div className="space-y-2">
+                                                 {(q.question_bank_options || []).sort((a: any, b: any) => a.option_number - b.option_number).map((opt: any, i: number) => {
+                                                    const isSelected = answers[q.id] === opt.id;
+                                                    const isCorrectOpt = opt.is_correct;
+                                                    const border = isCorrectOpt ? 'border-emerald-400' : isSelected ? 'border-rose-400' : 'border-slate-200';
+                                                    const bg = isCorrectOpt ? 'bg-emerald-50' : isSelected ? 'bg-rose-50' : 'bg-slate-50';
+                                                    return (
+                                                       <div key={opt.id} className={`border-2 ${border} ${bg} px-4 py-3 rounded-xl flex items-center justify-between`}>
+                                                          <div className="flex items-center gap-3">
+                                                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs ${isCorrectOpt ? 'bg-emerald-200 text-emerald-700' : isSelected ? 'bg-rose-200 text-rose-700' : 'bg-slate-200 text-slate-500'}`}>
+                                                                {String.fromCharCode(65 + i)}
+                                                             </div>
+                                                             <div className="text-sm font-bold text-slate-700">
+                                                                <MathText text={opt.text} />
+                                                             </div>
+                                                          </div>
+                                                          <div className="flex gap-2">
+                                                             {isSelected && <span className="px-2 py-0.5 bg-primary/10 text-primary text-[9px] font-black uppercase rounded">Your Choice</span>}
+                                                             {isCorrectOpt && <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[9px] font-black uppercase rounded">Correct</span>}
+                                                          </div>
+                                                       </div>
+                                                    );
+                                                 })}
+                                              </div>
+                                           )}
+
+                                           {/* Fill in the blank */}
+                                           {q.type === 'fill' && (
+                                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                 <div className={`p-4 rounded-xl border-2 ${isCorrect ? 'border-emerald-300 bg-emerald-50' : 'border-rose-300 bg-rose-50'}`}>
+                                                    <div className="text-[10px] font-black uppercase tracking-widest mb-1 text-slate-500">Your Answer</div>
+                                                    <div className="text-sm font-bold text-slate-700">{answers[q.id] || '—'}</div>
+                                                 </div>
+                                                 <div className="bg-emerald-50 p-4 rounded-xl border-2 border-emerald-200">
+                                                    <div className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">Correct Answer</div>
+                                                    <div className="text-sm font-bold text-emerald-700">{q.correct_text}</div>
+                                                 </div>
+                                              </div>
+                                           )}
+
+                                           {/* Explanation */}
+                                           {q.explanation_text && (
+                                              <div className="mt-6 p-5 bg-blue-50 rounded-2xl border-2 border-blue-100/50">
+                                                 <div className="flex items-center gap-2 mb-3 text-blue-700">
+                                                    <span className="material-symbols-outlined text-sm">lightbulb</span>
+                                                    <span className="text-[10px] font-black uppercase tracking-widest">Explanation</span>
+                                                 </div>
+                                                 <div className="text-sm font-medium text-blue-900">
+                                                    <MathText text={q.explanation_text} />
+                                                 </div>
+                                              </div>
+                                           )}
+                                        </div>
+                                     </div>
+                                  );
+                               })}
+                            </div>
+                         </div>
+                      ) : (
                         currentPoint.subtopic_point_questions.sort((a, b) => a.sort_order - b.sort_order).map((qData, qIdx) => {
                            const q = qData.question_bank;
                            if (!q) return null;
@@ -338,11 +499,38 @@ export default function TopicLessonViewer() {
                   </>
                ) : currentIndex === points.length - 1 ? (
                   <>Finish Lesson <span className="material-symbols-outlined text-sm">done_all</span></>
-               ) : (
-                  <>Next Step <span className="material-symbols-outlined text-sm">arrow_forward</span></>
-               )}
-            </button>
-         </footer>
-      </div>
-   );
-}
+) : (
+                   <>Next Step <span className="material-symbols-outlined text-sm">arrow_forward</span></>
+                )}
+             </button>
+          </footer>
+
+          {showSignupPopup && (
+             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onClick={() => setShowSignupPopup(false)} />
+                <div className="relative bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300">
+                   <button onClick={() => setShowSignupPopup(false)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 transition-all">
+                      <span className="material-symbols-outlined text-sm">close</span>
+                   </button>
+                   <div className="text-center">
+                      <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                         <span className="material-symbols-outlined text-3xl text-primary">school</span>
+                      </div>
+                      <h2 className="text-2xl font-black text-primary mb-2">Create Your Free Account</h2>
+                      <p className="text-slate-500 mb-6">Sign up now to track your progress, access all lessons, and get personalized learning recommendations!</p>
+                      <div className="space-y-3">
+                         <Link href="/join" className="w-full py-4 bg-primary text-white font-black text-sm uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 hover:bg-slate-800 transition-all">
+                            Create Free Account
+                            <span className="material-symbols-outlined text-lg">arrow_forward</span>
+                         </Link>
+                         <button onClick={() => setShowSignupPopup(false)} className="w-full py-3 text-slate-400 font-bold text-sm hover:text-slate-600 transition-all">
+                            Maybe Later
+                         </button>
+                      </div>
+                   </div>
+                </div>
+             </div>
+          )}
+       </div>
+    );
+ }

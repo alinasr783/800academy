@@ -101,7 +101,7 @@ export default function SimulationClient() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
         {/* Left Sidebar: Package Selection */}
-        <div className="lg:col-span-4 space-y-6 sticky top-24">
+        <div className="lg:col-span-4 space-y-6 lg:sticky lg:top-24">
           <div className="bg-white rounded-3xl border border-outline/40 p-6 shadow-soft-xl">
             <h3 className="text-[10px] font-black uppercase tracking-widest text-secondary mb-4 px-2">Select Package</h3>
             <div className="space-y-2">

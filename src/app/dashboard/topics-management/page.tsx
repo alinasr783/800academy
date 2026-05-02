@@ -15,11 +15,15 @@ type SubtopicRow = {
   category: string | null;
   is_free: boolean;
   created_at: string;
+  sort_order?: number;
 };
 type TopicRow = { id: string; title: string };
 
 export default function TopicsManagementPage() {
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
+  const [originalOrder, setOriginalOrder] = useState<string[]>([]);
   const [subjects, setSubjects] = useState<SubjectRow[]>([]);
   const [topics, setTopics] = useState<TopicRow[]>([]);
   const [subtopics, setSubtopics] = useState<SubtopicRow[]>([]);
@@ -27,6 +31,7 @@ export default function TopicsManagementPage() {
   const [selectedTopic, setSelectedTopic] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  // Add sort_order to type for subtopics
   async function loadData() {
     setLoading(true);
     try {
@@ -42,6 +47,44 @@ export default function TopicsManagementPage() {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Update sort_order function
+  async function updateSortOrder(reorderedSubtopics: SubtopicRow[]) {
+    setSubtopics(reorderedSubtopics);
+    const newOrderIds = reorderedSubtopics.map(st => st.id);
+    const changed = JSON.stringify(newOrderIds) !== JSON.stringify(originalOrder);
+    setHasChanges(changed);
+    
+    // Auto-save immediately
+    setSaving(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      const updates = reorderedSubtopics.map((st, index) => ({
+        id: st.id,
+        sort_order: index * 10
+      }));
+
+      for (const update of updates) {
+        await fetch(`/api/admin/subtopics?id=${update.id}`, {
+          method: "PATCH",
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ sort_order: update.sort_order })
+        });
+      }
+
+      setOriginalOrder(newOrderIds);
+      setHasChanges(false);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -75,6 +118,9 @@ export default function TopicsManagementPage() {
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       const json = await res.json();
       setSubtopics(json.items || []);
+      // Store original order for change detection
+      setOriginalOrder((json.items || []).map((st: SubtopicRow) => st.id));
+      setHasChanges(false);
     } catch (err: any) {
       setError(err.message);
     }
@@ -130,12 +176,86 @@ export default function TopicsManagementPage() {
 
       {/* List */}
       <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-black text-slate-400 uppercase tracking-widest">
+            {selectedTopic ? 'Drag to reorder lessons' : 'Select a topic to reorder lessons'}
+          </span>
+          <div className="flex items-center gap-3">
+            {hasChanges && (
+              <span className="text-xs font-black text-amber-600 bg-amber-50 px-3 py-1 rounded-full">Unsaved Changes</span>
+            )}
+            {saving ? (
+              <span className="text-xs font-black text-primary animate-pulse flex items-center gap-2">
+                <span className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin"></span>
+                Saving...
+              </span>
+            ) : !hasChanges && selectedTopic ? (
+              <span className="text-xs font-black text-emerald-600 flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">check_circle</span>
+                Saved
+              </span>
+            ) : null}
+          </div>
+        </div>
+        
         {loading ? (
           <div className="p-20 text-center font-bold text-on-surface-variant animate-pulse">Loading Lessons...</div>
         ) : subtopics.length === 0 ? (
           <div className="p-20 bg-white border border-dashed border-outline/60 rounded-[24px] text-center">
              <span className="material-symbols-outlined text-[64px] text-outline/40 mb-4">menu_book</span>
              <p className="font-bold text-on-surface-variant">No subtopics found. Create subtopics first.</p>
+          </div>
+        ) : selectedTopic ? (
+          <div className="grid grid-cols-1 gap-3">
+            {subtopics.map((subtopic, index) => {
+               const subject = subjects.find(s => s.id === subtopic.subject_id);
+               return (
+                 <div 
+                   key={subtopic.id}
+                   draggable
+                   onDragStart={(e) => e.dataTransfer.setData("lessonIndex", index.toString())}
+                   onDragOver={(e) => e.preventDefault()}
+                   onDrop={(e) => {
+                      e.preventDefault();
+                      const fromIdx = parseInt(e.dataTransfer.getData("lessonIndex"));
+                      const toIdx = index;
+                      if (fromIdx === toIdx) return;
+                      
+                      const newOrder = [...subtopics];
+                      const [moved] = newOrder.splice(fromIdx, 1);
+                      newOrder.splice(toIdx, 0, moved);
+                      updateSortOrder(newOrder);
+                   }}
+                   className="bg-white border-2 border-slate-200 rounded-xl p-4 flex items-center gap-4 cursor-move active:scale-[0.99] transition-all hover:border-primary/40 hover:shadow-md"
+                 >
+                   <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400">
+                      <span className="material-symbols-outlined text-lg">drag_indicator</span>
+                   </div>
+                   <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center font-black text-primary text-sm">
+                      {index + 1}
+                   </div>
+                   <div className="w-16 h-16 rounded-lg bg-slate-100 overflow-hidden shrink-0">
+                      {subtopic.image_url ? (
+                        <img src={subtopic.image_url} alt={subtopic.title} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                           <span className="material-symbols-outlined text-slate-300 text-xl">image</span>
+                        </div>
+                      )}
+                   </div>
+                   <div className="flex-1 min-w-0">
+                      <div className="text-[9px] font-black text-primary/60 uppercase tracking-widest">{subtopic.category || 'General'}</div>
+                      <h3 className="font-bold text-slate-800 leading-tight truncate">{subtopic.title}</h3>
+                   </div>
+                   <Link 
+                     href={`/dashboard/topics-management/${subtopic.id}`}
+                     className="h-10 px-4 bg-primary text-white rounded-lg font-black text-[9px] uppercase tracking-widest flex items-center justify-center hover:bg-slate-800 transition-all shrink-0"
+                   >
+                     Build
+                   </Link>
+                 </div>
+               );
+            })}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -200,7 +200,7 @@ export default function SubjectOfferActions({ subjectId, offers, examsCount }: P
 
       {/* Floating CTA */}
       {showFloating && offers.length > 0 && (
-        <div className="fixed bottom-6 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <div className="fixed bottom-6 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-[9999] animate-in fade-in slide-in-from-bottom-4 duration-300">
           <button
             type="button"
             disabled={!selectedOffer || loading}

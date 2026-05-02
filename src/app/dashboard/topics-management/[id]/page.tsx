@@ -344,35 +344,54 @@ export default function TopicBuilderPage() {
                      }} rows={6} className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:bg-white focus:border-primary transition-all" placeholder="Write the lesson content here..." />
                   </div>
 
-                  <div className="space-y-4 pt-4 border-t border-outline/20">
-                     <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                           <span className="material-symbols-outlined text-indigo-500 text-[18px]">quiz</span>
-                           <label className="text-[10px] font-black text-indigo-700 uppercase tracking-widest">Attached Practice Questions</label>
-                        </div>
-                        <button onClick={() => setShowPickerForPoint(pt.key)} className="text-[10px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all">+ Add from Bank</button>
-                     </div>
-                     
-                     {pt.questions.length > 0 ? (
-                        <div className="space-y-2">
-                           {pt.questions.map((q, qIdx) => (
-                              <div key={`q-${pIdx}-${qIdx}`} className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl flex items-center justify-between">
-                                 <div className="flex items-center gap-3">
-                                    <div className="w-5 h-5 rounded bg-indigo-100 text-indigo-600 flex items-center justify-center text-[9px] font-black">{qIdx + 1}</div>
-                                    <div className="text-xs font-medium text-slate-700 line-clamp-1"><MathText text={q.prompt_text ?? "Imported Question"} /></div>
-                                 </div>
-                                 <button onClick={() => {
-                                    const next = [...points];
-                                    next[pIdx].questions = next[pIdx].questions.filter((_, idx) => idx !== qIdx);
-                                    setPoints(next);
-                                 }} className="w-6 h-6 bg-white text-rose-400 rounded flex items-center justify-center opacity-0 hover:opacity-100 transition-all hover:text-rose-600 shadow-sm"><span className="material-symbols-outlined text-[14px]">close</span></button>
-                              </div>
-                           ))}
-                        </div>
-                     ) : (
-                        <div className="p-3 border border-dashed border-outline/40 rounded-xl text-center text-[9px] font-black text-slate-300 uppercase tracking-widest">No questions attached</div>
-                     )}
-                  </div>
+<div className="space-y-4 pt-4 border-t border-outline/20">
+                      <div className="flex items-center justify-between">
+                         <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-indigo-500 text-[18px]">quiz</span>
+                            <label className="text-[10px] font-black text-indigo-700 uppercase tracking-widest">Attached Practice Questions — Drag to Reorder</label>
+                         </div>
+                         <button onClick={() => setShowPickerForPoint(pt.key)} className="text-[10px] font-black text-indigo-600 uppercase tracking-widest bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all">+ Add from Bank</button>
+                      </div>
+                      
+                      {pt.questions.length > 0 ? (
+                         <div className="flex flex-wrap gap-4 p-4 bg-indigo-50/50 rounded-xl border border-dashed border-indigo-200">
+                            {pt.questions.map((q, qIdx) => (
+                               <div 
+                                  key={q.id + qIdx}
+                                  draggable
+                                  onDragStart={(e) => e.dataTransfer.setData("questionIndex", qIdx.toString())}
+                                  onDragOver={(e) => e.preventDefault()}
+                                  onDrop={(e) => {
+                                     e.preventDefault();
+                                     const fromIdx = parseInt(e.dataTransfer.getData("questionIndex"));
+                                     const toIdx = qIdx;
+                                     if (fromIdx === toIdx) return;
+                                     
+                                     const next = [...points];
+                                     const pointQuestions = [...next[pIdx].questions];
+                                     const [moved] = pointQuestions.splice(fromIdx, 1);
+                                     pointQuestions.splice(toIdx, 0, moved);
+                                     next[pIdx].questions = pointQuestions;
+                                     setPoints(next);
+                                  }}
+                                  className="p-3 bg-white border border-indigo-100 rounded-xl flex items-center justify-between gap-4 cursor-move active:scale-95 transition-transform w-full sm:w-[calc(50%-8px)]"
+                               >
+                                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                                     <div className="w-6 h-6 rounded bg-indigo-100 text-indigo-600 flex items-center justify-center text-[9px] font-black shrink-0">{qIdx + 1}</div>
+                                     <div className="text-xs font-medium text-slate-700 line-clamp-1 truncate"><MathText text={q.prompt_text ?? "Imported Question"} /></div>
+                                  </div>
+                                  <button onClick={() => {
+                                     const next = [...points];
+                                     next[pIdx].questions = next[pIdx].questions.filter((_, idx) => idx !== qIdx);
+                                     setPoints(next);
+                                  }} className="w-6 h-6 bg-rose-50 text-rose-400 rounded flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all shrink-0"><span className="material-symbols-outlined text-[14px]">close</span></button>
+                               </div>
+                            ))}
+                         </div>
+                      ) : (
+                         <div className="p-3 border border-dashed border-outline/40 rounded-xl text-center text-[9px] font-black text-slate-300 uppercase tracking-widest">No questions attached</div>
+                      )}
+                   </div>
                </div>
             ))}
          </div>

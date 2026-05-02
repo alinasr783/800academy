@@ -39,6 +39,7 @@ export async function GET(req: Request) {
   let query = admin
     .from("subtopics")
     .select("*")
+    .order("sort_order", { ascending: true })
     .order("title", { ascending: true });
 
   if (topicId) {
@@ -110,6 +111,7 @@ export async function PATCH(req: Request) {
     image_url: string | null;
     category: string | null;
     is_free: boolean;
+    sort_order: number;
   }> | null;
 
   if (!body) return NextResponse.json({ error: "Invalid body." }, { status: 400 });
@@ -123,6 +125,7 @@ export async function PATCH(req: Request) {
   if ("image_url" in body) patch.image_url = body.image_url;
   if ("category" in body) patch.category = body.category;
   if ("is_free" in body) patch.is_free = body.is_free;
+  if ("sort_order" in body && typeof body.sort_order === "number") patch.sort_order = body.sort_order;
 
   const { data, error } = await admin
     .from("subtopics")
