@@ -54,6 +54,7 @@ export default function TopicLessonViewer() {
   };
 
   // Guest user detection
+  const [isGuest, setIsGuest] = useState(false);
 
   useEffect(() => {
     // Scroll to top on point change
