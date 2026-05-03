@@ -24,6 +24,7 @@ type Topic = {
 type Subtopic = {
   id: string;
   topic_id: string;
+  subject_id: string;
   title: string;
   description: string | null;
   image_url: string | null;
@@ -39,6 +40,55 @@ export default function LessonsClient() {
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
   const [subscribedSubjectIds, setSubscribedSubjectIds] = useState<Set<string>>(new Set());
+  const [completedSubtopicIds, setCompletedSubtopicIds] = useState<Set<string>>(new Set());
+  const [isGuest, setIsGuest] = useState(true);
+
+  // Fetch completed lessons for the selected subject
+  useEffect(() => {
+    if (!selectedSubjectId) return;
+    async function fetchProgress() {
+      try {
+        // Always read from localStorage first for instant results
+        const stored = JSON.parse(localStorage.getItem("completed_lessons") || "[]");
+        setCompletedSubtopicIds(new Set(stored));
+        
+        // Also try to sync from server for logged-in users (in case they have data from another device)
+        const { data: sess } = await supabase.auth.getSession();
+        if (sess?.session?.access_token) {
+          fetch(`/api/lesson/completions?subject_id=${selectedSubjectId}`, {
+            headers: { Authorization: `Bearer ${sess.session.access_token}` }
+          }).then(async (res) => {
+            if (res.ok) {
+              const json = await res.json();
+              if (json.completed?.length > 0) {
+                // Merge server data with localStorage (server wins for dedup)
+                const merged = new Set([...stored, ...json.completed]);
+                setCompletedSubtopicIds(merged);
+                localStorage.setItem("completed_lessons", JSON.stringify([...merged]));
+              }
+            }
+          }).catch(() => {});
+        }
+      } catch (e) {
+        console.error("Failed to fetch progress:", e);
+      }
+    }
+    fetchProgress();
+  }, [selectedSubjectId, subtopics]);
+
+  // Listen for storage changes from other tabs
+  useEffect(() => {
+    const handler = () => {
+      try {
+        const stored = JSON.parse(localStorage.getItem("completed_lessons") || "[]");
+        setCompletedSubtopicIds(new Set(stored));
+      } catch (e) {
+        console.error("Parse error:", e);
+      }
+    };
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
+  }, []);
 
   useEffect(() => {
     async function init() {
@@ -81,6 +131,9 @@ export default function LessonsClient() {
         setSubjects(subjectRows ?? []);
         setTopics(topicRows ?? []);
         setSubtopics(subtopicRows ?? []);
+        
+        // Detect if user is guest
+        setIsGuest(!currentUser);
         
         // Restore from localStorage
         const savedSubjectId = localStorage.getItem("lessons_selected_subject");
@@ -152,6 +205,54 @@ export default function LessonsClient() {
         </p>
       </div>
 
+      {/* Progress Bar */}
+      {selectedSubjectId && (
+        <div className="mb-10 bg-white rounded-3xl border border-outline/40 p-6 shadow-soft-xl">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-black text-slate-800">Your Progress</h3>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                {currentSubject?.title || 'Subject'}
+              </p>
+            </div>
+            <div className="text-right">
+              <span className="text-xl font-black text-primary">
+                {subtopics.filter(st => st.subject_id === selectedSubjectId && completedSubtopicIds.has(st.id)).length}
+              </span>
+              <span className="text-xs font-bold text-slate-400"> / {subtopics.filter(st => st.subject_id === selectedSubjectId).length} lessons</span>
+            </div>
+          </div>
+          <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+            {(() => {
+              const total = subtopics.filter(st => st.subject_id === selectedSubjectId).length;
+              const done = subtopics.filter(st => st.subject_id === selectedSubjectId && completedSubtopicIds.has(st.id)).length;
+              const pct = total > 0 ? (done / total) * 100 : 0;
+              return (
+                <div 
+                  className="h-full bg-gradient-to-r from-primary to-secondary rounded-full transition-all duration-700 ease-out"
+                  style={{ width: `${pct}%` }}
+                />
+              );
+            })()}
+            </div>
+          </div>
+      )}
+
+      {/* CTA for guest users */}
+      {isGuest && (
+        <div className="mb-10 bg-amber-50 border-2 border-amber-200 rounded-3xl p-6 shadow-soft-xl text-center">
+          <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-3">
+            <span className="material-symbols-outlined text-2xl">cloud_upload</span>
+          </div>
+          <h3 className="text-sm font-black text-amber-900 mb-1">Save Your Progress</h3>
+          <p className="text-xs font-medium text-amber-700 mb-4">Create a free account to keep your progress saved across devices and never lose it.</p>
+          <Link href="/join" className="inline-flex items-center gap-2 px-6 py-3 bg-amber-600 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl hover:bg-amber-700 transition-all active:scale-95 shadow-lg shadow-amber-600/20">
+            Create Free Account
+            <span className="material-symbols-outlined text-sm">arrow_forward</span>
+          </Link>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
         {/* Left Sidebar: Packages & Topics */}
         <div className="lg:col-span-4 space-y-8 lg:sticky lg:top-24">
@@ -214,7 +315,7 @@ export default function LessonsClient() {
                     {currentTopic?.title}
                   </h2>
                   <p className="text-sm text-on-surface-variant font-medium mt-1">
-                    {filteredSubtopics.length} Lessons in this topic
+                     {filteredSubtopics.length} Lessons &bull; {filteredSubtopics.filter(st => completedSubtopicIds.has(st.id)).length} completed
                   </p>
                 </div>
               </div>
@@ -243,10 +344,17 @@ export default function LessonsClient() {
 
                       {/* Glass Content Container */}
                       <div className="mt-auto relative z-10 p-2">
-                        <div className="bg-white/10 backdrop-blur-2xl border border-white/20 rounded-[2rem] p-5 sm:p-6 group-hover:bg-white/15 transition-all duration-500">
-                          <h3 className="text-lg sm:text-xl font-black text-white leading-tight mb-2">
-                            {subtopic.title}
-                          </h3>
+                      <div className="bg-white/10 backdrop-blur-2xl border border-white/20 rounded-[2rem] p-5 sm:p-6 group-hover:bg-white/15 transition-all duration-500">
+                           <div className="flex items-start justify-between gap-2">
+                              <h3 className="text-lg sm:text-xl font-black text-white leading-tight mb-2">
+                                {subtopic.title}
+                              </h3>
+                              {completedSubtopicIds.has(subtopic.id) && (
+                                <div className="shrink-0 w-7 h-7 rounded-full bg-emerald-400 flex items-center justify-center shadow-lg">
+                                  <span className="material-symbols-outlined text-sm text-white">check</span>
+                                </div>
+                              )}
+                           </div>
                           <p className="text-xs text-white/70 line-clamp-2 mb-4 font-medium">
                             {subtopic.description || "Start mastering this subtopic now."}
                           </p>

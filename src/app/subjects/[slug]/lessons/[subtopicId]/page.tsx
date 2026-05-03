@@ -55,6 +55,7 @@ export default function TopicLessonViewer() {
 
   // Guest user detection
   const [isGuest, setIsGuest] = useState(false);
+  const [showCompletionPopup, setShowCompletionPopup] = useState(false);
 
   useEffect(() => {
     // Scroll to top on point change
@@ -118,25 +119,55 @@ useEffect(() => {
     }, [params.subtopicId]);
 
 const handleNext = useCallback(async () => {
-       // Scroll to top before moving to next step
-       window.scrollTo({ top: 0, behavior: 'smooth' });
-       
-       // Record streak activity when progressing
-       const { data: { session } } = await supabase.auth.getSession();
-       if (session?.access_token) {
-          fetch("/api/user/streak", {
-             method: "POST",
-             headers: { "Authorization": `Bearer ${session.access_token}` }
-          }).catch(() => { });
-       }
+        // Scroll to top before moving to next step
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        
+        // Record streak activity when progressing
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+           fetch("/api/user/streak", {
+              method: "POST",
+              headers: { "Authorization": `Bearer ${session.access_token}` }
+           }).catch(() => { });
+        }
 
-       if (currentIndex < points.length - 1) {
-          setCurrentIndex(prev => prev + 1);
-       } else {
-          // Finished - Redirect to Lessons Portal
-          router.push('/lessons');
-       }
-   }, [currentIndex, points.length, router, params.slug]);
+        if (currentIndex < points.length - 1) {
+           setCurrentIndex(prev => prev + 1);
+        } else {
+           // Finished - Record lesson completion
+           try {
+              // Always store in localStorage for instant feedback
+              const stored = JSON.parse(localStorage.getItem("completed_lessons") || "[]");
+              if (!stored.includes(params.subtopicId)) {
+                 stored.push(params.subtopicId);
+                 localStorage.setItem("completed_lessons", JSON.stringify(stored));
+              }
+              
+              // Also sync to server for logged-in users
+              if (session?.access_token) {
+                 fetch("/api/lesson/completions", {
+                    method: "POST",
+                    headers: { 
+                       Authorization: `Bearer ${session.access_token}`,
+                       "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ subtopic_id: params.subtopicId, subject_id: subtopic?.subject_id })
+                 }).catch(() => {});
+              }
+           } catch (e) {
+              console.error("[TopicLessonViewer] Record completion error:", e);
+           }
+           
+           // Show completion popup for guests
+           if (isGuest) {
+              setShowCompletionPopup(true);
+              return; // Don't redirect yet
+           }
+           
+           // Redirect to Lessons Portal
+           router.push('/lessons');
+        }
+    }, [currentIndex, points.length, router, params.slug, params.subtopicId, subtopic?.subject_id, isGuest]);
 
 const handleSubmitPractice = useCallback(() => {
      const currentPoint = points[currentIndex];
@@ -167,11 +198,13 @@ const handleSubmitPractice = useCallback(() => {
      setScoresByPoint(prev => ({ ...prev, [currentIndex]: { correct: correctCount, total } }));
      setSubmittedPoints(prev => new Set(prev).add(currentIndex));
      
-     // Scroll to results after submission
+     // Scroll to show ~50px above the practice result
      setTimeout(() => {
        const resultEl = document.getElementById('practice-result');
        if (resultEl) {
-         resultEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+         const rect = resultEl.getBoundingClientRect();
+         const scrollTarget = window.scrollY + rect.top - 50;
+         window.scrollTo({ top: scrollTarget, behavior: 'smooth' });
        }
      }, 100);
      
@@ -532,6 +565,34 @@ const handleSubmitPractice = useCallback(() => {
                 )}
               </button>
            </footer>
+            )}
+
+           {/* Lesson Completion Popup for Guests */}
+           {showCompletionPopup && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                 <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onClick={() => { setShowCompletionPopup(false); router.push('/lessons'); }} />
+                 <div className="relative bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-in zoom-in-95 duration-300">
+                    <button onClick={() => { setShowCompletionPopup(false); router.push('/lessons'); }} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 transition-all">
+                       <span className="material-symbols-outlined text-sm">close</span>
+                    </button>
+                    <div className="text-center">
+                       <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-4">
+                          <span className="material-symbols-outlined text-3xl">school</span>
+                       </div>
+                       <h2 className="text-2xl font-black text-slate-800 mb-2">Lesson Complete!</h2>
+                       <p className="text-slate-500 mb-6">Create a free account to track your progress across all lessons and see how much you've completed!</p>
+                       <div className="space-y-3">
+                          <Link href="/join" className="w-full py-4 bg-primary text-white font-black text-sm uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 hover:bg-slate-800 transition-all">
+                             Create Free Account
+                             <span className="material-symbols-outlined text-lg">arrow_forward</span>
+                          </Link>
+                          <button onClick={() => { setShowCompletionPopup(false); router.push('/lessons'); }} className="w-full py-3 text-slate-400 font-bold text-sm hover:text-slate-600 transition-all">
+                             Maybe Later
+                          </button>
+                       </div>
+                    </div>
+                 </div>
+              </div>
            )}
 
         </div>
