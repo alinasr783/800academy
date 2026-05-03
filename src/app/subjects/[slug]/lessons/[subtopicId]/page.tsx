@@ -57,6 +57,10 @@ export default function TopicLessonViewer() {
   const [isGuest, setIsGuest] = useState(false);
   const [showCompletionPopup, setShowCompletionPopup] = useState(false);
 
+  // Gallery state
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [galleryIndex, setGalleryIndex] = useState(0);
+
   useEffect(() => {
     // Scroll to top on point change
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -218,18 +222,61 @@ const handleSubmitPractice = useCallback(() => {
 
    useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
+         const pt = points.length > 0 ? points[currentIndex] : null;
+         
+         // Gallery mode: arrows = prev/next photo, Escape = close, Space = next photo
+         if (galleryOpen && pt) {
+            if (e.code === "ArrowRight" || e.code === "Space") {
+               e.preventDefault();
+               setGalleryIndex(prev => Math.min(prev + 1, (pt.subtopic_point_assets?.length || 1) - 1));
+            } else if (e.code === "ArrowLeft") {
+               e.preventDefault();
+               setGalleryIndex(prev => Math.max(prev - 1, 0));
+            } else if (e.code === "Escape") {
+               e.preventDefault();
+               setGalleryOpen(false);
+            }
+            return;
+         }
+         
+         // Normal mode: arrows = next/prev step, Space = next step
          if (e.code === "Space" && e.target === document.body) {
             e.preventDefault();
             handleNext();
          } else if (e.code === "ArrowRight") {
+            if (pt && !e.ctrlKey && !e.metaKey) {
+               const carousel = document.getElementById(`carousel-${pt.id}`);
+               if (carousel) {
+                  const atEnd = carousel.scrollLeft + carousel.clientWidth >= carousel.scrollWidth - 10;
+                  if (atEnd) {
+                     handleNext();
+                     return;
+                  }
+                  carousel.scrollBy({ left: 400, behavior: 'smooth' });
+                  return;
+               }
+            }
             handleNext();
          } else if (e.code === "ArrowLeft") {
+            if (pt && !e.ctrlKey && !e.metaKey) {
+               const carousel = document.getElementById(`carousel-${pt.id}`);
+               if (carousel) {
+                  const atStart = carousel.scrollLeft <= 10;
+                  if (atStart && currentIndex === 0) return;
+                  if (atStart) {
+                     handlePrev();
+                     return;
+                  }
+                  carousel.scrollBy({ left: -400, behavior: 'smooth' });
+                  return;
+               }
+            }
             handlePrev();
          }
       };
       window.addEventListener("keydown", handleKeyDown);
       return () => window.removeEventListener("keydown", handleKeyDown);
-   }, [handleNext, handlePrev]);
+   }, [handleNext, handlePrev, galleryOpen, points, currentIndex]);
 
    if (loading) {
       return (
@@ -287,7 +334,12 @@ const handleSubmitPractice = useCallback(() => {
                      <div className="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar gap-4 pb-2" id={`carousel-${currentPoint.id}`}>
                         {currentPoint.subtopic_point_assets.sort((a, b) => a.sort_order - b.sort_order).map((asset, i) => (
                            <div key={asset.id} className="snap-center shrink-0 w-full md:w-[85%] lg:w-[75%]">
-                              <img src={asset.url} alt="lesson asset" className="w-full h-auto max-h-[65vh] object-contain rounded-xl border border-outline/20 shadow-soft-lg" />
+                              <img 
+                                 src={asset.url} 
+                                 alt="lesson asset" 
+                                 className="w-full h-auto max-h-[65vh] object-contain rounded-xl border border-outline/20 shadow-soft-lg cursor-pointer hover:shadow-soft-xl hover:scale-[1.02] transition-all"
+                                 onClick={() => { setGalleryIndex(i); setGalleryOpen(true); }}
+                              />
                            </div>
                         ))}
                      </div>
@@ -564,6 +616,52 @@ const handleSubmitPractice = useCallback(() => {
                 )}
               </button>
            </footer>
+            )}
+
+{/* Fullscreen Image Gallery */}
+            {galleryOpen && currentPoint && currentPoint.subtopic_point_assets?.length > 0 && (
+               <div className="fixed inset-0 z-[9999] bg-black" onClick={() => setGalleryOpen(false)}>
+                  <div className="relative w-full h-full" onClick={(e) => e.stopPropagation()}>
+                     <img 
+                        src={currentPoint.subtopic_point_assets.sort((a,b) => a.sort_order - b.sort_order)[galleryIndex]?.url}
+                        alt="lesson detail"
+                        className="w-full h-full object-contain"
+                     />
+                     
+                     {/* Close button - top left glass */}
+                     <button
+                        onClick={() => setGalleryOpen(false)}
+                        className="absolute top-4 left-4 w-14 h-14 rounded-full bg-white/10 backdrop-blur-2xl border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition-all active:scale-95 shadow-lg"
+                     >
+                        <span className="material-symbols-outlined text-2xl">close</span>
+                     </button>
+
+                     {/* Photo counter - top center glass */}
+                     <div className="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-2xl border border-white/20 text-white text-sm font-bold">
+                        {galleryIndex + 1} / {currentPoint.subtopic_point_assets.length}
+                     </div>
+
+                     {/* Prev button - left glass */}
+                     {galleryIndex > 0 && (
+                        <button
+                           onClick={(e) => { e.stopPropagation(); setGalleryIndex(prev => Math.max(prev - 1, 0)); }}
+                           className="absolute left-4 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-white/10 backdrop-blur-2xl border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition-all active:scale-95 shadow-lg"
+                        >
+                           <span className="material-symbols-outlined text-3xl">chevron_left</span>
+                        </button>
+                     )}
+
+                     {/* Next button - right glass */}
+                     {galleryIndex < currentPoint.subtopic_point_assets.length - 1 && (
+                        <button
+                           onClick={(e) => { e.stopPropagation(); setGalleryIndex(prev => Math.min(prev + 1, (currentPoint.subtopic_point_assets?.length || 1) - 1)); }}
+                           className="absolute right-4 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-white/10 backdrop-blur-2xl border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition-all active:scale-95 shadow-lg"
+                        >
+                           <span className="material-symbols-outlined text-3xl">chevron_right</span>
+                        </button>
+                     )}
+                  </div>
+               </div>
             )}
 
            {/* Lesson Completion Popup for Guests */}
