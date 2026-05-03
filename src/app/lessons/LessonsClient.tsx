@@ -169,6 +169,8 @@ export default function LessonsClient() {
   const currentSubject = subjects.find(s => s.id === selectedSubjectId);
   const filteredTopics = topics.filter(t => t.subject_id === selectedSubjectId);
   const currentTopic = topics.find(t => t.id === selectedTopicId);
+  // Get subjectSlug for lesson links (works even when no package is selected)
+  const subjectSlug = currentSubject?.slug;
   
   // Logic to update topic if current selection is invalid for new subject
   useEffect(() => {
@@ -180,7 +182,12 @@ export default function LessonsClient() {
     }
   }, [selectedSubjectId]);
 
-  const filteredSubtopics = subtopics.filter(st => st.topic_id === selectedTopicId);
+  // Filter subtopics based on selection state
+  const filteredSubtopics = selectedTopicId
+    ? subtopics.filter(st => st.topic_id === selectedTopicId)
+    : selectedSubjectId
+      ? subtopics.filter(st => st.subject_id === selectedSubjectId)
+      : subtopics;
 
   if (loading) {
     return (
@@ -307,22 +314,29 @@ export default function LessonsClient() {
 
         {/* Main Content: Subtopics (Lessons) */}
         <div className="lg:col-span-8">
-          {selectedTopicId ? (
+          {filteredSubtopics.length === 0 && !selectedSubjectId ? (
+            <div className="p-20 bg-white rounded-3xl border border-outline/40 shadow-soft-xl text-center">
+              <span className="material-symbols-outlined text-6xl text-primary/20 mb-6">auto_awesome</span>
+              <h2 className="text-2xl font-black text-primary tracking-tight mb-2">Ready to learn?</h2>
+              <p className="text-on-surface-variant font-medium">Select a package from the sidebar to begin your journey.</p>
+            </div>
+          ) : (
             <div className="space-y-8">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-2xl font-black text-primary tracking-tight">
-                    {currentTopic?.title}
+                    {selectedTopicId ? currentTopic?.title : (selectedSubjectId ? `${currentSubject?.title} - All Lessons` : 'All Lessons')}
                   </h2>
                   <p className="text-sm text-on-surface-variant font-medium mt-1">
-                     {filteredSubtopics.length} Lessons &bull; {filteredSubtopics.filter(st => completedSubtopicIds.has(st.id)).length} completed
+                     {filteredSubtopics.length} Lessons{selectedSubjectId ? ` • ${filteredSubtopics.filter(st => completedSubtopicIds.has(st.id)).length} completed` : ''}
                   </p>
                 </div>
               </div>
 
-<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {filteredSubtopics.map((subtopic) => {
-                  const isSubscribed = subscribedSubjectIds.has(selectedSubjectId!);
+                  const subSubject = subjects.find(s => s.id === subtopic.subject_id);
+                  const isSubscribed = selectedSubjectId ? subscribedSubjectIds.has(selectedSubjectId) : false;
                   const canAccess = isSubscribed || subtopic.is_free;
 
                   return (
@@ -361,7 +375,7 @@ export default function LessonsClient() {
                           
                           {canAccess ? (
                             <Link
-                              href={`/subjects/${currentSubject?.slug}/lessons/${subtopic.id}`}
+                              href={`/subjects/${subSubject?.slug || currentSubject?.slug}/lessons/${subtopic.id}`}
                               className="w-full py-3.5 font-black text-[10px] uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-2 rounded-2xl bg-white text-primary hover:bg-secondary hover:text-white shadow-lg active:scale-[0.98]"
                             >
                               Start Lesson
@@ -374,7 +388,7 @@ export default function LessonsClient() {
                                 Locked Lesson
                               </div>
                               <Link
-                                href={`/subjects/${currentSubject?.slug}`}
+                                href={`/subjects/${subSubject?.slug || currentSubject?.slug}`}
                                 className="w-full py-3.5 bg-white/10 backdrop-blur-md text-white font-black text-[10px] uppercase tracking-widest hover:bg-white/20 transition-all rounded-2xl text-center border border-white/10"
                               >
                                 Unlock with Plan
@@ -389,21 +403,15 @@ export default function LessonsClient() {
               </div>
               
               {filteredSubtopics.length === 0 && (
-                <div className="p-20 bg-white rounded-3xl border-2 border-dashed border-slate-200 text-center">
-                  <span className="material-symbols-outlined text-5xl text-slate-300 mb-4">menu_book</span>
-                  <p className="font-bold text-on-surface-variant">No lessons found in this topic yet.</p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="p-20 bg-white rounded-3xl border border-outline/40 shadow-soft-xl text-center">
-              <span className="material-symbols-outlined text-6xl text-primary/20 mb-6">auto_awesome</span>
-              <h2 className="text-2xl font-black text-primary tracking-tight mb-2">Ready to learn?</h2>
-              <p className="text-on-surface-variant font-medium">Select a package and topic from the sidebar to begin your journey.</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </section>
+                 <div className="p-20 bg-white rounded-3xl border-2 border-dashed border-slate-200 text-center">
+                   <span className="material-symbols-outlined text-5xl text-slate-300 mb-4">menu_book</span>
+                   <p className="font-bold text-on-surface-variant">No lessons found here yet.</p>
+                 </div>
+               )}
+             </div>
+           )}
+         </div>
+       </div>
+     </section>
   );
 }
