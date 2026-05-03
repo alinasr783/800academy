@@ -316,16 +316,15 @@ const handleSubmitPractice = useCallback(() => {
                   </div>
                )}
 
-{/* Explanation */}
+{/* Explanation - Full width */}
                 {currentPoint.content_html && (
-                  <div className="mb-12">
+                  <div className="-mx-4 md:-mx-12 mb-12">
                     {isHtmlContent(currentPoint.content_html) ? (
                       <div 
-                        className="bg-white p-6 md:p-12 rounded-3xl border border-outline/20 shadow-soft-md"
                         dangerouslySetInnerHTML={{ __html: currentPoint.content_html }}
                       />
                     ) : (
-                      <div className="prose prose-lg prose-slate max-w-none text-slate-700 leading-loose bg-white p-6 md:p-12 rounded-3xl border border-outline/20 shadow-soft-md">
+                      <div className="prose prose-lg prose-slate max-w-none text-slate-700 leading-loose bg-white p-6 md:p-12 rounded-3xl border border-outline/20 shadow-soft-md mx-4 md:mx-12">
                         <MathText text={currentPoint.content_html} />
                       </div>
                     )}
