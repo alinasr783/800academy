@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useCart } from "@/components/cart/CartProvider";
-import AuthRequiredModal from "@/components/AuthRequiredModal";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 type CartRow = {
   id: string;
@@ -43,7 +43,7 @@ export default function CheckoutPage() {
   const [paying, setPaying] = useState(false);
   const [userEmail, setUserEmail] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<{ id: string; discountCents: number; code: string } | null>(null);
@@ -53,26 +53,25 @@ export default function CheckoutPage() {
   const [couponModalMessage, setCouponModalMessage] = useState("");
 
   useEffect(() => {
-    let mounted = true;
-    async function run() {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!mounted) return;
-      
-      if (sessionData.session) {
-        setUserEmail(sessionData.session.user.email || "");
-        setIsAuthenticated(true);
-      } else {
-        setIsAuthenticated(false);
-        setIsAuthModalOpen(true);
-      }
-      
-      setLoading(false);
-    }
-    run();
-    return () => {
-      mounted = false;
-    };
-  }, []);
+     let mounted = true;
+     async function run() {
+       const { data: sessionData } = await supabase.auth.getSession();
+       if (!mounted) return;
+       
+       if (sessionData.session) {
+         setUserEmail(sessionData.session.user.email || "");
+         setIsAuthenticated(true);
+       } else {
+         setIsAuthenticated(false);
+       }
+       
+       setLoading(false);
+     }
+     run();
+     return () => {
+       mounted = false;
+     };
+   }, []);
 
   const rows = cart.items;
 
@@ -107,10 +106,9 @@ export default function CheckoutPage() {
   }
 
   async function handleWhatsApp() {
-    if (!isAuthenticated) return;
-    const msg = buildWhatsAppMessage();
-    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`, "_blank");
-  }
+     const msg = buildWhatsAppMessage();
+     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`, "_blank");
+   }
 
   async function handleApplyCoupon() {
     if (!couponCode.trim()) return;
@@ -154,7 +152,10 @@ export default function CheckoutPage() {
   }
 
   async function handlePayment() {
-    if (!isAuthenticated) return;
+     if (!isAuthenticated) {
+       setShowAuthModal(true);
+       return;
+     }
 
     setPaying(true);
     try {
@@ -190,43 +191,27 @@ export default function CheckoutPage() {
   }
 
   async function handleRemove(cartItemId: string) {
-    await cart.removeItem(cartItemId);
-  }
+     await cart.removeItem(cartItemId);
+   }
 
-  // If not authenticated, only show the modal and header, prevent viewing checkout content
-  if (isAuthenticated === false) {
-    return (
-      <>
-        <main className="min-h-screen bg-surface-variant/50" />
-        <AuthRequiredModal 
-          isOpen={isAuthModalOpen} 
-          onClose={() => {
-            setIsAuthModalOpen(false);
-            router.push("/");
-          }} 
-        />
-      </>
-    );
-  }
+   return (
+     <>
+       <main className="pt-24 pb-40 min-h-screen bg-gradient-to-b from-surface-variant/50 to-white">
+         <section className="max-w-[1440px] mx-auto px-6 sm:px-8 lg:px-12 py-12 sm:py-20">
+           {/* Header */}
+           <div className="mb-10 sm:mb-14">
+             <div className="text-secondary font-extrabold text-[10px] sm:text-[11px] uppercase tracking-[0.3em] mb-3">
+               Checkout
+             </div>
+             <h1 className="font-headline text-3xl sm:text-4xl lg:text-5xl font-extrabold text-primary tracking-tight">
+               Complete your payment
+             </h1>
+             <p className="text-on-surface-variant text-sm sm:text-base font-medium mt-3 max-w-xl">
+               Choose your preferred payment method to complete your subscription.
+             </p>
+           </div>
 
-  return (
-    <>
-      <main className="pt-24 pb-40 min-h-screen bg-gradient-to-b from-surface-variant/50 to-white">
-        <section className="max-w-[1440px] mx-auto px-6 sm:px-8 lg:px-12 py-12 sm:py-20">
-          {/* Header */}
-          <div className="mb-10 sm:mb-14">
-            <div className="text-secondary font-extrabold text-[10px] sm:text-[11px] uppercase tracking-[0.3em] mb-3">
-              Checkout
-            </div>
-            <h1 className="font-headline text-3xl sm:text-4xl lg:text-5xl font-extrabold text-primary tracking-tight">
-              Complete your payment
-            </h1>
-            <p className="text-on-surface-variant text-sm sm:text-base font-medium mt-3 max-w-xl">
-              Choose your preferred payment method to complete your subscription.
-            </p>
-          </div>
-
-          {loading || isAuthenticated === null ? (
+           {loading || isAuthenticated === null ? (
             <div className="bg-white rounded-3xl border border-outline/30 shadow-soft-xl p-10 sm:p-14 text-center">
               <span className="material-symbols-outlined text-4xl text-primary animate-spin">progress_activity</span>
               <p className="text-on-surface-variant font-medium mt-4">Loading...</p>
@@ -419,7 +404,7 @@ export default function CheckoutPage() {
       </main>
 
       {/* Floating Sticky Payment Footer */}
-      {!loading && isAuthenticated === true && rows.length > 0 && (
+      {!loading && isAuthenticated !== null && rows.length > 0 && (
         <div className="fixed bottom-6 left-6 right-6 z-50 flex flex-col md:flex-row items-center justify-center gap-4">
           {/* Main Action: WhatsApp Payment (Prominent) */}
           <button
@@ -481,7 +466,46 @@ export default function CheckoutPage() {
             </button>
           </div>
         </div>
-      )}
-    </>
-  );
-}
+       )}
+
+       {/* Auth Required Modal - for guest Pay Online */}
+       {showAuthModal && (
+         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+           <div 
+             className="absolute inset-0 bg-primary/20 backdrop-blur-md"
+             onClick={() => setShowAuthModal(false)}
+           />
+           <div className="relative bg-white rounded-[2.5rem] shadow-premium max-w-md w-full p-8 sm:p-10 text-center animate-in fade-in zoom-in duration-300">
+             <button
+               onClick={() => setShowAuthModal(false)}
+               className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 transition-all"
+             >
+               <span className="material-symbols-outlined text-sm">close</span>
+             </button>
+             <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6">
+               <span className="material-symbols-outlined text-4xl text-primary">account_circle</span>
+             </div>
+             <h3 className="text-2xl font-black text-primary tracking-tight mb-3">Account Required</h3>
+             <p className="text-on-surface-variant font-medium leading-relaxed mb-8">
+               To pay online with a card or mobile wallet, you need an account. Create one or log in to continue.
+             </p>
+             <div className="space-y-3">
+               <Link
+                 href={`/join?mode=signup&next=${encodeURIComponent(window.location.pathname)}`}
+                 className="w-full h-14 bg-primary text-white font-black uppercase tracking-widest rounded-2xl hover:bg-slate-800 transition-all shadow-premium flex items-center justify-center"
+               >
+                 Create Free Account
+               </Link>
+               <Link
+                 href={`/join?mode=login&next=${encodeURIComponent(window.location.pathname)}`}
+                 className="w-full h-12 text-primary font-bold hover:text-secondary transition-all flex items-center justify-center"
+               >
+                 Log In
+               </Link>
+             </div>
+           </div>
+         </div>
+       )}
+     </>
+   );
+ }

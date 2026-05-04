@@ -72,6 +72,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       { href: "/dashboard/notifications", label: "Notifications", icon: "notifications" },
                       { href: "/dashboard/notification-types", label: "Notif. Types", icon: "category" },
                       { href: "/dashboard/ips", label: "IP Blacklist", icon: "block" },
+                      { href: "/dashboard/visitors", label: "Visitors", icon: "visibility" },
                     ].map((item) => {
                       const isActive = pathname === item.href;
                       return (

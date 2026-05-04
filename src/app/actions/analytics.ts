@@ -30,7 +30,8 @@ export async function trackVisit(path: string) {
       ip_address: ip,
       path: path,
       country: country,
-      city: decodeURIComponent(city), // City names can be URL encoded
+      city: decodeURIComponent(city),
+      user_agent: userAgent,
     });
     
     return { success: true };
