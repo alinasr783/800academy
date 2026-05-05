@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdminFromBearer } from "@/lib/adminGuard";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
-const DEEPSEEK_KEY = "sk-88def493360844168b01364f68a263d2";
+const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY || "";
 const DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 
 type TopicRow = { id: string; title: string; subject_id: string };
