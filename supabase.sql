@@ -175,6 +175,17 @@ CREATE TABLE public.exams (
   CONSTRAINT exams_pkey PRIMARY KEY (id),
   CONSTRAINT exams_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.subjects(id)
 );
+CREATE TABLE public.lesson_completions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  subtopic_id uuid NOT NULL,
+  subject_id uuid NOT NULL,
+  completed_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT lesson_completions_pkey PRIMARY KEY (id),
+  CONSTRAINT lesson_completions_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT lesson_completions_subtopic_id_fkey FOREIGN KEY (subtopic_id) REFERENCES public.subtopics(id),
+  CONSTRAINT lesson_completions_subject_id_fkey FOREIGN KEY (subject_id) REFERENCES public.subjects(id)
+);
 CREATE TABLE public.mistake_bank (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
@@ -254,6 +265,7 @@ CREATE TABLE public.page_visits (
   created_at timestamp with time zone DEFAULT now(),
   ip_address text DEFAULT 'unknown'::text,
   city text DEFAULT 'Unknown'::text,
+  user_agent text,
   CONSTRAINT page_visits_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.practice_sessions (
@@ -287,6 +299,7 @@ CREATE TABLE public.profiles (
   current_streak integer DEFAULT 0,
   last_activity_date date,
   longest_streak integer DEFAULT 0,
+  last_ip text,
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
 );

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import MathText from "@/components/MathText";
 
-export default function QuestionBankPicker({ isOpen, onClose, onImport }: { isOpen: boolean, onClose: () => void, onImport: (ids: string[]) => void }) {
+export default function QuestionBankPicker({ isOpen, onClose, onImport, existingQuestionIds }: { isOpen: boolean, onClose: () => void, onImport: (ids: string[]) => void, existingQuestionIds?: string[] }) {
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<any[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -114,7 +114,9 @@ export default function QuestionBankPicker({ isOpen, onClose, onImport }: { isOp
            ) : items.length === 0 ? (
               <div className="p-20 text-center text-slate-400 font-bold">No questions found.</div>
            ) : (
-              items.map(q => (
+              items.map(q => {
+                  const alreadyAdded = existingQuestionIds?.includes(q.id);
+                  return (
                  <div 
                    key={q.id} 
                    onClick={() => {
@@ -128,15 +130,19 @@ export default function QuestionBankPicker({ isOpen, onClose, onImport }: { isOp
                     </div>
                     <div className="flex-1 space-y-2">
                        <div className="flex items-center gap-2">
-                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{q.type}</span>
-                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">• Points: {q.points}</span>
+                           <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{q.type}</span>
+                           <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">• Points: {q.points}</span>
+                           {alreadyAdded && (
+                              <span className="text-[9px] font-black uppercase tracking-widest text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">Already in Exam</span>
+                           )}
                        </div>
                        <div className="text-sm font-medium leading-relaxed line-clamp-2">
                           <MathText text={q.prompt_text || ""} />
                        </div>
                     </div>
-                 </div>
-              ))
+                  </div>
+                  );
+               })
            )}
         </div>
 

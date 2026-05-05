@@ -39,11 +39,18 @@ export default function VisitorsPage() {
   const [filterCountry, setFilterCountry] = useState("");
   const [filterCity, setFilterCity] = useState("");
   const [filterDevice, setFilterDevice] = useState("");
+  const [filterTime, setFilterTime] = useState("all");
+  const [filterIP, setFilterIP] = useState("");
 
   // Blocking
   const [blockReason, setBlockReason] = useState("");
   const [blockingIp, setBlockingIp] = useState<string | null>(null);
   const [blockedIps, setBlockedIps] = useState<Set<string>>(new Set());
+
+  // IP History tracking
+  const [trackingIP, setTrackingIP] = useState<string | null>(null);
+  const [ipHistory, setIpHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   const fetchBlockedIps = useCallback(async () => {
     try {
@@ -65,6 +72,8 @@ export default function VisitorsPage() {
       if (filterCountry) params.set("country", filterCountry);
       if (filterCity) params.set("city", filterCity);
       if (filterDevice) params.set("device", filterDevice);
+      if (filterTime && filterTime !== "all") params.set("time", filterTime);
+      if (filterIP) params.set("ip", filterIP);
       params.set("page", String(page));
       params.set("limit", "50");
 
@@ -82,7 +91,25 @@ export default function VisitorsPage() {
     } finally {
       setLoading(false);
     }
-  }, [filterCountry, filterCity, filterDevice, page]);
+  }, [filterCountry, filterCity, filterDevice, filterTime, filterIP, page]);
+
+  async function fetchIpHistory(ip: string) {
+    setTrackingIP(ip);
+    setLoadingHistory(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const params = new URLSearchParams({ ip });
+      const res = await fetch(`/api/admin/visitors/history?${params}`, {
+        headers: { Authorization: `Bearer ${sessionData.session?.access_token}` },
+      });
+      const json = await res.json();
+      setIpHistory(json.history || []);
+    } catch {
+      setError("Failed to load IP history");
+    } finally {
+      setLoadingHistory(false);
+    }
+  }
 
   useEffect(() => {
     fetchBlockedIps();
@@ -184,9 +211,26 @@ export default function VisitorsPage() {
               <option key={d} value={d}>{d || "All Devices"}</option>
             ))}
           </select>
-          {(filterCountry || filterCity || filterDevice) && (
+          <input
+            type="text"
+            value={filterIP}
+            onChange={(e) => { setFilterIP(e.target.value); setPage(1); }}
+            placeholder="Search IP..."
+            className="px-4 py-2.5 border border-outline/40 rounded-xl text-sm font-bold font-mono outline-none focus:border-primary transition-colors"
+          />
+          <select
+            value={filterTime}
+            onChange={(e) => { setFilterTime(e.target.value); setPage(1); }}
+            className="px-4 py-2.5 border border-outline/40 rounded-xl text-sm font-bold outline-none focus:border-primary transition-colors bg-white"
+          >
+            <option value="all">All Time</option>
+            <option value="today">Today</option>
+            <option value="7days">Last 7 Days</option>
+            <option value="30days">Last 30 Days</option>
+          </select>
+          {(filterCountry || filterCity || filterDevice || filterTime !== "all") && (
             <button
-              onClick={() => { setFilterCountry(""); setFilterCity(""); setFilterDevice(""); setPage(1); }}
+              onClick={() => { setFilterCountry(""); setFilterCity(""); setFilterDevice(""); setFilterTime("all"); setPage(1); }}
               className="px-4 py-2.5 text-rose-600 font-bold text-sm hover:bg-rose-50 rounded-xl transition-colors"
             >
               Clear Filters
@@ -224,7 +268,15 @@ export default function VisitorsPage() {
               <tbody>
                 {visitors.map(v => (
                   <tr key={v.id} className="border-b border-outline/20 hover:bg-slate-50 transition-colors">
-                    <td className="p-4 font-bold text-sm font-mono text-primary">{v.ip_address}</td>
+                    <td className="p-4 font-bold text-sm font-mono text-primary">
+                      <button
+                        onClick={() => fetchIpHistory(v.ip_address)}
+                        className="hover:underline hover:text-secondary transition-colors cursor-pointer"
+                        title="Click to track this IP"
+                      >
+                        {v.ip_address}
+                      </button>
+                    </td>
                     <td className="p-4 text-sm font-bold">{v.country}</td>
                     <td className="p-4 text-sm font-bold">{v.city}</td>
                     <td className="p-4">
@@ -316,6 +368,63 @@ export default function VisitorsPage() {
           </div>
         )}
       </div>
+
+      {/* IP History Modal */}
+      {trackingIP && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between p-6 border-b border-outline/30">
+              <div>
+                <h2 className="text-xl font-bold font-headline">IP Visit History</h2>
+                <p className="text-sm font-mono text-primary mt-1">{trackingIP}</p>
+              </div>
+              <button 
+                onClick={() => { setTrackingIP(null); setIpHistory([]); }}
+                className="p-2 rounded-full hover:bg-slate-100 transition-colors"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6">
+              {loadingHistory ? (
+                <div className="flex justify-center py-10">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : ipHistory.length === 0 ? (
+                <p className="text-center text-on-surface-variant">No history found for this IP.</p>
+              ) : (
+                <div className="space-y-4">
+                  {ipHistory.map((visit, i) => (
+                    <div key={visit.id || i} className="relative flex items-start gap-4 pb-4 border-b border-slate-100 last:border-0">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                        <span className="material-symbols-outlined text-sm">{i === 0 ? 'where_to_vote' : 'ads_click'}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <span className="text-sm font-bold text-primary break-all">{visit.path}</span>
+                          {visit.country !== "Unknown" && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold">
+                              {visit.city !== "Unknown" ? `${visit.city}, ` : ""}{visit.country}
+                            </span>
+                          )}
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-bold capitalize">{visit.device}</span>
+                        </div>
+                        <time className="text-xs font-medium text-slate-400">
+                          {new Date(visit.created_at).toLocaleString("en-US", { 
+                            year: "numeric", month: "short", day: "numeric", 
+                            hour: "2-digit", minute: "2-digit", second: "2-digit" 
+                          })}
+                        </time>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
-}
+ }

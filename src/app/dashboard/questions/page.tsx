@@ -13,6 +13,7 @@ type BankQuestionRow = {
   id: string;
   type: "mcq" | "fill" | "reference_block";
   prompt_text: string | null;
+  explanation_text: string | null;
   points: number;
   topic_id: string | null;
   subtopic_id: string | null;
@@ -38,6 +39,8 @@ export default function QuestionsBankPage() {
   const [bulkTargetExam, setBulkTargetExam] = useState("");
   const [exams, setExams] = useState<any[]>([]);
   const [importing, setImporting] = useState(false);
+  const [aiProcessing, setAiProcessing] = useState(false);
+  const [aiMsg, setAiMsg] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -164,6 +167,64 @@ export default function QuestionsBankPage() {
     }
   }
 
+  async function handleAiExplainBulk() {
+     const ids = selectedIds.length > 0 ? selectedIds : items.map(i => i.id);
+     if (ids.length === 0) return;
+     setAiProcessing(true);
+     setAiMsg(null);
+     try {
+       console.log("[AI-Explain-Bulk] Processing", ids.length, "questions");
+       const { data: sessionData } = await supabase.auth.getSession();
+       const token = sessionData.session?.access_token;
+       const res = await fetch("/api/admin/ai-explanations", {
+         method: "POST",
+         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+         body: JSON.stringify({ question_ids: ids, source: "question_bank" }),
+       });
+       const json = await res.json();
+       console.log("[AI-Explain-Bulk] Response:", json);
+       if (json.success) {
+         setAiMsg(`Explanations generated for ${json.updated} questions. ${json.failed > 0 ? `${json.failed} failed.` : ""}`);
+         setSelectedIds([]);
+         loadData();
+       } else {
+         setAiMsg("Error: " + (json.error || "Unknown"));
+       }
+     } catch (e: any) {
+       setAiMsg("Error: " + e.message);
+     } finally {
+       setAiProcessing(false);
+     }
+   }
+
+   async function handleAiCategorize() {
+    const ids = selectedIds.length > 0 ? selectedIds : items.map(i => i.id);
+    if (ids.length === 0) return;
+    setAiProcessing(true);
+    setAiMsg(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const res = await fetch("/api/admin/ai-categorize", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ question_ids: ids, source: "question_bank" }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setAiMsg(`Updated ${json.updated} questions (${json.confidence.high} high, ${json.confidence.medium} medium, ${json.confidence.low} low)`);
+        setSelectedIds([]);
+        loadData();
+      } else {
+        setAiMsg("Error: " + (json.error || "Unknown"));
+      }
+    } catch (e: any) {
+      setAiMsg("Error: " + e.message);
+    } finally {
+      setAiProcessing(false);
+    }
+  }
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -278,6 +339,17 @@ export default function QuestionsBankPage() {
                         {item.type.replace('_', ' ')}
                       </span>
                       <span className="text-[10px] font-bold text-slate-400">Points: {item.points}</span>
+                      {item.explanation_text ? (
+                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 rounded-full text-[9px] font-bold flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[10px]">check_circle</span>
+                          Has Explanation
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 bg-amber-50 text-amber-500 rounded-full text-[9px] font-bold flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[10px]">pending</span>
+                          No Explanation
+                        </span>
+                      )}
                       <span className="text-[10px] font-bold text-slate-300 ml-auto">{new Date(item.created_at).toLocaleDateString()}</span>
                     </div>
                     
@@ -361,10 +433,34 @@ export default function QuestionsBankPage() {
                  >
                     {importing ? "Importing..." : `Import to Exam`}
                  </button>
+                  <button 
+                    onClick={handleAiCategorize}
+                    disabled={aiProcessing || items.length === 0}
+                    className="h-12 px-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:from-indigo-700 hover:to-purple-700 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2"
+                  >
+                     <span className="material-symbols-outlined text-base">{aiProcessing ? "progress_activity" : "auto_awesome"}</span>
+                     {aiProcessing ? "Processing..." : selectedIds.length > 0 ? "AI Categorize Selected" : "AI Categorize ALL"}
+                  </button>
+                  <button 
+                    onClick={handleAiExplainBulk}
+                    disabled={aiProcessing || items.length === 0}
+                    className="h-12 px-6 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl hover:from-emerald-600 hover:to-teal-600 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2"
+                  >
+                     <span className="material-symbols-outlined text-base">{aiProcessing ? "progress_activity" : "psychology"}</span>
+                     {aiProcessing ? "Processing..." : selectedIds.length > 0 ? `AI Explain ${selectedIds.length}` : "AI Explain ALL"}
+                  </button>
               </div>
-           </div>
+            </div>
+         </div>
+      )}
+
+      {/* AI result banner */}
+      {aiMsg && (
+        <div className={`px-6 py-4 rounded-2xl text-sm font-bold ${aiMsg.startsWith("Error") ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}>
+          {aiMsg}
+          <button onClick={() => setAiMsg(null)} className="ml-4 text-xs opacity-60 hover:opacity-100">Dismiss</button>
         </div>
       )}
     </div>
   );
-}
+ }

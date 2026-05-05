@@ -15,12 +15,22 @@ export async function GET(req: NextRequest) {
   const page = parseInt(url.searchParams.get("page") || "1");
   const limit = parseInt(url.searchParams.get("limit") || "50");
   const offset = (page - 1) * limit;
+  const time = url.searchParams.get("time");
 
   try {
-    // Get unique visitors (grouped by IP) with their latest visit info
+    // Calculate time range
+    const now = new Date();
+    let timeStart: string | null = null;
+    if (time === "today") timeStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    else if (time === "7days") timeStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    else if (time === "30days") timeStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Get unique visitors
     let query = admin
       .from("page_visits")
       .select("id, ip_address, country, city, user_agent, path, created_at, session_hash", { count: "exact" });
+
+    if (timeStart) query = query.gte("created_at", timeStart);
 
     if (country) query = query.eq("country", country);
     if (city) query = query.eq("city", city);

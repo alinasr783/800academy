@@ -12,10 +12,6 @@ export default function DashboardOverview() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
 
-  // IP History Modal State
-  const [selectedIp, setSelectedIp] = useState<string | null>(null);
-  const [ipHistory, setIpHistory] = useState<any[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -48,27 +44,7 @@ export default function DashboardOverview() {
     fetchData();
   }, [dateRange]);
 
-  const handleIpClick = async (ip: string) => {
-    setSelectedIp(ip);
-    setLoadingHistory(true);
-    try {
-      const now = new Date();
-      let start = subDays(now, 7);
-      let end = now;
 
-      if (dateRange === "today") start = startOfDay(now);
-      else if (dateRange === "yesterday") { start = startOfDay(subDays(now, 1)); end = startOfDay(now); }
-      else if (dateRange === "30days") start = subDays(now, 30);
-      else if (dateRange === "all") start = new Date("2020-01-01");
-
-      const history = await getIpHistory(ip, start.toISOString(), end.toISOString());
-      setIpHistory(history);
-    } catch (error) {
-      console.error("Failed to fetch IP history", error);
-    } finally {
-      setLoadingHistory(false);
-    }
-  };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">

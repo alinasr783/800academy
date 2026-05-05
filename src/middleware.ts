@@ -51,6 +51,8 @@ export async function middleware(request: NextRequest) {
   if (ips.has(ip)) {
     const reason = reasons[ip] || "Access denied";
     // Return minimal HTML page with only the reason
+    const WAPP_NUM = "201158954215";
+    const wappMsg = encodeURIComponent("I believe my access to 800 Academy was blocked by mistake. I request a review of this decision.");
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -60,12 +62,16 @@ export async function middleware(request: NextRequest) {
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; background: #0a0a0c; }
-  body { display: flex; align-items: center; justify-content: center; font-family: system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: system-ui, -apple-system, sans-serif; gap: 24px; }
   h1 { color: #ef4444; font-size: clamp(1.2rem, 4vw, 2.5rem); font-weight: 900; text-align: center; padding: 0 24px; }
+  .contact { font-size: 0.875rem; color: #71717a; text-align: center; line-height: 1.6; }
+  .contact a { color: #3b82f6; text-decoration: none; font-weight: 600; border-bottom: 1px solid rgba(59,130,246,0.3); transition: border-color .2s; }
+  .contact a:hover { border-bottom-color: #3b82f6; }
 </style>
 </head>
 <body>
 <h1>${reason}</h1>
+<p class="contact">Think this is a mistake?<br><a href="https://wa.me/${WAPP_NUM}?text=${wappMsg}" target="_blank">Contact us</a></p>
 </body>
 </html>`;
 

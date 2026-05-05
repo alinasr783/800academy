@@ -42,6 +42,7 @@ type QuestionRow = {
   points: number;
   allow_multiple: boolean;
   correct_text: string | null;
+  explanation_text: string | null;
   passage_id: string | null;
   created_at: string;
   updated_at: string;
@@ -77,6 +78,9 @@ export default function DashboardExamDetails() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [showBankPicker, setShowBankPicker] = useState(false);
+  const [aiDistributing, setAiDistributing] = useState(false);
+  const [aiResult, setAiResult] = useState<string | null>(null);
+  const [selectedQIds, setSelectedQIds] = useState<Set<string>>(new Set());
 
   const [title, setTitle] = useState("");
   const [examNumber, setExamNumber] = useState("");
@@ -154,7 +158,72 @@ export default function DashboardExamDetails() {
   // Note: MathText component handles its own KaTeX rendering internally.
   // No need for a separate useEffect to render math in passage previews.
 
-  async function saveExam() {
+   async function handleAiDistribute() {
+      if (!questions.length || !examId) return;
+      console.log("[AI-Distribute] Starting for exam:", examId, "totalPoints:", totalPoints);
+      setAiDistributing(true);
+      setAiResult(null);
+      try {
+        const json = await adminFetch(`/api/admin/ai-distribute-points`, {
+          method: "POST",
+          body: JSON.stringify({ exam_id: examId, total_points: Number(totalPoints) || 0 }),
+        });
+        console.log("[AI-Distribute] Response:", json);
+        if (json.success) {
+          setAiResult(`Points distributed: ${json.sum} total across ${json.distributions?.length || 0} questions. Easy: ${json.summary.easy.count} (${json.summary.easy.points}pts), Medium: ${json.summary.medium.count} (${json.summary.medium.points}pts), Hard: ${json.summary.hard.count} (${json.summary.hard.points}pts)`);
+          load();
+        } else {
+          setAiResult(`Error: ${json.error || "Unknown error"}`);
+        }
+      } catch (e: any) {
+        console.error("[AI-Distribute] Error:", e);
+        setAiResult(`Error: ${e.message || String(e)}`);
+      } finally {
+        console.log("[AI-Distribute] Done");
+        setAiDistributing(false);
+      }
+    }
+
+   async function handleAiExplain(qId: string) {
+     setSaving(true);
+     try {
+       console.log("[AI-Explain] Requesting explanation for question:", qId);
+       await adminFetch(`/api/admin/ai-explanations`, {
+         method: "POST",
+         body: JSON.stringify({ question_ids: [qId], source: "exam_questions" }),
+       });
+       setMessage("AI explanation generated!");
+       load();
+     } catch (e: any) {
+       console.error("[AI-Explain] Error:", e);
+       setError(e.message);
+     } finally {
+       setSaving(false);
+     }
+   }
+
+   async function handleAiExplainBulk() {
+     const ids = selectedQIds.size > 0 ? Array.from(selectedQIds) : questions.map(q => q.id);
+     if (ids.length === 0) return;
+     setSaving(true);
+     try {
+       console.log("[AI-Explain-Bulk] Generating explanations for", ids.length, "questions");
+       await adminFetch(`/api/admin/ai-explanations`, {
+         method: "POST",
+         body: JSON.stringify({ question_ids: ids, source: "exam_questions" }),
+       });
+       setMessage(`AI explanations generated for ${ids.length} questions!`);
+       setSelectedQIds(new Set());
+       load();
+     } catch (e: any) {
+       console.error("[AI-Explain-Bulk] Error:", e);
+       setError(e.message);
+     } finally {
+       setSaving(false);
+     }
+   }
+
+   async function saveExam() {
     const num = Math.trunc(Number(examNumber));
     const durMin = Math.trunc(Number(durationMin));
     const pass = Math.trunc(Number(passPercent));
@@ -782,19 +851,29 @@ export default function DashboardExamDetails() {
                   >
                     + Create New Question
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowBankPicker(true)}
-                    className="w-full h-14 bg-white/10 text-white border-2 border-white/20 border-dashed rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-white/20 transition-all active:scale-95"
-                  >
-                    <span className="material-symbols-outlined text-[20px] mr-2 align-middle">database</span>
-                    Add from Bank
-                  </button>
+                   <button
+                     type="button"
+                     onClick={() => setShowBankPicker(true)}
+                     className="w-full h-14 bg-white/10 text-white border-2 border-white/20 border-dashed rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-white/20 transition-all active:scale-95"
+                   >
+                     <span className="material-symbols-outlined text-[20px] mr-2 align-middle">database</span>
+                     Add from Bank
+                   </button>
+                   <button
+                     type="button"
+                     onClick={handleAiDistribute}
+                     disabled={aiDistributing || questions.length === 0}
+                     className="w-full h-14 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:from-amber-600 hover:to-orange-600 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                   >
+                     <span className="material-symbols-outlined text-[20px]">{aiDistributing ? "progress_activity" : "auto_awesome"}</span>
+                     {aiDistributing ? "AI is analyzing..." : "Distribute Points by AI"}
+                   </button>
                </div>
             </div>
 
             <QuestionBankPicker 
-              isOpen={showBankPicker} 
+               isOpen={showBankPicker}
+               existingQuestionIds={questions.map(q => q.id)}
               onClose={() => setShowBankPicker(false)}
               onImport={async (bankIds) => {
                 setSaving(true);
@@ -817,10 +896,30 @@ export default function DashboardExamDetails() {
             {/* Questions List */}
             <div className="bg-white border border-outline/60 shadow-soft-xl rounded-2xl overflow-hidden">
                <div className="p-5 border-b border-outline/40 bg-slate-50/50 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="material-symbols-outlined text-primary text-[20px]">list_alt</span>
-                    <h2 className="text-[10px] font-black uppercase tracking-widest text-primary">Question Bank ({questions.filter(q => q.type !== 'reference_block').length})</h2>
-                  </div>
+                   <div className="flex items-center gap-3">
+                     <input
+                       type="checkbox"
+                       checked={questions.length > 0 && selectedQIds.size === questions.filter(q => q.type !== "reference_block").length}
+                       onChange={() => {
+                         const mcq = questions.filter(q => q.type !== "reference_block");
+                         if (selectedQIds.size === mcq.length) setSelectedQIds(new Set());
+                         else setSelectedQIds(new Set(mcq.map(q => q.id)));
+                       }}
+                       className="w-4 h-4 accent-indigo-600 cursor-pointer"
+                     />
+                     <span className="material-symbols-outlined text-primary text-[20px]">list_alt</span>
+                     <h2 className="text-[10px] font-black uppercase tracking-widest text-primary">Question Bank ({questions.filter(q => q.type !== 'reference_block').length})</h2>
+                     {selectedQIds.size > 0 && (
+                       <button
+                         type="button"
+                         onClick={handleAiExplainBulk}
+                         className="h-8 px-3 bg-emerald-500 text-white font-black text-[9px] uppercase tracking-widest rounded-lg hover:bg-emerald-600 transition-all flex items-center gap-1"
+                       >
+                         <span className="material-symbols-outlined text-sm">auto_awesome</span>
+                         AI Explain ({selectedQIds.size})
+                       </button>
+                     )}
+                   </div>
                   <button
                     type="button"
                     onClick={saveOrder}
@@ -853,7 +952,23 @@ export default function DashboardExamDetails() {
                           className="p-5 hover:bg-slate-50 transition-colors cursor-move group animate-fade-in"
                         >
                           <div className="flex items-start justify-between gap-4">
-                            <div className="min-w-0">
+                             <div className="flex items-start gap-3 min-w-0">
+                               <input
+                                 type="checkbox"
+                                 checked={selectedQIds.has(q.id)}
+                                 onChange={(e) => {
+                                   e.stopPropagation();
+                                   setSelectedQIds(prev => {
+                                     const next = new Set(prev);
+                                     if (next.has(q.id)) next.delete(q.id);
+                                     else next.add(q.id);
+                                     return next;
+                                   });
+                                 }}
+                                 onClick={(e) => e.stopPropagation()}
+                                 className="mt-1 w-4 h-4 accent-indigo-600 cursor-pointer flex-shrink-0"
+                               />
+                               <div className="min-w-0">
                                <div className="flex items-center gap-2 mb-2">
                                   <div className="px-2 py-0.5 bg-primary text-white text-[9px] font-bold rounded uppercase">
                                      Q{idx + 1}
@@ -870,12 +985,32 @@ export default function DashboardExamDetails() {
                                       P
                                     </div>
                                   )}
+                                  {q.explanation_text ? (
+                                    <div className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[9px] font-bold rounded uppercase tracking-widest flex items-center gap-1" title="Has explanation">
+                                      <span className="material-symbols-outlined text-[10px]">check_circle</span>
+                                      Explained
+                                    </div>
+                                  ) : (
+                                    <div className="px-2 py-0.5 bg-amber-50 text-amber-500 text-[9px] font-bold rounded uppercase tracking-widest flex items-center gap-1" title="No explanation yet">
+                                      <span className="material-symbols-outlined text-[10px]">pending</span>
+                                      No Expl.
+                                    </div>
+                                  )}
                                </div>
                                <div className="text-xs font-bold text-on-surface line-clamp-2 leading-relaxed opacity-80 group-hover:opacity-100 transition-opacity">
                                  {q.prompt_text || "No prompt text provided."}
                                </div>
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
+                               </div>
+                             </div>
+                             <div className="flex items-center gap-2 flex-shrink-0">
+                               <button
+                                 type="button"
+                                 onClick={() => handleAiExplain(q.id)}
+                                 className="w-8 h-8 flex items-center justify-center bg-indigo-50 text-indigo-500 hover:bg-indigo-100 hover:text-indigo-600 transition-all rounded-lg active:scale-90"
+                                 title="Generate AI Explanation"
+                               >
+                                 <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
+                               </button>
                                <Link
                                  href={`/dashboard/exams/questions/${q.id}`}
                                  className="w-8 h-8 flex items-center justify-center bg-slate-100 text-slate-400 hover:bg-slate-200 hover:text-primary transition-all rounded-lg active:scale-90"

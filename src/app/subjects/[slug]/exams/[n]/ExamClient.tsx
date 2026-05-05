@@ -115,6 +115,14 @@ function assetUrl(a: Asset | null) {
   return null;
 }
 
+function optionImgUrl(opt: { url: string | null; bucket: string | null; storage_path: string | null }) {
+  if (opt.url) return opt.url;
+  if (opt.storage_path) {
+    return supabase.storage.from(opt.bucket ?? "assets").getPublicUrl(opt.storage_path).data.publicUrl;
+  }
+  return null;
+}
+
 function normalizeText(v: string) {
   return v.trim().toLowerCase();
 }
@@ -251,6 +259,7 @@ export default function ExamClient({
   const [sessionUserId, setSessionUserId] = useState<string | null>(null);
 
   const [contentLoading, setContentLoading] = useState(true);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [referenceSheets, setReferenceSheets] = useState<Asset[]>([]);
   const [passagesById, setPassagesById] = useState<Map<string, Passage>>(new Map());
@@ -669,6 +678,15 @@ export default function ExamClient({
       });
     });
   }, [contentLoading, currentIndex, qState, result]); // Re-run when navigation or state changes
+
+  // Scroll-to-top button visibility
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 600);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
     setQState(buildInitialQState(questions));
@@ -1801,11 +1819,16 @@ export default function ExamClient({
                                       const isCorrectOpt = opt.is_correct;
                                       const border = isCorrectOpt ? 'border-emerald-400' : isSelected ? 'border-rose-400' : 'border-outline/30';
                                       const bg = isCorrectOpt ? 'bg-emerald-50' : isSelected ? 'bg-rose-50' : 'bg-slate-50';
-                                      return (
-                                         <div key={opt.id} className={`border-2 ${border} ${bg} px-4 py-3 rounded-xl flex items-center justify-between`}>
-                                            <div className="text-sm font-bold text-primary flex-1">
-                                               <MathText text={opt.text ?? `Option ${opt.option_number}`} />
-                                            </div>
+                                       return (
+                                          <div key={opt.id} className={`border-2 ${border} ${bg} px-4 py-3 rounded-xl flex items-center justify-between`}>
+                                             <div className="flex-1">
+                                                <div className="text-sm font-bold text-primary">
+                                                   <MathText text={opt.text ?? `Option ${opt.option_number}`} />
+                                                </div>
+                                                {(() => { const imgUrl = optionImgUrl(opt); return imgUrl ? (
+                                                   <img src={imgUrl} className="mt-3 mx-auto max-w-full rounded-lg h-40 object-contain" alt="Option" />
+                                                ) : null; })()}
+                                             </div>
                                             <div className="flex gap-2">
                                                {isSelected && <span className="px-2 py-0.5 bg-primary/10 text-primary text-[9px] font-black uppercase rounded">Your Choice</span>}
                                                {isCorrectOpt && <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[9px] font-black uppercase rounded">Correct</span>}
@@ -1894,6 +1917,17 @@ export default function ExamClient({
               })}
             </div>
           </div>
+
+          {/* Scroll to top button */}
+          {result && (
+            <button
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              className="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full bg-primary text-white shadow-2xl shadow-primary/30 flex items-center justify-center hover:bg-slate-800 hover:scale-110 transition-all active:scale-95"
+              title="Scroll to top"
+            >
+              <span className="material-symbols-outlined">keyboard_arrow_up</span>
+            </button>
+          )}
 
           {/* Action buttons at the very bottom */}
           <div className="mt-8 sm:mt-10 flex flex-col sm:flex-row gap-3 sm:gap-4">
@@ -2156,7 +2190,7 @@ export default function ExamClient({
                                                   {isSelected && <span className="material-symbols-outlined text-white text-[14px]">check</span>}
                                                </div>
                                             </div>
-                                            {opt.url && <img src={opt.url} className="mt-4 mx-auto max-w-full rounded-lg h-48 object-contain" alt="Option" />}
+                                            {(() => { const imgUrl = optionImgUrl(opt); return imgUrl ? <img src={imgUrl} className="mt-4 mx-auto max-w-full rounded-lg h-48 object-contain" alt="Option" /> : null; })()}
                                          </button>
                                       );
                                    })}
@@ -2388,6 +2422,18 @@ export default function ExamClient({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Scroll-to-top button */}
+      {showScrollTop && result && (
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full bg-primary text-white shadow-2xl shadow-primary/30 flex items-center justify-center hover:bg-secondary transition-all active:scale-90 animate-in fade-in zoom-in duration-300"
+          title="Scroll to top"
+        >
+          <span className="material-symbols-outlined text-2xl">keyboard_arrow_up</span>
+        </button>
       )}
     </div>
   );

@@ -32,6 +32,11 @@ export default function DashboardExams() {
   const [newNumber, setNewNumber] = useState("");
   const [newTitle, setNewTitle] = useState("");
 
+  // AI Categorization
+  const [selectedExamIds, setSelectedExamIds] = useState<Set<string>>(new Set());
+  const [aiProcessing, setAiProcessing] = useState(false);
+  const [aiResult, setAiResult] = useState<string | null>(null);
+
   async function getToken() {
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
@@ -127,6 +132,32 @@ export default function DashboardExams() {
     }
   }
 
+  async function handleAiCategorize() {
+    const ids = selectedExamIds.size > 0 ? Array.from(selectedExamIds) : exams.map(e => e.id);
+    if (ids.length === 0) return;
+    setAiProcessing(true);
+    setAiResult(null);
+    try {
+      const token = await getToken();
+      const res = await fetch("/api/admin/ai-categorize", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ exam_ids: ids, source: "exam_questions" }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setAiResult(`Updated ${json.updated} questions (${json.confidence.high} high, ${json.confidence.medium} medium, ${json.confidence.low} low confidence). ${json.skipped > 0 ? `${json.skipped} skipped.` : ""}`);
+        setSelectedExamIds(new Set());
+      } else {
+        setAiResult("Error: " + (json.error || "Unknown"));
+      }
+    } catch (e: any) {
+      setAiResult("Error: " + e.message);
+    } finally {
+      setAiProcessing(false);
+    }
+  }
+
   useEffect(() => {
     load();
   }, []);
@@ -171,6 +202,15 @@ export default function DashboardExams() {
             >
               Refresh
             </button>
+            <button
+              type="button"
+              onClick={handleAiCategorize}
+              disabled={aiProcessing || exams.length === 0}
+              className="h-12 px-6 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-sm hover:from-indigo-700 hover:to-purple-700 transition-all disabled:opacity-50 flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-lg">{aiProcessing ? "progress_activity" : "auto_awesome"}</span>
+              {aiProcessing ? "AI Working..." : selectedExamIds.size > 0 ? `Categorize ${selectedExamIds.size} Exams by AI` : "Categorize ALL Exams by AI"}
+            </button>
           </div>
         </div>
       </div>
@@ -178,6 +218,13 @@ export default function DashboardExams() {
       {error ? (
         <div className="p-6 border-b border-outline/40 bg-rose-50 text-rose-700">{error}</div>
       ) : null}
+
+      {aiResult && (
+        <div className={`p-6 border-b border-outline/40 text-sm font-bold ${aiResult.startsWith("Error") ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}>
+          {aiResult}
+          <button onClick={() => setAiResult(null)} className="ml-4 text-xs opacity-60 hover:opacity-100">Dismiss</button>
+        </div>
+      )}
 
       <div className="p-8 border-b border-outline/40 bg-surface-variant">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end">
@@ -222,8 +269,22 @@ export default function DashboardExams() {
         <div className="overflow-auto">
           <table className="w-full text-left">
             <thead className="bg-surface-variant">
-              <tr className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">
-                <th className="px-6 py-4">Exam</th>
+               <tr className="text-xs uppercase tracking-widest text-on-surface-variant font-bold">
+                 <th className="px-6 py-4 w-10">
+                   <input
+                     type="checkbox"
+                     checked={exams.length > 0 && selectedExamIds.size === exams.length}
+                     onChange={() => {
+                       if (selectedExamIds.size === exams.length) {
+                         setSelectedExamIds(new Set());
+                       } else {
+                         setSelectedExamIds(new Set(exams.map(e => e.id)));
+                       }
+                     }}
+                     className="w-4 h-4 accent-indigo-600 cursor-pointer"
+                   />
+                 </th>
+                 <th className="px-6 py-4">Exam</th>
                 <th className="px-6 py-4">Access</th>
                 <th className="px-6 py-4">Duration</th>
                 <th className="px-6 py-4">Pass</th>
@@ -231,9 +292,24 @@ export default function DashboardExams() {
               </tr>
             </thead>
             <tbody>
-              {exams.map((e) => (
-                <tr key={e.id} className="border-t border-outline/40">
-                  <td className="px-6 py-5">
+            {exams.map((e) => (
+                 <tr key={e.id} className="border-t border-outline/40">
+                   <td className="px-6 py-5 w-10">
+                     <input
+                       type="checkbox"
+                       checked={selectedExamIds.has(e.id)}
+                       onChange={() => {
+                         setSelectedExamIds(prev => {
+                           const next = new Set(prev);
+                           if (next.has(e.id)) next.delete(e.id);
+                           else next.add(e.id);
+                           return next;
+                         });
+                       }}
+                       className="w-4 h-4 accent-indigo-600 cursor-pointer"
+                     />
+                   </td>
+                   <td className="px-6 py-5">
                     <div className="text-sm font-extrabold text-primary">
                       #{e.exam_number} • {e.title}
                     </div>
